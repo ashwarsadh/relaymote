@@ -95,8 +95,11 @@ if ($path) {
   if ($np -ne $path) { [Environment]::SetEnvironmentVariable('Path', $np, 'User'); $out.removed += "PATH entry $Old" }
 }
 try {
-  $cj = Get-Content (Join-Path $env:USERPROFILE '.claude.json') -Raw | ConvertFrom-Json
-  if ($cj.mcpServers -and $cj.mcpServers.baton) {
+  # node, not ConvertFrom-Json: Windows PowerShell 5 refuses ~/.claude.json when two project keys differ only
+  # in case (measured: "D:/..." and "d:/..."), which would silently skip this step.
+  $node = Join-Path $New 'runtime\node.exe'
+  $hasOld = & $node -e "try{const j=require(require('os').homedir()+'/.claude.json');process.stdout.write(j.mcpServers&&j.mcpServers.baton?'1':'0')}catch(e){process.stdout.write('0')}"
+  if ($hasOld -eq '1') {
     & claude mcp remove --scope user baton | Out-Null
     & (Join-Path $New 'runtime\node.exe') (Join-Path $New 'bin\relaymote.js') mcp | Out-Null
     $out.removed += 'MCP server baton (relaymote registered)'

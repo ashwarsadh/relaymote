@@ -18,6 +18,7 @@ conductor for running many sessions at once.</p>
 <p align="center">
   <a href="https://github.com/ashwarsadh/relaymote/releases/latest"><b>⬇ Download</b></a> ·
   <a href="#let-your-ai-install-it">Let your AI install it</a> ·
+  <a href="INSTALL-FOR-AI.md">Setup guide for AI agents</a> ·
   <a href="#get-started-in-three-steps">Get started</a> ·
   <a href="docs/ARCHITECTURE.md">How it works</a>
 </p>
@@ -174,6 +175,10 @@ Claude Desktop runs, and say:
 It checks your system, installs Relaymote, connects Claude Desktop, registers the conductor tools, asks you how
 your phone should reach the computer, and shows you the pairing QR code. It asks before anything that
 changes an account of yours (such as creating a Cloudflare address).
+
+The guide is [INSTALL-FOR-AI.md](INSTALL-FOR-AI.md): nine numbered steps (check the machine, install, port
+conflict, setup, connect the Main Process Debugger, remote access, pairing, optional features, report) plus
+troubleshooting. [llms.txt](llms.txt) points agents and crawlers at it.
 
 ## Get started in three steps
 

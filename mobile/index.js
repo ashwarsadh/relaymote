@@ -717,11 +717,11 @@ async function handle(req, res) {
         ? 'Signed in with Cloudflare Access, but the assertion could not be verified. ' +
           'Check BATON_ACCESS_AUD and BATON_ACCESS_TEAM, then reload.'
         : 'This address is not behind Cloudflare Access, so it needs the access key. ' +
-          'Open Baton on your computer and scan the pairing QR code, or run <code>baton pair</code>.';
+          'Open Relaymote on your computer and scan the pairing QR code, or run <code>baton pair</code>.';
       res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end('<meta name=viewport content="width=device-width,initial-scale=1">' +
         '<body style="font:16px/1.6 system-ui;padding:2rem;background:#12110f;color:#e8e6e1">' +
-        '<h2 style="margin:0 0 .6rem">Baton</h2><p style="color:#9b958c">' + msg + '</p></body>');
+        '<h2 style="margin:0 0 .6rem">Relaymote</h2><p style="color:#9b958c">' + msg + '</p></body>');
     }
     return json(res, 401, { error: 'unauthorized' });
   }
@@ -1101,7 +1101,7 @@ async function handle(req, res) {
   }
   if (p === '/api/token/rotate' && req.method === 'POST') {
     try { fs.unlinkSync(SECRET_FILE); } catch {}
-    return json(res, 200, { ok: true, note: 'A new token is issued when Baton restarts; every paired phone must scan again.' });
+    return json(res, 200, { ok: true, note: 'A new token is issued when Relaymote restarts; every paired phone must scan again.' });
   }
 
   if (p === '/api/send-now') {
@@ -1547,7 +1547,7 @@ async function handle(req, res) {
     }
 
     if (p === '/api/baton-task/stop') {
-      const out = await orch.stopTask(String(body.id || ''), { by: 'phone (Baton mobile)' });
+      const out = await orch.stopTask(String(body.id || ''), { by: 'phone (Relaymote mobile)' });
       return json(res, out && out.ok !== false ? 200 : 400, { ok: !(out && out.ok === false), result: out });
     }
 
@@ -1566,9 +1566,9 @@ async function handle(req, res) {
       return uiJob(res, 'chipdismiss', () => desktop.dismissTask(body), { id: body.sessionId });
     }
     if (p === '/api/push/subscribe') { push.subscribe(body); return json(res, 200, { ok: true }); }
-    if (p === '/api/push/test') { await push.send({ title: 'Baton', body: 'Test notification' }); return json(res, 200, { ok: true }); }
+    if (p === '/api/push/test') { await push.send({ title: 'Relaymote', body: 'Test notification' }); return json(res, 200, { ok: true }); }
     if (p === '/api/notify/test-backup') {
-      const r = await alerts.sendBackup({ kind: 'test', title: 'Baton', body: 'Test alert from Baton — the backup channel works.', tag: 'baton-test', url: '/' }, { test: true });
+      const r = await alerts.sendBackup({ kind: 'test', title: 'Relaymote', body: 'Test alert from Relaymote — the backup channel works.', tag: 'baton-test', url: '/' }, { test: true });
       return json(res, 200, { ok: !!r.ok, result: r });
     }
   } catch (e) {

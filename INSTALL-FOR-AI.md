@@ -1,7 +1,7 @@
-# Installing Baton — instructions for an AI agent
+# Installing Relaymote — instructions for an AI agent
 
-You are an AI coding agent (for example Claude Code) and a person has asked you to set up **Baton** on this
-computer. Baton is a phone and desktop client for the Code tab of Claude Desktop. Follow these steps in
+You are an AI coding agent (for example Claude Code) and a person has asked you to set up **Relaymote** on this
+computer. Relaymote is a phone and desktop client for the Code tab of Claude Desktop. Follow these steps in
 order. Run the commands yourself; ask the person only where a step says **ASK**. Report the result at the
 end in a few lines.
 
@@ -21,7 +21,7 @@ node --version          # need v18 or newer
 ```
 
 - **OS:** Windows 10/11 is fully supported. macOS works but is experimental. Linux has no Claude Desktop, so
-  Baton cannot run there — stop and tell the person.
+  Relaymote cannot run there — stop and tell the person.
 - **Claude Desktop** must be installed and signed in, with the Code tab used at least once. Its data folder
   exists at `%APPDATA%\Claude` (Windows) or `~/Library/Application Support/Claude` (macOS). If it is missing,
   tell the person to install it from https://claude.ai/download and stop.
@@ -31,11 +31,11 @@ node --version          # need v18 or newer
 
 ## 2. Install
 
-**2a. Windows installer (no Node needed).** Download `Baton-Setup-<version>.exe` from
-https://github.com/ashwarsadh/baton/releases/latest and run it:
+**2a. Windows installer (no Node needed).** Download `Relaymote-Setup-<version>.exe` from
+https://github.com/ashwarsadh/relaymote/releases/latest and run it:
 
 ```powershell
-.\Baton-Setup-<version>.exe /VERYSILENT /SUPPRESSMSGBOXES
+.\Relaymote-Setup-<version>.exe /VERYSILENT /SUPPRESSMSGBOXES
 ```
 
 It installs to `%LOCALAPPDATA%\Programs\Baton` and puts `baton` on the PATH for new terminals. Use the full
@@ -44,7 +44,7 @@ path `"%LOCALAPPDATA%\Programs\Baton\baton.cmd"` in the current terminal.
 **2b. From source (Windows or macOS).**
 
 ```bash
-git clone https://github.com/ashwarsadh/baton.git
+git clone https://github.com/ashwarsadh/relaymote.git
 cd baton
 npm install
 npm link            # optional: puts `baton` on the PATH; otherwise use `node bin/baton.js`
@@ -54,7 +54,7 @@ Below, `baton` means whichever of these you used.
 
 ## 3. Check for a port conflict
 
-Baton uses ports **8788** (local control API) and **8790** (the app).
+Relaymote uses ports **8788** (local control API) and **8790** (the app).
 
 ```bash
 baton status
@@ -78,7 +78,7 @@ This:
   `developer_settings.json`), which un-hides the **Developer** menu;
 - on Windows, tries to switch on the **Main Process Debugger**;
 - registers the `baton` MCP server with Claude Code (the conductor and master tools);
-- on Windows, adds Baton to start at sign-in, with a tray icon;
+- on Windows, adds Relaymote to start at sign-in, with a tray icon;
 - starts the daemon and opens the app.
 
 If `claude` is not on the PATH, `baton mcp install` prints a JSON block to add to `~/.claude.json` under
@@ -86,7 +86,7 @@ If `claude` is not on the PATH, `baton mcp install` prints a JSON block to add t
 
 ## 5. Connect Claude Desktop (the Main Process Debugger)
 
-Baton acts through Claude Desktop's main-process debugger (port 9229, loopback only). Run `baton status` and
+Relaymote acts through Claude Desktop's main-process debugger (port 9229, loopback only). Run `baton status` and
 look at the *Claude Desktop debugger* line. If it is ✘:
 
 1. If setup printed *Turned on Claude Desktop Developer Mode*, Claude Desktop must restart once to show the
@@ -99,7 +99,7 @@ look at the *Claude Desktop debugger* line. If it is ✘:
    Developer Mode** first. On Windows the menus are behind the ☰ icon at the top-left of the window.)
 4. Run `baton status` again until the debugger line is ✔.
 
-The debugger turns itself off whenever Claude Desktop restarts. On Windows Baton re-enables it automatically
+The debugger turns itself off whenever Claude Desktop restarts. On Windows Relaymote re-enables it automatically
 once Claude Desktop is signed in, after a 3-2-1 countdown on screen; on macOS they repeat step 3 after a restart. Tell them this.
 
 ## 6. Choose how the phone reaches the computer — ASK
@@ -111,7 +111,7 @@ Ask the person which they want, briefly explaining each option:
 | Only this computer | nothing | for trying it out |
 | Same Wi-Fi | set `"remote": {"mode": "lan"}` in settings.json, then `baton restart` | plain HTTP, no push notifications |
 | Tailscale | set `"remote": {"mode": "tailscale"}`, then `baton restart` | Tailscale must be installed and signed in on both devices |
-| Anywhere, quick link | `baton tunnel quick` | no account; the address changes whenever Baton restarts |
+| Anywhere, quick link | `baton tunnel quick` | no account; the address changes whenever Relaymote restarts |
 | Anywhere, own address | `baton tunnel login`, then `baton tunnel setup <hostname>` | needs a free Cloudflare account with a domain; creates a tunnel and a DNS record — **ASK** for the hostname and confirm before running |
 
 Cloudflare options need `cloudflared` (`winget install Cloudflare.cloudflared` / `brew install cloudflared`)
@@ -158,4 +158,4 @@ conversation).
 | `claude` CLI not found during `mcp install` | add the printed JSON to `~/.claude.json` under `mcpServers` |
 | Phone cannot reach the link | the link is local-only — choose a remote-access mode (step 6) |
 | Push notifications do not arrive | they need HTTPS: use a Cloudflare mode, then tap 🔔 in the app on the phone |
-| Anything else | `baton status` output, then https://github.com/ashwarsadh/baton/issues |
+| Anything else | `baton status` output, then https://github.com/ashwarsadh/relaymote/issues |

@@ -4,7 +4,7 @@
 // in a temp world: two fake account scopes on disk, a switch simulated by rewriting the detector's
 // baseline, and the backup alert channel pointed at a local recorder instead of a phone.
 //
-// Also covers the Baton fix: the alert is gated on the Accounts module and its words come from the
+// Also covers the Relaymote fix: the alert is gated on the Accounts module and its words come from the
 // real sync settings (it used to claim "sync both ways every 15 minutes" regardless).
 'use strict';
 const H = require('./mobile-harness');

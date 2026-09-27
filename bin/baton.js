@@ -45,14 +45,14 @@ const portClash = async () => !(await running()) && !!(await get(config.get().po
 const clashHelp = () => `Port ${config.get().port} is used by another program. Pick free ports: set "port" and "appPort" in ${config.SETTINGS_FILE}, then run "baton start".`;
 
 async function startBackground() {
-  if (await running()) { console.log(C.g('Baton is already running.')); return true; }
+  if (await running()) { console.log(C.g('Relaymote is already running.')); return true; }
   if (await portClash()) { console.log(C.r(clashHelp())); return false; }
   // Through the stderr-keeping wrapper (lib/launch.js): rotation at 10 MB, launch and exit lines.
   const launch = require('../lib/launch');
   launch.clearStopped();
   const { log: logFile } = launch.spawnDaemon();
-  for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 250)); if (await running()) { console.log(C.g('Baton started.')); return true; } }
-  console.log(C.r('Baton did not answer within 10s. See ' + logFile + ' and ' + path.join(config.STATE, 'baton.log')));
+  for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 250)); if (await running()) { console.log(C.g('Relaymote started.')); return true; } }
+  console.log(C.r('Relaymote did not answer within 10s. See ' + logFile + ' and ' + path.join(config.STATE, 'baton.log')));
   return false;
 }
 
@@ -68,7 +68,7 @@ async function doctor() {
   const cdp = await cdpUp();
   ok(cdp, `Claude Desktop debugger on port ${config.get().cdpPort}`, 'In Claude Desktop: Help > Troubleshooting > Enable Developer Mode, then Developer > Enable Main Process Debugger. Or run `baton debugger`.');
   const up = await running();
-  ok(up, 'Baton daemon running', (await portClash()) ? clashHelp() : 'Run `baton start`.');
+  ok(up, 'Relaymote daemon running', (await portClash()) ? clashHelp() : 'Run `baton start`.');
   let mcp = false;
   try { const j = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf8')); mcp = !!(j.mcpServers && j.mcpServers.baton); } catch {}
   ok(mcp, 'MCP server registered with Claude Code (orchestrator tools)', 'Run `baton mcp install`.');
@@ -79,7 +79,7 @@ async function doctor() {
     const idle = require('../lib/idle');
     for (let i = 0; i < 12 && idle.idleMs() === null; i++) await new Promise(r => setTimeout(r, 250));
     const st = idle.status(); idle.stop();
-    ok(st.known, `idle detection (${st.method})`, (st.error || 'no reading') + ' — until it works Baton treats you as ACTIVE and waits. ' +
+    ok(st.known, `idle detection (${st.method})`, (st.error || 'no reading') + ' — until it works Relaymote treats you as ACTIVE and waits. ' +
       (process.platform === 'linux' ? 'Install xprintidle, or ' : '') + 'set "idleGateSeconds": 0 to run UI actions without waiting.');
   }
   if (WIN) {
@@ -87,12 +87,12 @@ async function doctor() {
     ok(a.healthy, `autostart: ${a.detail}`, 'Run `baton autostart`.');
   }
   const stopped = require('../lib/launch').stoppedByUser();
-  if (stopped && !up) console.log(C.d(`  (you stopped Baton at ${stopped.at} via ${stopped.by}; the tray and watchdog leave it stopped until \`baton start\`)`));
+  if (stopped && !up) console.log(C.d(`  (you stopped Relaymote at ${stopped.at} via ${stopped.by}; the tray and watchdog leave it stopped until \`baton start\`)`));
   console.log(C.d(`\ndata: ${config.DATA}`));
 }
 
 async function pairCmd() {
-  if (!(await running())) { console.log(C.y('Baton is not running — starting it…')); if (!(await startBackground())) return; }
+  if (!(await running())) { console.log(C.y('Relaymote is not running — starting it…')); if (!(await startBackground())) return; }
   const r = await get(config.get().appPort, '/api/pair?k=' + encodeURIComponent(token() || ''), 8000);
   const links = (r && r.body && r.body.links) || [];
   if (!links.length) return console.log(C.r('Could not read pairing links.'));
@@ -146,7 +146,7 @@ function autostart(action) {
   if (act === 'remove') return console.log(out.plan.length ? C.g((out.dryRun ? 'Would remove: ' : 'Removed: ') + out.plan.join('; ')) : 'Autostart was not set.');
   if (out.dryRun) return console.log('Would set up:\n  ' + out.plan.join('\n  '));
   if (!out.ok) return console.log(C.r('Could not set up autostart (scheduled task and Run key both refused).'));
-  const what = args.includes('--headless') ? 'The Baton daemon' : 'Baton (with its tray icon)';
+  const what = args.includes('--headless') ? 'The Relaymote daemon' : 'Relaymote (with its tray icon)';
   console.log(C.g(`${what} will start when you sign in (${out.logon === 'task' ? 'scheduled task' + (out.s4u ? ', S4U' : '') : 'Run key'})` +
     (out.watchdog ? ', and a watchdog checks every 10 minutes.' : '.')) + (args.includes('--headless') ? '' : ' Start it now with `baton tray`.'));
 }
@@ -174,7 +174,7 @@ async function setup() {
   await doctor();
   if (!(await cdpUp()) && devMode(true) === 'changed') {
     console.log(C.y('\nTurned on Claude Desktop Developer Mode. Quit Claude Desktop (tray icon › Quit) and open it again, then run `baton debugger`' +
-      (WIN ? ' — or just leave it: Baton switches the debugger on by itself once Claude Desktop is signed in (a 3-2-1 countdown shows on screen first).' : '.')));
+      (WIN ? ' — or just leave it: Relaymote switches the debugger on by itself once Claude Desktop is signed in (a 3-2-1 countdown shows on screen first).' : '.')));
   } else if (!(await cdpUp()) && WIN) {
     console.log(C.y('\nTrying to switch on the Claude Desktop debugger for you (Claude will come to the front briefly)…'));
     spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'scripts', 'enable-debugger.ps1')], { stdio: 'inherit', windowsHide: true });
@@ -185,7 +185,7 @@ async function setup() {
   if (WIN && !args.includes('--no-autostart')) autostart('install');
   await startBackground();
   if (WIN) tray();
-  console.log(C.b('\nDone. Opening Baton — use Settings › Pair a phone to connect your phone.'));
+  console.log(C.b('\nDone. Opening Relaymote — use Settings › Pair a phone to connect your phone.'));
   openBrowser(appUrl());
 }
 
@@ -219,7 +219,7 @@ ${C.b('Daemon')}
   baton accounts first-run baseline|archived-wins · groups-backups · groups-restore <stamp|latest>
   baton accounts forget <scope> <group id>   a group deleted on purpose is never restored
   baton accounts import-migrate [dir] [--apply] [--merge]   take over another sync tool's history
-  baton accounts launch-hook install|remove|status   start Claude through Baton (repair first) · verify
+  baton accounts launch-hook install|remove|status   start Claude through Relaymote (repair first) · verify
 
 ${C.b('Remote access')}   (also in Settings › Remote access)
   baton tunnel quick                random https://….trycloudflare.com address, no account
@@ -236,7 +236,7 @@ ${C.b('Orchestrator')}
                                       project index + transcript intelligence (\`baton index help\`)
   baton hygiene [compact [--send] [--cap N] | show]   what each session's context needs (HYGIENE.md); compact = last-warm-cycle /compact
   baton archive-candidates [days]     sessions safe to archive, with reasons (never archives; default 14 days)
-  baton wakes [hours] | log [hours] | rollup [--force]   warm vs cold wakes; the wakes Baton itself sent
+  baton wakes [hours] | log [hours] | rollup [--force]   warm vs cold wakes; the wakes Relaymote itself sent
   baton summarize [--cap N] [--budget-min M] [--days D] [--dry-run]   5-line overview per changed session
   baton roles [--budget N] [--one <id>] [--stats]   the roles DB owner routing reads (free heuristic without an engine)
   baton engine [status|test]          the model engine (off by default; Settings › Model engine)
@@ -282,7 +282,7 @@ async function accountsCmd() {
     case 'launch-hook': {
       const v = (args[2] || 'status').toLowerCase();
       const r = v === 'install' ? await lnch().hookInstall() : v === 'remove' ? await lnch().hookRemove() : await lnch().hookStatus();
-      if (v === 'status') return console.log(r.supported ? (r.installed ? C.g('Claude Desktop starts through Baton.') + C.d(' Undo: baton accounts launch-hook remove') : 'Claude Desktop starts on its own.') : r.message);
+      if (v === 'status') return console.log(r.supported ? (r.installed ? C.g('Claude Desktop starts through Relaymote.') + C.d(' Undo: baton accounts launch-hook remove') : 'Claude Desktop starts on its own.') : r.message);
       return say(r);
     }
     case 'verify': {
@@ -329,11 +329,11 @@ async function accountsCmd() {
         process.argv = [process.argv[0], path.join(ROOT, 'cli.js'), ...args];
         return require('../cli.js');
       }
-      // Only ask Baton to shut down: never POST /api/shutdown at another program on the same port.
+      // Only ask Relaymote to shut down: never POST /api/shutdown at another program on the same port.
       const s = (await running()) && await post(config.get().port, '/api/shutdown');
       // Remembered, so the tray's health poll and the 10-minute watchdog leave it stopped.
       if (s) require('../lib/launch').markStopped('baton stop');
-      return console.log(s ? C.g('Stopping…') + C.d(' (it stays stopped until `baton start`)') : C.y('Baton was not running.'));
+      return console.log(s ? C.g('Stopping…') + C.d(' (it stays stopped until `baton start`)') : C.y('Relaymote was not running.'));
     }
     case 'salvage': {
       const r = require('../lib/salvage').run({ src: args[1] && !args[1].startsWith('-') ? args[1] : undefined, apply: args.includes('--apply') || args.includes('--write') });
@@ -350,11 +350,11 @@ async function accountsCmd() {
       if (!r.ok) return console.log(C.r(`${r.error}: ${r.message}`));
       console.log(`from ${r.source}\n  to ${r.dest}`);
       for (const [f, v] of Object.entries(r.files)) console.log(`  ${f.padEnd(19)} ${JSON.stringify(v)}`);
-      if (Object.keys(r.renumbered).length) console.log(C.y(`  ${Object.keys(r.renumbered).length} task id(s) renumbered because Baton already uses them; references follow.`));
+      if (Object.keys(r.renumbered).length) console.log(C.y(`  ${Object.keys(r.renumbered).length} task id(s) renumbered because Relaymote already uses them; references follow.`));
       for (const w of r.warnings) console.log(C.y('  ! ' + w));
-      if (r.applied) console.log(C.g(`Imported: ${r.wrote.join(', ')}.`) + (r.backup ? C.d(` Previous Baton files saved in ${r.backup}.`) : '') + C.d(' The source was not modified.'));
+      if (r.applied) console.log(C.g(`Imported: ${r.wrote.join(', ')}.`) + (r.backup ? C.d(` Previous Relaymote files saved in ${r.backup}.`) : '') + C.d(' The source was not modified.'));
       else console.log(r.wouldWrite.length ? C.y(`Dry run: would write ${r.wouldWrite.join(', ')}. Add --apply to import (the source is never modified).`) : C.g('Nothing to import.'));
-      if (r.applied && await running()) console.log(C.d('Restart Baton (`baton restart`) so the notify queue and watches are re-read.'));
+      if (r.applied && await running()) console.log(C.d('Restart Relaymote (`baton restart`) so the notify queue and watches are re-read.'));
       return;
     }
     case 'restart':
@@ -416,7 +416,7 @@ async function accountsCmd() {
     case 'tunnel': {
       const tunnel = require('../lib/tunnel');
       const sub = (args[1] || 'status').toLowerCase();
-      if (sub === 'quick') { config.set({ remote: { mode: 'cloudflare-quick' } }); console.log('Remote access: Cloudflare quick tunnel. Restart Baton (`baton restart`), then `baton pair`.'); return; }
+      if (sub === 'quick') { config.set({ remote: { mode: 'cloudflare-quick' } }); console.log('Remote access: Cloudflare quick tunnel. Restart Relaymote (`baton restart`), then `baton pair`.'); return; }
       if (sub === 'off') { config.set({ remote: { mode: 'off' } }); return console.log('Remote access off. `baton restart` to apply.'); }
       if (sub === 'login') { const r = await tunnel.login(); if (r.loginUrl) { console.log('Opening: ' + r.loginUrl); openBrowser(r.loginUrl); } else console.log(r); return; }
       if (sub === 'setup') { const r = await tunnel.setupNamed(args[2], args[3]); tunnel.stop(); console.log(r.ok ? C.g(`Ready: https://${r.hostname} — run \`baton restart\`, then \`baton pair\`.`) : C.r(r.error + (r.detail ? '\n' + r.detail : ''))); return; }

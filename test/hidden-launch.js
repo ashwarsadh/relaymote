@@ -1,4 +1,4 @@
-// hidden-launch.js — no Baton launch path may show a console window (lib/launch.js spawnHidden).
+// hidden-launch.js — no Relaymote launch path may show a console window (lib/launch.js spawnHidden).
 // On Windows, spawn(cmd, { detached: true }) is DETACHED_PROCESS: cmd gets no console, so the node.exe it
 // starts is given a new, VISIBLE one (windowsHide cannot reach it). Every background start therefore goes
 // through wscript + scripts/run-hidden.vbs, which gives cmd a hidden console that node shares.

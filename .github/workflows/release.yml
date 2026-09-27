@@ -63,7 +63,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $setup = Resolve-Path "dist/Baton-Setup-$v-x64.exe"
+          $setup = Resolve-Path "dist/Relaymote-Setup-$v-x64.exe"
           $dir = Join-Path $env:RUNNER_TEMP 'baton-install'
           $log = Join-Path $env:RUNNER_TEMP 'baton-setup.log'
           $env:BATON_HOME = Join-Path $env:RUNNER_TEMP 'baton-home'
@@ -126,20 +126,20 @@ jobs:
           mkdir -p "$APPDATA" "$CLAUDE_CONFIG_DIR"
           npm test
 
-      - name: Build Baton.app, DMG and portable tarball
+      - name: Build Relaymote.app, DMG and portable tarball
         run: ARCH=${{ matrix.arch }} bash installer/macos/build-dmg.sh
 
       - name: Self-test the DMG
         run: |
           set -euo pipefail
           v="$(node -p "require('./package.json').version")"
-          dmg="dist/Baton-$v-${{ matrix.arch }}.dmg"
+          dmg="dist/Relaymote-$v-${{ matrix.arch }}.dmg"
           mnt="$RUNNER_TEMP/baton-dmg"
           mkdir -p "$mnt"
           hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg"
-          c="$mnt/Baton.app/Contents"
-          test -x "$c/MacOS/Baton"
-          bash -n "$c/MacOS/Baton"
+          c="$mnt/Relaymote.app/Contents"
+          test -x "$c/MacOS/Relaymote"
+          bash -n "$c/MacOS/Relaymote"
           test -f "$c/Resources/baton.icns"
           plutil -lint "$c/Info.plist"
           node_bin="$c/Resources/app/runtime/node"
@@ -180,6 +180,8 @@ jobs:
           v="$(node -p "require('./package.json').version")"
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "tag=v$v" >> "$GITHUB_OUTPUT"
+          # Installs from before the rename look for Baton-Setup-<v>-x64.exe: ship a signed copy under that name.
+          if [ -f "dist/Relaymote-Setup-$v-x64.exe" ]; then cp "dist/Relaymote-Setup-$v-x64.exe" "dist/Baton-Setup-$v-x64.exe"; fi
           (cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
           cp installer/RELEASE_NOTES.md "$RUNNER_TEMP/notes.md"
           sed -i "s/<version>/$v/g" "$RUNNER_TEMP/notes.md"
@@ -190,14 +192,14 @@ jobs:
       - name: Sign SHA256SUMS.txt (installed copies refuse an update without a valid signature)
         env:
           BATON_SIGNING_KEY: ${{ secrets.BATON_SIGNING_KEY }}
-          BATON_REQUIRE_SIGNATURE: ${{ github.repository == 'ashwarsadh/baton' && '1' || '' }}
+          BATON_REQUIRE_SIGNATURE: ${{ github.repository == 'ashwarsadh/relaymote' && '1' || '' }}
         run: node scripts/sign-release.js dist/SHA256SUMS.txt
 
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || steps.meta.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: Baton ${{ steps.meta.outputs.version }}
+          name: Relaymote ${{ steps.meta.outputs.version }}
           body_path: ${{ runner.temp }}/notes.md
           prerelease: ${{ contains(steps.meta.outputs.version, '-') }}
           fail_on_unmatched_files: true

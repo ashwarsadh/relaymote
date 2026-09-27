@@ -13,16 +13,16 @@ All of these sit in the board folder: `~/.baton/board/` by default, or `board.di
 
 | File | Written by | What it holds |
 |---|---|---|
-| `board.json` | Baton (`lib/board-build.js`) or anything else | what the app shows |
+| `board.json` | Relaymote (`lib/board-build.js`) or anything else | what the app shows |
 | `inbox.jsonl` | `lib/inbox.js` | the inbox: an append-only ledger of things only you can do |
 | `board-actions.jsonl` | the app | every tap, as an audit log |
 | `hygiene.json` | optional, another tool | per-session context verdicts; shown when present |
 
-When the Board and Goal chaser modules are on, Baton writes `board.json` itself every 10 minutes and
+When the Board and Goal chaser modules are on, Relaymote writes `board.json` itself every 10 minutes and
 whenever you open the Board. It also writes a desktop page, `board.html` (`board.html` in the data
 folder, or `board.html` in settings). If a `board.json` or `board.html` in that place was written by
-something else (no `"generator": "baton"`), Baton leaves it alone unless you set `board.generate` to
-true. Before it writes `board.html`, Baton checks the page script for a quoted string left open at
+something else (no `"generator": "baton"`), Relaymote leaves it alone unless you set `board.generate` to
+true. Before it writes `board.html`, Relaymote checks the page script for a quoted string left open at
 the end of a line. A real newline inside a string literal is a syntax error that kills the whole
 script, so the page would render but no button or filter would work. If the check finds one, the page
 is not written and the build reports the line.
@@ -125,7 +125,7 @@ Answers typed on the Board are copied onto the card they answer, as a note plus 
 
 In **Batch** mode, taps are queued and sent as one message, one line each. **Clear all FYI** queues a
 Done for every FYI card on screen, and **Yes to all Nudge** queues a Yes for every Nudge row. Neither
-sends anything until you tap *Send N replies*. On Baton's own board a delivered Done also closes the
+sends anything until you tap *Send N replies*. On Relaymote's own board a delivered Done also closes the
 inbox item, and a delivered Reinstate reopens and pins it.
 
 Tell your Conductor session once what these lines mean (for example in its CLAUDE.md), and it can

@@ -1,7 +1,7 @@
 // mobile-live-ui.js — the app must keep itself current, and must not carry a private copy of the
 // desktop's vocabulary. Ported from the private tool's test-live-ui.js: mostly assertions on the
 // source (each names the incident it pins down), plus the parts that can run against the
-// stand-in desktop. Adapted for Baton's names (__batonLastKey, baton-mcp.js). Not ported: the
+// stand-in desktop. Adapted for Relaymote's names (__batonLastKey, baton-mcp.js). Not ported: the
 // board / goals-register checks (that code is owned and tested by the board work package) and
 // the checks that need a real Electron renderer (model menu contents, timer throttling, the
 // modal-blocker scrape) — listed as SKIP.

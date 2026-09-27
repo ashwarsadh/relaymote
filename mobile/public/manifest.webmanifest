@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Baton Mobile",
-  "short_name": "Baton",
+  "name": "Relaymote Mobile",
+  "short_name": "Relaymote",
   "description": "Control Claude Code Desktop sessions from your phone",
   "start_url": "/",
   "scope": "/",

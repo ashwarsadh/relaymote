@@ -1,5 +1,5 @@
 // make-demo.js <dir> — write a fake Claude Desktop data set (sessions + transcripts) for demos,
-// screenshots and UI work without touching real data. Run Baton against it with:
+// screenshots and UI work without touching real data. Run Relaymote against it with:
 //   APPDATA=<dir>/appdata CLAUDE_CONFIG_DIR=<dir>/claude BATON_HOME=<dir>/baton node server.js
 'use strict';
 const fs = require('fs');

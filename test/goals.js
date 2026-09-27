@@ -318,7 +318,7 @@ function told(owner, title, quietH, extra = {}) {
   fs.writeFileSync(goals.LEGACY_FILE, '{"version":1,"next":3,"goals":[{"id":"g1","title":"Path C:\\data\\goals","status":"open"},{"oops":true}]}');
   reg = goals.load();
   check(reg.goals.length === 1 && reg.bad.length === 1 && fs.existsSync(goals.FILE) && fs.existsSync(goals.LEGACY_FILE + '.migrated') && !fs.existsSync(goals.LEGACY_FILE),
-    'a goals.json from an earlier Baton is migrated ONCE into the ledger (unusable rows kept), and renamed, never deleted');
+    'a goals.json from an earlier Relaymote is migrated ONCE into the ledger (unusable rows kept), and renamed, never deleted');
   goals.add({ title: 'after migration' }, { resolve: () => ({ ok: false }) });
   check(goals.load().goals[1].id === 'g3', 'numbering continues from the old register');
   reset();
@@ -370,7 +370,7 @@ function told(owner, title, quietH, extra = {}) {
   const pq = (s) => s.id === sid(3) ? { id: 'q1', questions: [{ question: 'Deploy now or tomorrow?' }] } : null;
   let b = await boardBuild.build({ now: NOW, sessions: bsessions, pendingQuestion: pq, conductor: CONDUCTOR });
   const bj = JSON.parse(fs.readFileSync(boardBuild.boardFile(), 'utf8'));
-  check(b.written && bj.generator === 'baton' && bj.built_at && bj.conductor === CONDUCTOR, 'board.json written, stamped as Baton\'s');
+  check(b.written && bj.generator === 'baton' && bj.built_at && bj.conductor === CONDUCTOR, 'board.json written, stamped as Relaymote\'s');
   check(['rows', 'inbox', 'goals', 'labels', 'hints', 'counts'].every(k => k in bj), 'board.json has the documented sections');
   const bucket = (id) => (bj.rows.find(r => r.id === id) || {}).bucket;
   check(bucket(sid(3)) === 'decide' && /Deploy now/.test(bj.rows.find(r => r.id === sid(3)).ask), 'a session awaiting you is a Decide row with its question');
@@ -401,7 +401,7 @@ function told(owner, title, quietH, extra = {}) {
   check(out.body.sent === 3 && out.body.rejected.length === 1 && out.body.rejected[0].id === 'local_nope', 'a card no longer on the board is reported back, not sent');
   const acted = board.readActed();
   check(acted[sid(4)] && acted[sid(3)] && acted['#1'], 'every sent card is marked handled');
-  check(goals.notes().length === 0, 'Done on a Baton note closes it');
+  check(goals.notes().length === 0, 'Done on a Relaymote note closes it');
   {
     // The per-line audit records stay (the Conductor's index reads id + kind from each); one batch record joins them.
     const recs = fs.readFileSync(board.AUDIT, 'utf8').trim().split('\n').map(l => JSON.parse(l)).filter(r => r.batch === out.body.batch);

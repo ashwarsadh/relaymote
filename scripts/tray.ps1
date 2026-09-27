@@ -1,7 +1,7 @@
-# tray.ps1 - Baton's Windows tray icon. Keeps the daemon running and gives one-click access to the
+# tray.ps1 - Relaymote's Windows tray icon. Keeps the daemon running and gives one-click access to the
 # app, phone pairing and settings. Started by `baton tray` or the `baton autostart` logon task.
 # -Watchdog: started by the 10-minute "Baton Watchdog" task. It exits at once when a tray is already
-# running (single-instance lock) or when you stopped Baton yourself (state\stopped-by-user.json).
+# running (single-instance lock) or when you stopped Relaymote yourself (state\stopped-by-user.json).
 param([switch]$Watchdog)
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -AssemblyName System.Windows.Forms
@@ -14,7 +14,7 @@ $Data = if ($env:BATON_HOME) { $env:BATON_HOME } else { Join-Path $env:USERPROFI
 $mutex = New-Object System.Threading.Mutex($false, 'Local\BatonTray')
 if (-not $mutex.WaitOne(0)) { exit 0 }
 
-# "You stopped Baton" marker, shared with `baton stop` / `baton start` (lib/launch.js).
+# "You stopped Relaymote" marker, shared with `baton stop` / `baton start` (lib/launch.js).
 $State = if ($env:BATON_STATE_DIR) { $env:BATON_STATE_DIR } else { Join-Path $Data 'state' }
 $StopMarker = Join-Path $State 'stopped-by-user.json'
 function StoppedByUser { return (Test-Path $StopMarker) }
@@ -51,7 +51,7 @@ function Health {
   return $null
 }
 function Healthy { return [bool](Health) }
-# followClaude (Settings): Baton runs only while Claude Desktop does. The tray starts it when claude.exe
+# followClaude (Settings): Relaymote runs only while Claude Desktop does. The tray starts it when claude.exe
 # appears; the daemon stops itself after Desktop exits (and after its account sync).
 function FollowClaude { try { return ((Get-Content (Join-Path $Data 'settings.json') -Raw | ConvertFrom-Json).followClaude -eq $true) } catch { return $false } }
 function ClaudeUp { return [bool](Get-Process -Name claude -ErrorAction SilentlyContinue) }
@@ -85,19 +85,19 @@ $icon = New-Object System.Windows.Forms.NotifyIcon
 $png = Join-Path $Root 'assets\tray.png'
 if (Test-Path $png) { $bmp = New-Object System.Drawing.Bitmap $png; $icon.Icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon()) }
 else { $icon.Icon = [System.Drawing.SystemIcons]::Application }
-$icon.Text = 'Baton'
+$icon.Text = 'Relaymote'
 $icon.Visible = $true
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 $status = $menu.Items.Add('Starting...'); $status.Enabled = $false
 [void]$menu.Items.Add('-')
-$menu.Items.Add('Open Baton', $null, { OpenApp '' }) | Out-Null
+$menu.Items.Add('Open Relaymote', $null, { OpenApp '' }) | Out-Null
 $menu.Items.Add('Pair a phone (QR code)', $null, { OpenApp '#pair' }) | Out-Null
 $menu.Items.Add('Settings', $null, { OpenApp '#settings' }) | Out-Null
 $fix = $menu.Items.Add('Connect Claude Desktop...', $null, { OpenApp '#desktop' }); $fix.Visible = $false
 [void]$menu.Items.Add('-')
-$menu.Items.Add('Restart Baton', $null, { ClearStopped; StopDaemon; Start-Sleep -Seconds 3; StartDaemon }) | Out-Null
-$menu.Items.Add('Quit (stop Baton)', $null, {
+$menu.Items.Add('Restart Relaymote', $null, { ClearStopped; StopDaemon; Start-Sleep -Seconds 3; StartDaemon }) | Out-Null
+$menu.Items.Add('Quit (stop Relaymote)', $null, {
   MarkStopped; StopDaemon; $icon.Visible = $false; $icon.Dispose(); [System.Windows.Forms.Application]::Exit()
 }) | Out-Null
 $icon.ContextMenuStrip = $menu
@@ -111,17 +111,17 @@ $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 20000
 $timer.add_Tick({
   $h = Health
-  if (-not $h -and (StoppedByUser)) { $status.Text = 'Baton is stopped (Restart Baton to start it)'; $icon.Text = 'Baton - stopped'; $fix.Visible = $false; return }
-  if (-not $h -and -not (Wanted)) { $status.Text = 'Baton is asleep - it starts when Claude Desktop opens'; $icon.Text = 'Baton - waiting for Claude Desktop'; $fix.Visible = $false; return }
-  if (-not $h) { $status.Text = 'Baton stopped - restarting'; $icon.Text = 'Baton - restarting'; $fix.Visible = $false; StartDaemon; return }
+  if (-not $h -and (StoppedByUser)) { $status.Text = 'Relaymote is stopped (Restart Relaymote to start it)'; $icon.Text = 'Relaymote - stopped'; $fix.Visible = $false; return }
+  if (-not $h -and -not (Wanted)) { $status.Text = 'Relaymote is asleep - it starts when Claude Desktop opens'; $icon.Text = 'Relaymote - waiting for Claude Desktop'; $fix.Visible = $false; return }
+  if (-not $h) { $status.Text = 'Relaymote stopped - restarting'; $icon.Text = 'Relaymote - restarting'; $fix.Visible = $false; StartDaemon; return }
   if ($h.cdp -eq $false) {
-    $status.Text = 'Claude Desktop not connected'; $icon.Text = 'Baton - Claude Desktop not connected'; $fix.Visible = $true
+    $status.Text = 'Claude Desktop not connected'; $icon.Text = 'Relaymote - Claude Desktop not connected'; $fix.Visible = $true
     if (-not $script:warned) {
-      $icon.ShowBalloonTip(10000, 'Baton', "Claude Desktop's debugger is off, so Baton can read sessions but not send or resume. Click to set it up.", [System.Windows.Forms.ToolTipIcon]::Warning)
+      $icon.ShowBalloonTip(10000, 'Relaymote', "Claude Desktop's debugger is off, so Relaymote can read sessions but not send or resume. Click to set it up.", [System.Windows.Forms.ToolTipIcon]::Warning)
       $script:warned = $true
     }
   } else {
-    $status.Text = 'Baton is running'; $icon.Text = 'Baton - running'; $fix.Visible = $false; $script:warned = $false
+    $status.Text = 'Relaymote is running'; $icon.Text = 'Relaymote - running'; $fix.Visible = $false; $script:warned = $false
   }
 })
 $timer.Start()
@@ -132,10 +132,10 @@ $follow.Interval = 3000
 $follow.add_Tick({
   if (-not (FollowClaude)) { return }
   $up = ClaudeUp
-  if ($up -and -not $script:wasUp -and -not (StoppedByUser)) { StartDaemon; $status.Text = 'Baton is running'; $icon.Text = 'Baton - running' }
+  if ($up -and -not $script:wasUp -and -not (StoppedByUser)) { StartDaemon; $status.Text = 'Relaymote is running'; $icon.Text = 'Relaymote - running' }
   $script:wasUp = $up
 })
 $follow.Start()
-$status.Text = $(if (Wanted) { 'Baton is running' } else { 'Baton is asleep - it starts when Claude Desktop opens' })
+$status.Text = $(if (Wanted) { 'Relaymote is running' } else { 'Relaymote is asleep - it starts when Claude Desktop opens' })
 
 [System.Windows.Forms.Application]::Run()

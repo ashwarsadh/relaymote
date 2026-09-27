@@ -1,11 +1,11 @@
-# build.ps1 - build the Windows installer (Inno Setup 6) and a portable zip for Baton.
+# build.ps1 - build the Windows installer (Inno Setup 6) and a portable zip for Relaymote.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File installer\windows\build.ps1 [-NodeVersion 22.x.y] [-RequireInstaller]
 #   (or: npm run build:win)
 #
 # Output in dist\:
-#   Baton-Setup-<version>-x64.exe          per-user installer, no admin needed
-#   Baton-<version>-win-x64-portable.zip   unzip anywhere, run start-baton.cmd or baton.cmd
+#   Relaymote-Setup-<version>-x64.exe          per-user installer, no admin needed
+#   Relaymote-<version>-win-x64-portable.zip   unzip anywhere, run start-baton.cmd or baton.cmd
 #
 # A portable Node.js (latest 22.x LTS unless -NodeVersion is given) is downloaded from nodejs.org
 # and checked against the release's SHASUMS256.txt before it is bundled. Without Inno Setup the
@@ -24,7 +24,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Dist = Join-Path $Repo 'dist'
 $Cache = Join-Path $Dist 'cache'
-$Stage = Join-Path $Dist 'build\win\Baton'
+$Stage = Join-Path $Dist 'build\win\Relaymote'
 $Version = (Get-Content (Join-Path $Repo 'package.json') -Raw | ConvertFrom-Json).version
 function Say($m) { Write-Host "[build-win] $m" }
 
@@ -52,7 +52,7 @@ if ($actual -ne $expected) { Remove-Item -LiteralPath $zip -Force; throw "SHA256
 Say "Node $NodeVersion verified (sha256 $($expected.Substring(0, 16))...)"
 
 # --- 2. Stage the app -------------------------------------------------------------------------
-if (-not $Stage.EndsWith('\dist\build\win\Baton')) { throw "unexpected stage path $Stage" }
+if (-not $Stage.EndsWith('\dist\build\win\Relaymote')) { throw "unexpected stage path $Stage" }
 if (Test-Path $Stage) { Remove-Item -LiteralPath $Stage -Recurse -Force }
 New-Item -ItemType Directory -Force $Stage | Out-Null
 # Everything at the top level ships except development-only folders and files.
@@ -79,11 +79,11 @@ if (-not (Test-Path (Join-Path $rt 'node.exe'))) { throw 'node.exe missing from 
 
 # Launchers. CRLF line endings: cmd.exe misreads LF-only batch files.
 function Write-Cmd($name, [string[]]$lines) { [IO.File]::WriteAllText((Join-Path $Stage $name), (($lines -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII) }
-Write-Cmd 'baton.cmd' @('@echo off', 'rem baton.cmd - the Baton command line, run with the Node.js bundled next to it.', '"%~dp0runtime\node.exe" "%~dp0bin\baton.js" %*')
-Write-Cmd 'baton-setup.cmd' @('@echo off', 'title Baton setup', 'call "%~dp0baton.cmd" setup %*', 'echo.', 'pause')
-Write-Cmd 'baton-pair.cmd' @('@echo off', 'title Baton - Pair a phone', 'call "%~dp0baton.cmd" pair', 'echo.', 'pause')
-Write-Cmd 'baton-status.cmd' @('@echo off', 'title Baton - Status', 'call "%~dp0baton.cmd" status', 'echo.', 'pause')
-Write-Cmd 'start-baton.cmd' @('@echo off', 'rem Portable start: runs Baton in the background and opens it in your browser.', 'call "%~dp0baton.cmd" open')
+Write-Cmd 'baton.cmd' @('@echo off', 'rem baton.cmd - the Relaymote command line, run with the Node.js bundled next to it.', '"%~dp0runtime\node.exe" "%~dp0bin\baton.js" %*')
+Write-Cmd 'baton-setup.cmd' @('@echo off', 'title Relaymote setup', 'call "%~dp0baton.cmd" setup %*', 'echo.', 'pause')
+Write-Cmd 'baton-pair.cmd' @('@echo off', 'title Relaymote - Pair a phone', 'call "%~dp0baton.cmd" pair', 'echo.', 'pause')
+Write-Cmd 'baton-status.cmd' @('@echo off', 'title Relaymote - Status', 'call "%~dp0baton.cmd" status', 'echo.', 'pause')
+Write-Cmd 'start-baton.cmd' @('@echo off', 'rem Portable start: runs Relaymote in the background and opens it in your browser.', 'call "%~dp0baton.cmd" open')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'stop-baton.ps1') -Destination $Stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'baton.ico') -Destination $Stage
 
@@ -91,7 +91,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'baton.ico') -Destination $Stage
 if ($LASTEXITCODE -ne 0) { throw 'the staged CLI does not run' }
 
 # --- 3. Portable zip --------------------------------------------------------------------------
-$portable = Join-Path $Dist "Baton-$Version-win-x64-portable.zip"
+$portable = Join-Path $Dist "Relaymote-$Version-win-x64-portable.zip"
 if (Test-Path $portable) { Remove-Item -LiteralPath $portable -Force }
 [System.IO.Compression.ZipFile]::CreateFromDirectory($Stage, $portable, [System.IO.Compression.CompressionLevel]::Optimal, $true)
 Say "portable: $portable"
@@ -108,4 +108,4 @@ if (-not $iscc) {
 }
 & $iscc /Qp "/DAppVersion=$Version" "/DSourceDir=$Stage" "/DOutputDir=$Dist" (Join-Path $PSScriptRoot 'baton.iss')
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
-Say "installer: $(Join-Path $Dist "Baton-Setup-$Version-x64.exe")"
+Say "installer: $(Join-Path $Dist "Relaymote-Setup-$Version-x64.exe")"

@@ -228,8 +228,8 @@
 
     var hook = adv.launchHook;
     if (hook && hook.supported) {
-      box.appendChild(check('Start Claude through Baton', !!hook.installed, function (v) { act(function () { return api('/api/accounts/launch-hook', { on: v }).then(function (r) { if (r.ok === false) msg = r.message || r.error; }); }); },
-        'At sign-in Baton runs the repair pass first (at most 150 s), then starts Claude. Untick to put Claude’s own startup entry back.'));
+      box.appendChild(check('Start Claude through Relaymote', !!hook.installed, function (v) { act(function () { return api('/api/accounts/launch-hook', { on: v }).then(function (r) { if (r.ok === false) msg = r.message || r.error; }); }); },
+        'At sign-in Relaymote runs the repair pass first (at most 150 s), then starts Claude. Untick to put Claude’s own startup entry back.'));
     }
     box.appendChild(el('div', 'acct-sub', 'Lock file: ' + (adv.lockFile || '') + '. Only one sync tool may write: switch the others off before turning on automatic sync.'));
     return box;
@@ -299,10 +299,10 @@
     if (!state) { host.appendChild(el('div', 'muted', 'Loading accounts…')); return; }
     if (!state.ok && !state.scopes) { host.appendChild(el('div', 'muted', 'Accounts unavailable: ' + (state.error || ''))); return; }
 
-    host.appendChild(el('p', 'acct-sub', 'Use more than one Claude account? Baton keeps them looking the same: your sessions, archive marks ' +
+    host.appendChild(el('p', 'acct-sub', 'Use more than one Claude account? Relaymote keeps them looking the same: your sessions, archive marks ' +
       'and routines are copied between the accounts on this computer, and each account’s sidebar groups are kept from being lost. Nothing is deleted, and a backup is kept before every change.'));
     if (state.writableNote) host.appendChild(el('div', 'acct-sub', state.writableNote));
-    if (state.verdict && state.verdict.ok === false) host.appendChild(el('div', 'acct-armed', 'Claude Desktop replaced the sidebar groups Baton wrote (checked ' + when(state.verdict.at) + '). Restore them under Advanced, or sync again with Claude closed.'));
+    if (state.verdict && state.verdict.ok === false) host.appendChild(el('div', 'acct-armed', 'Claude Desktop replaced the sidebar groups Relaymote wrote (checked ' + when(state.verdict.at) + '). Restore them under Advanced, or sync again with Claude closed.'));
     if (state.settings && state.settings.enabled === false) host.appendChild(el('div', 'acct-armed', 'Account sync is switched off (Settings below).'));
 
     var scopes = scopeList(state);
@@ -317,7 +317,7 @@
       var acts = el('div', 'acct-row');
       acts.appendChild(btn(busy ? 'Working…' : 'Preview sync', 'acct-btn acct-go', function () { preview({}); }));
       acts.appendChild(btn('Close Claude, sync, reopen Claude', 'acct-btn', function () {
-        if (!state.cycleSupported) { cycle = { opts: {}, result: { manual: true, steps: state.manualSteps, message: 'On this computer Baton cannot close and reopen Claude Desktop for you. Do it by hand:' } }; render(); return; }
+        if (!state.cycleSupported) { cycle = { opts: {}, result: { manual: true, steps: state.manualSteps, message: 'On this computer Relaymote cannot close and reopen Claude Desktop for you. Do it by hand:' } }; render(); return; }
         runCycle({});
       }));
       host.appendChild(acts);

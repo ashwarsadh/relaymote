@@ -1,5 +1,5 @@
 @echo off
-rem run-daemon.cmd - start the Baton daemon so that WHAT NODE WRITES WHEN IT DIES IS KEPT.
+rem run-daemon.cmd - start the Relaymote daemon so that WHAT NODE WRITES WHEN IT DIES IS KEPT.
 rem
 rem Used by `baton start`, the tray and the autostart tasks (see lib/launch.js). A heap-limit abort, a
 rem native fault and an out-of-memory message all report on stderr; the daemon's own markers catch
@@ -16,9 +16,9 @@ rem Environment: BATON_NODE (node.exe to use; default: a bundled node.exe, then 
 rem BATON_HOME / BATON_STATE_DIR (data folder), BATON_DAEMON_ENTRY (script to run; tests only),
 rem BATON_STDIO_MAX_BYTES (rotation size; tests only).
 rem
-rem FOLLOW CLAUDE. A daemon that stopped because Claude Desktop closed (Settings > Run Baton only while
+rem FOLLOW CLAUDE. A daemon that stopped because Claude Desktop closed (Settings > Run Relaymote only while
 rem Claude Desktop is open) leaves state\follow-sleep.json. This wrapper then waits, checking every 3
-rem seconds, and starts the daemon again as soon as claude.exe appears. That is what brings Baton back
+rem seconds, and starts the daemon again as soon as claude.exe appears. That is what brings Relaymote back
 rem without the tray (headless autostart), instead of the 10-minute watchdog. `baton stop` or the tray's
 rem Quit (stopped-by-user.json) ends the wait.
 

@@ -43,7 +43,7 @@ check(!/href="(?:javascript|data):/i.test(md('javascript:alert(1) data:text/html
   check(!/onmouseover="/.test(h) && hrefs(h).length === 1 && hrefs(h)[0][0] === 'https://x.io/', 'a quote cannot break out of the href', h);
 }
 {
-  const h = md('[Baton](https://github.com/example/baton) and https://a.io');
+  const h = md('[Relaymote](https://github.com/example/baton) and https://a.io');
   check((h.match(/<a /g) || []).length === 2 && !/<a[^>]*>[^<]*<a/.test(h), 'markdown links still work and are not double-linked', h);
 }
 check(hrefs(md('run `https://a.io/x`')).length === 1, 'a URL inside a code span is linked too');

@@ -7,9 +7,9 @@ self.addEventListener('fetch', (event) => {
   if (event.request.mode !== 'navigate') return;
   event.respondWith(
     fetch(event.request).catch(() => new Response(
-      '<!doctype html><meta charset="utf-8"><title>Baton</title>' +
+      '<!doctype html><meta charset="utf-8"><title>Relaymote</title>' +
       '<body style="font:16px system-ui;background:#12110f;color:#e8e6e3;padding:28px">' +
-      '<b>Cannot reach Baton</b>' +
+      '<b>Cannot reach Relaymote</b>' +
       '<p style="color:#9b9691">The desktop is not reachable from here right now.</p>',
       { headers: { 'Content-Type': 'text/html; charset=utf-8' } })));
 });
@@ -41,9 +41,9 @@ self.addEventListener('pushsubscriptionchange', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let d = { title: 'Baton', body: 'Update' };
+  let d = { title: 'Relaymote', body: 'Update' };
   try { if (event.data) d = event.data.json(); } catch { try { d.body = event.data.text(); } catch {} }
-  event.waitUntil(self.registration.showNotification(d.title || 'Baton', {
+  event.waitUntil(self.registration.showNotification(d.title || 'Relaymote', {
     body: d.body || '',
     icon: '/icon-192.png',
     badge: '/badge-96.png',

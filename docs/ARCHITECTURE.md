@@ -1,8 +1,8 @@
-# How Baton works
+# How Relaymote works
 
 ```
  phone / browser ──HTTPS (Cloudflare) or Tailscale/LAN──►  app port 8790  ─┐
-                                                                          │   Baton daemon (Node.js)
+                                                                          │   Relaymote daemon (Node.js)
  Claude Code sessions ──MCP (stdio)── mcp/baton-mcp.js ──► control 8788 ─┤    server.js
                                                                           │
          reads files ◄────────────────────────────────────────────────────┤
@@ -22,7 +22,7 @@
   30 seconds. It never opens a session just to look at it.
 - **Actions** (send, answer a question or permission, change model or effort, rename, archive, start
   a session, press a background-task chip) go through Claude Desktop's main-process debugger.
-  Where the app has an internal method for it — for example sending a message to a session — Baton
+  Where the app has an internal method for it — for example sending a message to a session — Relaymote
   calls that method directly (`lib/bridge.js`), which needs no clicking. Otherwise it drives the UI
   the way you would (`lib/desktop.js`).
 - All UI driving is serialised through one lane, and waits until you have been away from the
@@ -65,12 +65,12 @@ task can be escalated one level.
 
 ## Resume
 
-A session stopped by a usage limit records when the limit resets; Baton sends it a short
+A session stopped by a usage limit records when the limit resets; Relaymote sends it a short
 continuation at that time. A session that was mid-turn when Claude Desktop exited is detected on the
 next start and continued. Sessions the app will resume on its own are left alone.
 
 ## Limits
 
-Claude Desktop's UI and debugger are not a public API. A desktop update can change the markup Baton
+Claude Desktop's UI and debugger are not a public API. A desktop update can change the markup Relaymote
 drives; reads keep working because they only use files. File an issue with `baton status` output
 when an action stops working.

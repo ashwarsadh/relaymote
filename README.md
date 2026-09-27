@@ -1,8 +1,11 @@
 <p align="center">
-  <img src="assets/logo.svg" width="112" alt="Baton logo">
+  <img src="assets/logo.svg" width="112" alt="Relaymote logo">
 </p>
 
-<h1 align="center">Baton</h1>
+<h1 align="center">Relaymote</h1>
+
+> **Relaymote was called Baton until v0.2.25.** Nothing changes for an existing install: it updates itself, and the
+> `baton` command, the `baton_*` tools, your settings in `~/.baton` and the install folder all keep their names.
 
 > **Unofficial; not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.**
 
@@ -12,7 +15,7 @@ computer. Plus auto-resume, one app across several Claude accounts, automatic pr
 conductor for running many sessions at once.</p>
 
 <p align="center">
-  <a href="https://github.com/ashwarsadh/baton/releases/latest"><b>⬇ Download</b></a> ·
+  <a href="https://github.com/ashwarsadh/relaymote/releases/latest"><b>⬇ Download</b></a> ·
   <a href="#let-your-ai-install-it">Let your AI install it</a> ·
   <a href="#get-started-in-three-steps">Get started</a> ·
   <a href="docs/ARCHITECTURE.md">How it works</a>
@@ -30,11 +33,11 @@ conductor for running many sessions at once.</p>
 
 ### 1. It mirrors your desktop — it does not start a copy
 
-Baton shows **the sessions Claude Desktop already has**: the same list, the same groups, the same
+Relaymote shows **the sessions Claude Desktop already has**: the same list, the same groups, the same
 conversation, the same model and effort. Pick up any session on your phone and put it down again at your
 computer; nothing is forked, and there is nothing to switch on per session.
 
-| | Claude's built-in Remote Control | Baton |
+| | Claude's built-in Remote Control | Relaymote |
 |---|---|---|
 | What you see on the phone | the session you turned it on for | **every** Code-tab session, as the desktop shows it |
 | Switching it on | per session, and again after Claude restarts | once, at install |
@@ -49,12 +52,12 @@ computer; nothing is forked, and there is nothing to switch on per session.
 
 If you use Claude Desktop with more than one account or organisation (work and personal, or two
 subscriptions), each keeps its own sidebar: sessions, archive, groups and routines. Switch accounts and the
-app looks different. **Baton keeps them in sync**, so switching accounts shows the same app. You preview
+app looks different. **Relaymote keeps them in sync**, so switching accounts shows the same app. You preview
 every change before anything is written. See [Accounts](#accounts).
 
 ### 3. It organises your data for you
 
-Baton reads every session and knows which **project** (folder) it belongs to. The Organizer puts each new
+Relaymote reads every session and knows which **project** (folder) it belongs to. The Organizer puts each new
 session into its project's sidebar group automatically, and keeps a live **index of all your projects** —
 their sessions, groups and who coordinates them. Your sidebar stays tidy without you dragging anything.
 
@@ -95,7 +98,7 @@ sessions you start from the app.
 ### 7. Goal chaser — work gets finished, not just started
 
 Tell the Conductor what you want done — *"ship the v2 API, with docs and tests"* — and it becomes a **goal**
-with an owner, a check and an optional due date. Baton works out **which project and which session** it
+with an owner, a check and an optional due date. Relaymote works out **which project and which session** it
 belongs to and sends it there; if no session owns it, it **starts a new one in the right folder and files it
 in the project's group**. From then on the chaser watches every open goal:
 
@@ -113,7 +116,7 @@ tools.
 Claude's prompt cache lasts about **an hour**. A session woken inside that hour continues on a warm cache; a
 session woken after it re-reads its whole context at full price. Cached input is billed at about a tenth of the
 normal rate, so for a long session a cold wake costs **many times more** than the same turn warm. The cache
-keeper times Baton's own nudges to land **inside the warm window** (by default 25–55 minutes after the
+keeper times Relaymote's own nudges to land **inside the warm window** (by default 25–55 minutes after the
 session's last reply), batches everything for one session into one wake, and only wakes a
 cold session when a goal is late or stuck for days. It can also keep the Conductor itself warm. Each wake is
 logged as warm or cold, and the daily roll-up shows the difference (`baton wakes`).
@@ -139,35 +142,35 @@ session is woken once, not five times. See [docs/BOARD.md](docs/BOARD.md).
 
 ### 10. Every feature is a switch
 
-Use Baton as a plain phone client, or turn on the orchestration. Each feature above is one toggle in
+Use Relaymote as a plain phone client, or turn on the orchestration. Each feature above is one toggle in
 **Settings › Modules**. The defaults are conservative: anything that would message or type into your
 sessions on its own (goal chasing, cache keeping, auto-compact, chip autostart) starts **off**.
 
-<p align="center"><img src="docs/img/shot-desktop.png" width="720" alt="Baton on a desktop browser"></p>
+<p align="center"><img src="docs/img/shot-desktop.png" width="720" alt="Relaymote on a desktop browser"></p>
 
 ---
 
 ## Download
 
-**[Latest release →](https://github.com/ashwarsadh/baton/releases/latest)**
+**[Latest release →](https://github.com/ashwarsadh/relaymote/releases/latest)**
 
 | System | File | Notes |
 |---|---|---|
-| Windows 10/11 | `Baton-Setup-<version>.exe` | Per-user install, no admin. Includes Node.js. Tray icon; start with Windows (optional). |
-| macOS, Apple silicon | `Baton-<version>-arm64.dmg` | **Experimental, untested by us.** Unsigned: right-click › Open the first time. |
-| macOS, Intel | `Baton-<version>-x64.dmg` | Same as above. |
+| Windows 10/11 | `Relaymote-Setup-<version>.exe` | Per-user install, no admin. Includes Node.js. Tray icon; start with Windows (optional). |
+| macOS, Apple silicon | `Relaymote-<version>-arm64.dmg` | **Experimental, untested by us.** Unsigned: right-click › Open the first time. |
+| macOS, Intel | `Relaymote-<version>-x64.dmg` | Same as above. |
 | Anything with Node.js 18+ | source | see [Install](#1-install) |
 
 You also need **Claude Desktop** with the Code tab, signed in.
 
 ## Let your AI install it
 
-Baton ships instructions written for AI agents. Open Claude Code (or any coding agent) on the computer where
+Relaymote ships instructions written for AI agents. Open Claude Code (or any coding agent) on the computer where
 Claude Desktop runs, and say:
 
-> **Set up Baton for me. Follow https://github.com/ashwarsadh/baton/blob/main/INSTALL-FOR-AI.md**
+> **Set up Relaymote for me. Follow https://github.com/ashwarsadh/relaymote/blob/main/INSTALL-FOR-AI.md**
 
-It checks your system, installs Baton, connects Claude Desktop, registers the conductor tools, asks you how
+It checks your system, installs Relaymote, connects Claude Desktop, registers the conductor tools, asks you how
 your phone should reach the computer, and shows you the pairing QR code. It asks before anything that
 changes an account of yours (such as creating a Cloudflare address).
 
@@ -178,7 +181,7 @@ changes an account of yours (such as creating a Cloudflare address).
 Run the installer from [Download](#download), or install from source:
 
 ```bash
-git clone https://github.com/ashwarsadh/baton.git
+git clone https://github.com/ashwarsadh/relaymote.git
 cd baton
 npm install
 npm link          # makes the `baton` command available (or run: node bin/baton.js)
@@ -186,12 +189,12 @@ baton setup
 ```
 
 `baton setup` checks everything, turns on Claude Desktop's Developer Mode and (on Windows) its debugger,
-registers the conductor tools with Claude Code, adds Baton to start with Windows (with a tray icon) and opens
+registers the conductor tools with Claude Code, adds Relaymote to start with Windows (with a tray icon) and opens
 the app.
 
 ### 2. Connect Claude Desktop (Developer Mode + Main Process Debugger)
 
-Baton acts through Claude Desktop's own **main-process debugger**. Its switch is in a **Developer** menu that
+Relaymote acts through Claude Desktop's own **main-process debugger**. Its switch is in a **Developer** menu that
 stays **hidden until you turn on Developer Mode**:
 
 1. **Turn on Developer Mode** (once). `baton setup` does this for you; then quit and reopen Claude Desktop
@@ -201,7 +204,7 @@ stays **hidden until you turn on Developer Mode**:
 2. **Turn on the debugger.** **Developer › Enable Main Process Debugger**, then press **OK**.
 3. Check it: `baton status`, or **Settings › Desktop connection › Check again**.
 
-The debugger switches itself off whenever Claude Desktop restarts. **On Windows Baton turns it back on for
+The debugger switches itself off whenever Claude Desktop restarts. **On Windows Relaymote turns it back on for
 you** — once Desktop is signed in it shows a 3-2-1 countdown on screen and clicks through the same menus in a
 few seconds, without resizing the window, and `baton debugger` does it on
 demand. On macOS, repeat step 2 after a restart; automatic re-enabling is Windows-only for now.
@@ -214,7 +217,7 @@ computer only (`127.0.0.1`).
 ### 3. Pair your phone
 
 Open **Settings › Pair a phone** (or *Pair a phone* in the tray menu, or `baton pair`) and scan the QR code.
-Then use your phone browser's **Add to Home screen** to install Baton like an app.
+Then use your phone browser's **Add to Home screen** to install Relaymote like an app.
 
 ## Reach it from your phone
 
@@ -229,7 +232,7 @@ Open **Settings › Remote access** and pick one:
 | **Anywhere — my own address** | free Cloudflare account + a domain | `https://baton.yourdomain.com` | daily use; never changes |
 
 For your own address: press **Log in to Cloudflare**, authorise the domain in the page that opens, type the
-hostname you want (e.g. `baton.example.com`) and press **Create**. Baton creates the tunnel and the DNS record.
+hostname you want (e.g. `baton.example.com`) and press **Create**. Relaymote creates the tunnel and the DNS record.
 From the command line:
 
 ```bash
@@ -256,7 +259,7 @@ Everything is in **Settings** (the ⚙ in the session list, or *Settings* in the
 | **Remote access** | this computer / Wi-Fi / Tailscale / Cloudflare quick link / your own Cloudflare address |
 | **Pair a phone** | QR codes, copy link, issue a new key |
 | **Notifications** | push on *needs input* and *finished*; your push contact; a backup channel (ntfy, webhook or a local command) for when push can't reach a phone, with a per-10-minute cap and a *Send a test* button |
-| **Model engine** | off by default. `None` · an OpenAI-compatible server (key read from an environment variable you name, never stored) · Claude CLI or Baton worker (**both use your own Claude plan**). Refuses empty answers, schema-invalid JSON and (optionally) a substituted model; `baton engine test` |
+| **Model engine** | off by default. `None` · an OpenAI-compatible server (key read from an environment variable you name, never stored) · Claude CLI or Relaymote worker (**both use your own Claude plan**). Refuses empty answers, schema-invalid JSON and (optionally) a substituted model; `baton engine test` |
 | **Advanced** | ports, worker concurrency, Conductor session, board folder, trusted project folders |
 
 | Module | Default | What it does |
@@ -271,7 +274,7 @@ Everything is in **Settings** (the ⚙ in the session list, or *Settings* in the
 | Accounts | off | Keep several Claude accounts' sidebars in sync ([Accounts](#accounts)) |
 | Board | off | A tappable to-do board from `board.json` ([docs/BOARD.md](docs/BOARD.md)) |
 | Goal chaser | off | Goals with owners, checks and due dates; nudges a session that stopped early, routes or starts the right session, holds a goal for your verification ([Goal chaser](#7-goal-chaser--work-gets-finished-not-just-started)) |
-| Cache keeper | off | Times Baton's nudges inside a session's 1-hour prompt-cache window and batches them, so long work continues on a warm cache ([Cache keeper](#8-cache-keeper--fewer-tokens-for-long-work)) |
+| Cache keeper | off | Times Relaymote's nudges inside a session's 1-hour prompt-cache window and batches them, so long work continues on a warm cache ([Cache keeper](#8-cache-keeper--fewer-tokens-for-long-work)) |
 | Inbox | on | Things only you can do: an append-only, numbered inbox (`baton inbox`, `baton_inbox_add`). It stays passive until something adds to it ([docs/BOARD.md](docs/BOARD.md#the-inbox)) |
 | Inbox auto-resolve | off | Moves an inbox item to *probably handled* when there is evidence for it (your tap, for example). It never goes straight to done, never touches a pinned item, and never touches money, deletion or outward items on weak evidence |
 | Backup alerts | off | Settings › Notifications: send alerts via ntfy, a webhook or a local command when push reaches no phone (e.g. Same Wi-Fi) |
@@ -285,18 +288,18 @@ Everything is in **Settings** (the ⚙ in the session list, or *Settings* in the
 | Context hygiene | on | Every 30 min: what each session's context needs — compact, write state first, rotate, new session, archive, hold — into `HYGIENE.md` / `hygiene.json` (shown on the Board), plus `ARCHIVE-CANDIDATES.md` and a daily wake roll-up. Writes files only (`baton hygiene`; tune under `hygiene`, `archive`) |
 | Auto-compact | off | Types `/compact` into a session only in its last warm cache cycle, mid-task, with its state authored on disk, idle and confirmed idle by the app — never cold, running or awaiting; capped per cycle, verified later |
 | Idle-CLI reaper | off | Every open session keeps a CLI process (~400 MB with its tools) whether you use it or not. Frees the ones idle 3 h or more through Claude's own teardown; the next message resumes the session with its history. Never touches a session that is running, unread, waiting on you, on Remote Control, queued, owns a goal or is in an await. Only logs what it would free for its first 24 h (`baton reaper`; tune under `reaper`) |
-| Automatic updates | on | Every 6 hours checks GitHub for a new release. A Windows install downloads the new installer, checks that SHA256SUMS.txt carries a valid signature by the Baton release key and that the installer matches its line, then installs it silently and restarts (about 15 s; never while a task runs). A source checkout, the portable zip and macOS only report it (`baton update`; `baton update --apply` installs now) |
+| Automatic updates | on | Every 6 hours checks GitHub for a new release. A Windows install downloads the new installer, checks that SHA256SUMS.txt carries a valid signature by the Relaymote release key and that the installer matches its line, then installs it silently and restarts (about 15 s; never while a task runs). A source checkout, the portable zip and macOS only report it (`baton update`; `baton update --apply` installs now) |
 
-**Idle gate.** Some actions drive the Claude Desktop window. Baton waits until you have not touched the
+**Idle gate.** Some actions drive the Claude Desktop window. Relaymote waits until you have not touched the
 keyboard or mouse for a few seconds (15 by default), so it never types into what you're doing. When the idle
-time cannot be read (see [Platform support](#platform-support)) Baton treats you as **active** and waits; set
+time cannot be read (see [Platform support](#platform-support)) Relaymote treats you as **active** and waits; set
 the gate to 0 to turn it off. `baton doctor` shows which probe is in use.
 
 **Trusted project folders** (`trustedRoots`, empty by default). Workers run with permission prompts
-bypassed, so Baton marks a folder as trusted for Claude Code only when a task runs in it. List parent
+bypassed, so Relaymote marks a folder as trusted for Claude Code only when a task runs in it. List parent
 folders here to trust everything under them up front; a drive root or a relative path is refused.
 
-Settings live in `~/.baton/settings.json`; all of Baton's data is under `~/.baton` (override with
+Settings live in `~/.baton/settings.json`; all of Relaymote's data is under `~/.baton` (override with
 `BATON_HOME`).
 
 ## The conductor and masters
@@ -321,7 +324,7 @@ There is one Conductor at a time; see or clear it in Settings › Advanced.
 - `baton_pending_tasks`, `baton_start_task`, `baton_dismiss_task` for background-task chips
 - `baton_set_model`, `baton_set_effort`, `baton_fast_mode`
 - `baton_goal` (a completion condition the session keeps working towards) and `baton_await` (park until
-  workers report, woken by Baton instead of polling)
+  workers report, woken by Relaymote instead of polling)
 - `baton_resume`, `baton_unstick`, `baton_heal` when something is stuck
 - `baton_hygiene` (what each session's context needs) and `baton_archive_candidates` (safe to archive, with
   reasons; archives nothing — show the user, archive only what they approve)
@@ -344,7 +347,7 @@ Turn on **Settings › Modules › Accounts**, then open **Accounts** in the app
 
 What syncs: session records, archive state, session details and routines; each account's sidebar groups are
 repaired when Claude loses them (folding groups across accounts is opt-in). Claude Desktop keeps only the account
-that is **currently open** in memory, so Baton updates the other accounts straight away and applies changes
+that is **currently open** in memory, so Relaymote updates the other accounts straight away and applies changes
 for the open one when Claude Desktop is closed.
 
 ## Command line
@@ -388,8 +391,8 @@ baton index progress "<project>" | buried [days] | learn | tag | log | dispatche
 | Idle gate | ✅ | ✅ `ioreg` (HIDIdleTime) | `xprintidle` if installed, else unknown (= not idle) |
 | Account sync | ✅ | untested | — |
 
-Baton depends on Claude Desktop's internal UI and debugger, which are not a public API. An update to Claude
-Desktop can break an action until Baton is updated; reading sessions keeps working because it only uses files
+Relaymote depends on Claude Desktop's internal UI and debugger, which are not a public API. An update to Claude
+Desktop can break an action until Relaymote is updated; reading sessions keeps working because it only uses files
 on disk.
 
 ## Security
@@ -416,7 +419,7 @@ folder.
 
 ## Not affiliated with Anthropic
 
-Baton is an independent open-source project. "Claude" and "Claude Code" are trademarks of Anthropic. Baton
+Relaymote is an independent open-source project. "Claude" and "Claude Code" are trademarks of Anthropic. Relaymote
 does not handle your Anthropic credentials; it drives the Claude Desktop app you are already signed in to.
 
 ## License

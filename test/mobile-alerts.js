@@ -170,7 +170,7 @@ function fakeSub(endpoint) {
   const on = { ...D, modules: { ...D.modules, accounts: true } };
   const w1 = alerts.accountSwitchText(on);
   check(w1.ask === true && /additively/.test(w1.note) && /press Sync/.test(w1.note) && !/both ways|every \d+ minutes/.test(all(w1)),
-        'module on, Baton defaults (add mode, auto-sync off): says additive and on demand', w1.note);
+        'module on, Relaymote defaults (add mode, auto-sync off): says additive and on demand', w1.note);
   const w2 = alerts.accountSwitchText({ ...on, accounts: { ...D.accounts, mode: 'two-way', autoSync: true, intervalMinutes: 20 } });
   check(/both ways, every 20 minutes/.test(w2.note) && /every 20 min/.test(w2.body), 'two-way + auto-sync every 20: says exactly that', w2.note);
   const w3 = alerts.accountSwitchText({ ...on, accounts: { ...D.accounts, autoSync: true, intervalMinutes: 2 } });

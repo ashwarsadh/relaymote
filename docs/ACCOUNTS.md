@@ -4,7 +4,7 @@ If you use more than one Claude account on the same computer (say "Work" and "Pe
 Desktop keeps a separate list for each one. Switch account and your sessions, archive, sidebar
 groups and routines seem to vanish. They have not; they sit in the other account's folder.
 
-Baton's **Accounts** screen copies them across, so whichever account you sign in to, the app
+Relaymote's **Accounts** screen copies them across, so whichever account you sign in to, the app
 looks the same.
 
 Turn it on in **Settings › Modules › Accounts**, then open the 👤 button.
@@ -20,7 +20,7 @@ Turn it on in **Settings › Modules › Accounts**, then open the 👤 button.
 | Sidebar groups | each account's own groups are repaired if Claude loses them; folding groups **across** accounts is off unless you switch it on (Advanced) | only while Claude Desktop is closed |
 
 Nothing is ever deleted by default. Something missing from one account is copied in, never taken
-as "delete it from the other". Before every write Baton keeps a backup and a journal, so any sync
+as "delete it from the other". Before every write Relaymote keeps a backup and a journal, so any sync
 can be undone (`baton accounts undo`).
 
 ## Three ways to sync
@@ -39,7 +39,7 @@ You can also choose which accounts take part: all accounts on this computer, or 
 
 1. In Claude Desktop, log out, then log in with the other account.
 2. Open the Code tab once, so Claude creates that account's folder.
-3. Come back to Baton. The new account appears on the Accounts screen.
+3. Come back to Relaymote. The new account appears on the Accounts screen.
 4. Press **Copy my sessions into this account** (or choose Two-way), check the preview, then **Sync now**.
 
 The account you are signed in to can only be written while Claude Desktop is closed. **Close Claude,
@@ -62,10 +62,10 @@ baton accounts sync --two-way --to 2 --apply
 baton accounts undo                   # reverse the last sync (Claude Desktop must be closed)
 ```
 
-**Sync by itself** (Settings) runs on a timer, on **every** Claude Desktop exit, and once when Baton
+**Sync by itself** (Settings) runs on a timer, on **every** Claude Desktop exit, and once when Relaymote
 starts before Claude does, so work that was waiting for Claude to close gets done.
 
-When you switch account in Claude and answer **Bring my things** to Baton's question, Baton syncs toward
+When you switch account in Claude and answer **Bring my things** to Relaymote's question, Relaymote syncs toward
 that account only. The account in use can be written only while Claude is closed, so this waits for the
 next exit (retried for up to 7 days). It never closes Claude for you.
 
@@ -87,21 +87,21 @@ baton accounts verify                  # the last relaunch check
 
 - **Undo** backs up what is there now before it restores, so an undo can itself be undone, and it
   rebuilds every account's archive index afterwards.
-- **Relaunch check.** After Baton writes sidebar groups, it waits until Claude Desktop is open again,
+- **Relaunch check.** After Relaymote writes sidebar groups, it waits until Claude Desktop is open again,
   lets it settle for 3 minutes, and counts both places Claude keeps groups. If Claude put back an older
   copy, the Accounts screen says so.
-- **Gateway mode** (third-party inference) keeps its own groups in its own store. Baton finds it, seeds it
+- **Gateway mode** (third-party inference) keeps its own groups in its own store. Relaymote finds it, seeds it
   once from the account you used last when it is empty, creates its settings copy, and keeps separate
   snapshots. Session details are never written into it.
 
-### Start Claude through Baton (Windows, opt-in)
+### Start Claude through Relaymote (Windows, opt-in)
 
 ```sh
-baton accounts launch-hook install     # Claude's startup entry now runs Baton first
+baton accounts launch-hook install     # Claude's startup entry now runs Relaymote first
 baton accounts launch-hook remove      # puts Claude's own entry back, exactly as it was
 ```
 
-At sign-in Baton runs the repair pass while Claude is still closed (at most 150 seconds), waits for any
+At sign-in Relaymote runs the repair pass while Claude is still closed (at most 150 seconds), waits for any
 other writer to finish, then starts Claude (the Store version through its app id). If anything fails,
 Claude still starts.
 
@@ -114,7 +114,7 @@ baton accounts import-migrate <dir> --apply    # import
 
 Reads the other tool's `sync-state.json`, `account-labels.json`, `state-sync-freeze.json`,
 `HOLD-STATE-SYNC` and `scope-snapshots/` (including groups you deleted on purpose). The source folder is
-never changed. It refuses if Baton already has sync history; add `--merge` to combine them (Baton's own
+never changed. It refuses if Relaymote already has sync history; add `--merge` to combine them (Relaymote's own
 facts win where both have one).
 
 **Only one sync tool may write.** Switch the other tool's automatic runs off before you turn on
@@ -124,7 +124,7 @@ setting, so one waits while the other writes.
 ## Where things are
 
 - Claude Desktop's data: `%APPDATA%\Claude` on Windows, `~/Library/Application Support/Claude` on macOS.
-- Baton's backups, journals, labels, snapshots and the sync lock: `~/.baton/accounts` (or `$BATON_HOME/accounts`).
+- Relaymote's backups, journals, labels, snapshots and the sync lock: `~/.baton/accounts` (or `$BATON_HOME/accounts`).
 - Account names come from the Claude Code login (`~/.claude.json`) when they match; otherwise
   rename an account yourself on the Accounts screen.
 
@@ -132,8 +132,8 @@ setting, so one waits while the other writes.
 
 - **Windows**: everything above, including telling whether Claude Desktop is running, the Store
   (MSIX) version of Claude, and close/sync/reopen.
-- **macOS**: the sync itself uses the same files and should work, but it is **untested**. Baton checks
+- **macOS**: the sync itself uses the same files and should work, but it is **untested**. Relaymote checks
   whether Claude is running with `ps`. Close/sync/reopen is not automated; follow the manual steps.
 - **Linux**: Claude Desktop does not run there, so there is nothing to sync.
-- Sidebar groups need the optional `classic-level` package (installed with Baton). Without it the
+- Sidebar groups need the optional `classic-level` package (installed with Relaymote). Without it the
   other parts still sync.

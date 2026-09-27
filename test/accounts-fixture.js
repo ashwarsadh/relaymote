@@ -1,6 +1,6 @@
 // accounts-fixture.js — throwaway fake Claude profiles for the accounts-* tests.
 // Require it FIRST: it points APPDATA, LOCALAPPDATA, CLAUDE_CONFIG_DIR and BATON_HOME into a temp
-// dir before any Baton module is loaded, so no test can reach the real Claude folders or ~/.baton.
+// dir before any Relaymote module is loaded, so no test can reach the real Claude folders or ~/.baton.
 // The Desktop presence probe is replaced by a stub (desk()): no test ever asks the real machine.
 'use strict';
 const fs = require('fs');

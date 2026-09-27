@@ -249,7 +249,7 @@ let STATE_FN = (board, opts) => conductorState(board, opts);
 function _setSender(fn) { const p = SEND; SEND = fn || ((s, m, o) => bridge.sendMessage(s, m, o)); return p; }
 function _setConductorState(fn) { const p = STATE_FN; STATE_FN = fn || ((b, o) => conductorState(b, o)); return p; }
 
-/** On Baton's own board a delivered Done closes the inbox item and a Reinstate re-opens (and pins) it. */
+/** On Relaymote's own board a delivered Done closes the inbox item and a Reinstate re-opens (and pins) it. */
 function closeBatonNote(board, l, kind) {
   if ((kind !== 'done' && kind !== 'reopen') || l.target !== 'inbox' || board.generator !== 'baton') return;
   const n = String(l.line).split(' ')[1];

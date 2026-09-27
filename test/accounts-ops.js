@@ -3,7 +3,7 @@
 //     over existing history unless merge, forgotten groups stay forgotten);
 //   * the shared lock file (a second writer is refused and does not overwrite the state);
 //   * the boot window, the Desktop-exit pass and the account-switch transfer;
-//   * launching Claude through Baton (repair capped, lock waited for, Store fallback) and its
+//   * launching Claude through Relaymote (repair capped, lock waited for, Store fallback) and its
 //     logon hook against a FAKE registry - the real one is never touched;
 //   * close-sync-reopen: nothing is closed without the confirm token; Store (MSIX) reopen fallback;
 //   * the Advanced API actions.
@@ -71,7 +71,7 @@ const { check } = fx;
   const lab = core.labels().user;
   check(lab[keyA] === 'Work' && lab[AA + '/' + AO2] === 'Work' && !lab[keyB], 'labels keyed by scope');
   check(core.frozenIds()[fx.sid(3)] === 'keeps its own model' && !core.frozenIds()['not-a-record'], 'the freeze list is imported (malformed ids dropped)');
-  check(core.held(), 'a HOLD in the source holds Baton too');
+  check(core.held(), 'a HOLD in the source holds Relaymote too');
   const snap = JSON.parse(fs.readFileSync(path.join(core.SNAP_DIR, snapName), 'utf8'));
   check(snap.forgotten.includes('g-dead') && snap.forgottenNames.includes('old stuff'), 'group snapshots imported with their forgotten lists');
   check(!fs.existsSync(path.join(core.SNAP_DIR, AA + '__' + AO + '-before-restore.json')), 'the other tool\'s own restore backups are not imported');
@@ -89,9 +89,9 @@ const { check } = fx;
   const srcHash2 = fx.hashTree(SRC);
   im = await sync.importMigrate(SRC, { apply: true, merge: true });
   const st3 = core.loadState();
-  check(im.ok && st3.observed[keyA].records[fx.sid(1)].value === 'baton-own' && st3.observed[keyA].records[fx.sid(7)].value === 'new-from-source', '--merge: Baton\'s own fact wins, a new one is added', lines(im));
+  check(im.ok && st3.observed[keyA].records[fx.sid(1)].value === 'baton-own' && st3.observed[keyA].records[fx.sid(7)].value === 'new-from-source', '--merge: Relaymote\'s own fact wins, a new one is added', lines(im));
   check(JSON.parse(fs.readFileSync(path.join(core.SNAP_DIR, snapName), 'utf8')).forgotten.join() === 'g-dead,g-dead-2', 'forgotten lists are unioned');
-  check(fs.readdirSync(core.BACKUP_DIR).filter(n => /^import-/.test(n)).length >= 1 && fx.hashTree(SRC) === srcHash2, 'what Baton had is backed up first; the source still unchanged');
+  check(fs.readdirSync(core.BACKUP_DIR).filter(n => /^import-/.test(n)).length >= 1 && fx.hashTree(SRC) === srcHash2, 'what Relaymote had is backed up first; the source still unchanged');
   fs.writeFileSync(path.join(SRC, 'sync-state.json'), JSON.stringify({ ...srcState, version: 2 }));
   im = await sync.importMigrate(SRC, { merge: true });
   check(im.errors.some(e => /not a version 1 state file/.test(e)), 'a state file of another version is refused, not guessed at');
@@ -125,7 +125,7 @@ const { check } = fx;
   check(r && r.skipped && r.presence === 'live' && !has(A, 5), 'Desktop already up: skipped');
   desk('absent');
   r = await sync.bootPass();
-  check(r && r.ok && r.trigger === 'boot' && has(A, 5), 'Desktop absent at Baton start: the pass runs and fills the account in use', JSON.stringify(r && r.trigger));
+  check(r && r.ok && r.trigger === 'boot' && has(A, 5), 'Desktop absent at Relaymote start: the pass runs and fills the account in use', JSON.stringify(r && r.trigger));
 
   // ---------------------------------------------------------------- the exit pass
   console.log('-- a pass on every Desktop exit');
@@ -168,8 +168,8 @@ const { check } = fx;
   t = await sync.transferTick({ exited: true });
   check(t && t.done && t.error === 'NO_TARGET', 'an account that is not on this computer: recorded, nothing written');
 
-  // ---------------------------------------------------------------- launching through Baton
-  console.log('-- launch Claude through Baton');
+  // ---------------------------------------------------------------- launching through Relaymote
+  console.log('-- launch Claude through Relaymote');
   const spawned = [];
   let clock = 0, lockTurns = 0;
   const deps = over => ({
@@ -207,7 +207,7 @@ const { check } = fx;
   const ORIGINAL = '"C:\\Users\\someone\\AppData\\Local\\AnthropicClaude\\claude.exe" --startup';
   REG.set('Claude', ORIGINAL);
   h = await launch.hookInstall(fakeReg);
-  check(h.ok && /wscript\.exe .*launch-claude\.vbs/.test(REG.get('Claude')) && fs.existsSync(launch.VBS_FILE) && h.undo === 'baton accounts launch-hook remove', 'install: the startup entry now goes through Baton, with a one-command undo', REG.get('Claude'));
+  check(h.ok && /wscript\.exe .*launch-claude\.vbs/.test(REG.get('Claude')) && fs.existsSync(launch.VBS_FILE) && h.undo === 'baton accounts launch-hook remove', 'install: the startup entry now goes through Relaymote, with a one-command undo', REG.get('Claude'));
   const orig = core.readJson(launch.ORIG_FILE, null);
   check(orig && orig.value === ORIGINAL && /claude\.exe$/.test(orig.exe) && orig.args.join() === '--startup', 'the original entry is saved first');
   check(/accounts launch/.test(fs.readFileSync(launch.VBS_FILE, 'utf8')), 'the launcher runs "baton accounts launch" hidden');

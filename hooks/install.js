@@ -1,13 +1,13 @@
 // hooks/install.js — `baton hooks install | remove | status [--dry-run]`.
 //
-// Adds or removes Baton's optional finish-the-task Stop hook in <CLAUDE_CONFIG_DIR>/settings.json
+// Adds or removes Relaymote's optional finish-the-task Stop hook in <CLAUDE_CONFIG_DIR>/settings.json
 // (default ~/.claude/settings.json). It is never installed by default.
 //   - Every other hook and setting in that file is left exactly as it was.
 //   - --dry-run prints what would change and writes nothing.
 //   - Before any write the current file is copied to settings.json.baton-backup-<timestamp>.
 //   - A settings.json that is not valid JSON is refused, never overwritten.
-//   - Installing twice changes nothing; remove takes out only Baton's entry.
-// install also switches modules.finishHook on in Baton's settings; remove switches it off.
+//   - Installing twice changes nothing; remove takes out only Relaymote's entry.
+// install also switches modules.finishHook on in Relaymote's settings; remove switches it off.
 'use strict';
 const fs = require('fs');
 const path = require('path');

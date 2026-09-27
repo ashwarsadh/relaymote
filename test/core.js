@@ -165,7 +165,7 @@ else {
   check(ok1.fin.sessionId === 'sess-fake' && ok1.fin.tokens.output === 3 && ok1.fin.pid === null, 'session id and tokens captured, pid cleared', ok1.fin);
   check(registry.getTask(ok1.task.id).status === 'done', 'the outcome survives a fresh read from disk');
   const logged = fs.readFileSync(ARGLOG, 'utf8').trim().split('\n').map(l => JSON.parse(l))[0];
-  check(logged.cfg === path.join(config.DATA, 'auth'), 'the worker runs with Baton\'s private CLAUDE_CONFIG_DIR', logged.cfg);
+  check(logged.cfg === path.join(config.DATA, 'auth'), 'the worker runs with Relaymote\'s private CLAUDE_CONFIG_DIR', logged.cfg);
   check(logged.args.includes('--permission-mode') && !logged.args.includes('--bare'), 'the real argv has no --bare', logged.args);
   const bad = await runTask('please FAIL');
   check(bad.fin.status === 'failed' && /error_during_execution/.test(bad.fin.error), 'an error result is recorded as a failure, not swallowed', bad.fin.error);
@@ -245,7 +245,7 @@ else {
   heal._setProbes({ platform: () => 'win32', queryTask: n => n === heal.TASK ? { state: 'Running', lastResult: '267009' } : null });
   const tk = heal.checkScheduledTask();
   const z = heal.zombie(tk, { healthy: false });
-  check(!z.healthy && z.fixable && /ZOMBIE/.test(z.detail) && /tray/.test(z.detail) && /IgnoreNew/.test(z.detail), 'ZOMBIE: task Running + daemon down, described as what Baton installs (the tray task)', z.detail);
+  check(!z.healthy && z.fixable && /ZOMBIE/.test(z.detail) && /tray/.test(z.detail) && /IgnoreNew/.test(z.detail), 'ZOMBIE: task Running + daemon down, described as what Relaymote installs (the tray task)', z.detail);
   check(heal.zombie(tk, { healthy: true }).healthy, 'Running + daemon up is not a zombie');
   heal._setProbes({ httpJson: httpStub({ 9: { ok: true, body: [] }, [PORT]: UP }) });
   const h1 = await heal.heal({ repair: false, skipAuth: true });
@@ -256,9 +256,9 @@ else {
   heal._setProbes({ httpJson: httpStub({ [PORT]: { ok: true, body: { ok: true, app: 'someone-else' } } }) });
   check(!(await heal.checkDaemon()).healthy, 'another program answering on the port is not our daemon');
   heal._setProbes({ ps: () => 'C:\\somewhere\\other-app.exe --serve' });
-  check(heal.isBatonProcess(4242) === false && heal.killPid(4242) === false, 'killPid refuses a process that is not Baton\'s own daemon (guard fires)');
+  check(heal.isBatonProcess(4242) === false && heal.killPid(4242) === false, 'killPid refuses a process that is not Relaymote\'s own daemon (guard fires)');
   heal._setProbes({ ps: () => `"${process.execPath}" "${path.join(ROOT, 'server.js')}"` });
-  check(heal.isBatonProcess(4242) === true, '…and recognises Baton\'s own server.js');
+  check(heal.isBatonProcess(4242) === true, '…and recognises Relaymote\'s own server.js');
   heal._setProbes(prev);
 
   // ------------------------------------------------------------------------------------------------
@@ -442,14 +442,14 @@ else {
   const ap = imp.run({ dir: AGO, destDir: DEST, apply: true });
   const R = JSON.parse(fs.readFileSync(path.join(DEST, 'registry.json'), 'utf8'));
   const newId = ap.renumbered.t0001;
-  check(ap.applied && R.tasks.t0001.title === 'baton own' && newId && R.tasks[newId].title === 'ago one', 'a colliding task id is renumbered; Baton\'s own task keeps its id', ap.renumbered);
+  check(ap.applied && R.tasks.t0001.title === 'baton own' && newId && R.tasks[newId].title === 'ago one', 'a colliding task id is renumbered; Relaymote\'s own task keeps its id', ap.renumbered);
   check(R.tasks.t0002.dependsOn[0] === newId && R.tasks.t0002.importedFrom === 'ago', '…and dependsOn follows the renumbering', R.tasks.t0002);
   const W = JSON.parse(fs.readFileSync(path.join(DEST, 'awaits.json'), 'utf8')).watches;
   check(W.length === 1 && W[0].waitingOn.join() === newId + ',t0002', 'open watches imported (resolved ones skipped), with renumbered task ids', W);
   const NS = JSON.parse(fs.readFileSync(path.join(DEST, 'notify-state.json'), 'utf8'));
-  check(NS.pending.length === 2 && NS.pending[0].key === `task:${newId}:done` && NS.notified[`task:${newId}:done`] && !NS.notified['task:t0001:done'], 'the notify queue and its dedupe keys follow the renumbering (Baton\'s own t0001 is not silenced)', NS.pending.map(p => p.key));
+  check(NS.pending.length === 2 && NS.pending[0].key === `task:${newId}:done` && NS.notified[`task:${newId}:done`] && !NS.notified['task:t0001:done'], 'the notify queue and its dedupe keys follow the renumbering (Relaymote\'s own t0001 is not silenced)', NS.pending.map(p => p.key));
   check(JSON.parse(fs.readFileSync(path.join(DEST, 'masters.json'), 'utf8')).web.sessionId === 'local_master_web' && fs.existsSync(path.join(DEST, 'notify-config.json')), 'master claims and notify config imported');
-  check(ap.backup && fs.existsSync(path.join(ap.backup, 'registry.json')), 'Baton\'s previous files are backed up before being replaced');
+  check(ap.backup && fs.existsSync(path.join(ap.backup, 'registry.json')), 'Relaymote\'s previous files are backed up before being replaced');
   check(Object.entries(srcHashes).every(([f, h]) => md5(path.join(AS, f)) === h) && fs.readdirSync(AS).length === Object.keys(srcHashes).length, 'the AGO source folder is byte-for-byte unchanged');
   const again = imp.run({ dir: AGO, destDir: DEST, apply: true });
   check(again.files['registry.json'].added === 0 && JSON.parse(fs.readFileSync(path.join(DEST, 'awaits.json'), 'utf8')).watches.length === 1, 'importing twice adds nothing', again.files);
@@ -474,7 +474,7 @@ else {
   const before = fs.readFileSync(launch.logFile(), 'utf8');
   const w = launch.wrapper();
   spawnSync(w.cmd, [...w.args, '--watchdog'], { env: { ...process.env, BATON_DAEMON_ENTRY: entry, BATON_NODE: process.execPath }, windowsHide: true });
-  check(fs.readFileSync(launch.logFile(), 'utf8') === before, 'a watchdog run does nothing after the user stopped Baton');
+  check(fs.readFileSync(launch.logFile(), 'utf8') === before, 'a watchdog run does nothing after the user stopped Relaymote');
   check(launch.clearStopped() && !launch.stoppedByUser(), 'the stop marker clears');
   delete process.env.BATON_STDIO_MAX_BYTES;
   delete process.env.BATON_STATE_DIR;
@@ -524,8 +524,8 @@ else {
   for (let i = 0; i < 80 && !upd; i++) { await wait(250); const r = await req(PORT, '/api/health'); upd = r.status === 200 && r.json && r.json.app === 'baton'; }
   check(upd, 'daemon answers on the spare port');
   const dash = await req(PORT, '/');
-  check(dash.status === 200 && /Baton · control/.test(dash.text) && dash.text.includes(`127.0.0.1:${APP}/`) && /route-preview/.test(dash.text) && /escalate/.test(dash.text), 'GET / serves the control dashboard (submit + preview, stop/escalate, sessions by group), with the configured app port');
-  check(!/AGO/.test(dash.text), 'the dashboard carries Baton branding only');
+  check(dash.status === 200 && /Relaymote · control/.test(dash.text) && dash.text.includes(`127.0.0.1:${APP}/`) && /route-preview/.test(dash.text) && /escalate/.test(dash.text), 'GET / serves the control dashboard (submit + preview, stop/escalate, sessions by group), with the configured app port');
+  check(!/AGO/.test(dash.text), 'the dashboard carries Relaymote branding only');
   const pv = await req(PORT, '/api/route-preview', { method: 'POST', body: { prompt: 'fix the typo in README' }, headers: { Origin: `http://127.0.0.1:${PORT}` } });
   check(pv.status === 200 && pv.json.decision.effort === 'low', 'the dashboard\'s route preview works from its own origin');
   const evil = await req(PORT, '/api/task', { method: 'POST', body: { prompt: 'rm -rf everything' }, headers: { Origin: 'https://evil.example' } });

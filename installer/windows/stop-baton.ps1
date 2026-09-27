@@ -1,4 +1,4 @@
-# stop-baton.ps1 - stop the Baton that runs from THIS folder, so its files can be replaced or removed.
+# stop-baton.ps1 - stop the Relaymote that runs from THIS folder, so its files can be replaced or removed.
 # Called by the installer before an upgrade and by the uninstaller (with -Unregister).
 # Leaves the data folder (~\.baton) alone.
 param([switch]$Unregister)
@@ -13,7 +13,7 @@ Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'"
   Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Contains($tray) } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 
-# 2. Ask the daemon to shut down (baton stop only talks to a Baton, never to another program on the port).
+# 2. Ask the daemon to shut down (baton stop only talks to a Relaymote, never to another program on the port).
 if ((Test-Path $Node) -and (Test-Path $Cli)) {
   & $Node $Cli stop | Out-Null
   if ($Unregister) {

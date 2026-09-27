@@ -1,7 +1,7 @@
 # Security
 
-Baton can send messages to your Claude Code sessions, and those sessions can run commands on your
-computer. Treat access to Baton like access to your computer.
+Relaymote can send messages to your Claude Code sessions, and those sessions can run commands on your
+computer. Treat access to Relaymote like access to your computer.
 
 ## Model
 

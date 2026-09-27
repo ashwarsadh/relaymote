@@ -205,7 +205,7 @@ const item = (n) => inbox.fold().items.get(n);
   board._setConductorState(async () => ({ id: sid(99), ok: true, reason: 'idle' }));
   const out = await board.actBatch({ items: [{ kind: 'reopen', id: '#3' }, { kind: 'done', id: '#2' }] });
   check(out.code === 200 && msgs.length === 1 && /reopen #3/.test(msgs[0].text) && /done #2/.test(msgs[0].text), 'bulk taps go as ONE message to the Conductor');
-  check(item(3).status === 'open' && item(3).no_auto && item(2).status === 'done', 'on Baton\'s own board a delivered Reinstate reopens and pins; Done closes');
+  check(item(3).status === 'open' && item(3).no_auto && item(2).status === 'done', 'on Relaymote\'s own board a delivered Reinstate reopens and pins; Done closes');
   board._setSender(null); board._setConductorState(null);
 
   // ---------------------------------------------------------------- board.html: the build refuses a broken script

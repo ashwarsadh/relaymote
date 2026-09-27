@@ -197,7 +197,7 @@ const NL = '\n';
     outbox.markSent(e3.id, { ok: true, delivery: 'queued' });
     chk(outbox.reconcile(() => '', late).suspect.length === 1, 'with no way to ask, an old caller still gets the plain timer');
     chk(H.src('mobile/index.js').indexOf('outbox.reconcile(transcriptTail, Date.now(), busy)') > 0, 'the daemon supplies that answer from the session index it already keeps');
-    // The private tool asserted a code COMMENT here; Baton ships without it, so assert the behaviour:
+    // The private tool asserted a code COMMENT here; Relaymote ships without it, so assert the behaviour:
     // a session busy before and after the send shows no change -- unobservable, reported as queued.
     const desktop = require('../lib/desktop');
     chk(desktop.changedFrom({ running: true }, { running: true }) === false, 'busy before AND after proves nothing about our message (never read as delivered or failed)');

@@ -34,11 +34,11 @@ const S = (o = {}) => ({ newSession: { model: 'sonnet', effort: 'medium' }, tier
     ok(tp.decide({ current: cur, record: { by: 'user', at: now - 1 * H }, want, now, hours: 4 }).skip === 'MANUAL_OVERRIDE', 'a hand change 1 h ago is respected');
     const old = tp.decide({ current: cur, record: { by: 'user', at: now - 5 * H }, want, now, hours: 4 });
     ok(!old.skip && old.apply.model === 'sonnet' && old.apply.effort === 'medium', 'a hand change 5 h ago may be replaced by the default');
-    ok(!tp.decide({ current: cur, record: { by: 'baton', at: now }, want, now, hours: 4 }).skip, "Baton's own change is never treated as the user's");
+    ok(!tp.decide({ current: cur, record: { by: 'baton', at: now }, want, now, hours: 4 }).skip, "Relaymote's own change is never treated as the user's");
     ok(tp.decide({ current: want, record: null, want, now, hours: 4 }).skip === 'ALREADY', 'nothing is changed when it already matches');
     ok(tp.decide({ current: cur, record: null, want: { model: '', effort: '' }, now, hours: 4 }).skip === 'NO_DEFAULT', 'no default set: nothing is touched');
 
-    // (a) detection: a tier that differs from Baton's last record is a hand change
+    // (a) detection: a tier that differs from Relaymote's last record is a hand change
     const d = fakeDesk({ s1: { model: 'opus', effort: 'max' } }); tp._setDesktop(d);
     let r = await tp.beforeWake('s1', { settings: S(), now: 0 });
     ok(r.ok && r.applied.model === 'sonnet' && r.applied.effort === 'medium', 'a never-seen session is put on the default before the wake');
@@ -58,7 +58,7 @@ const S = (o = {}) => ({ newSession: { model: 'sonnet', effort: 'medium' }, tier
     r = await tp.beforeWake('s2', { settings: S({ tierBeforeWake: false }) });
     ok(r.skipped === 'SETTING_OFF' && d2.log.length === 0, 'with the setting off a wake changes nothing');
     const brSrc = fs.readFileSync(path.join(root, 'lib', 'bridge.js'), 'utf8');
-    ok(/beforeWake\(sessionId\)[\s\S]{0,300}setTimeout[\s\S]{0,600}connectRaw\(await wsUrl\(\), 45000\)/.test(brSrc), "every Baton wake (bridge.sendMessage) sets the tier first, bounded so the wake is never blocked");
+    ok(/beforeWake\(sessionId\)[\s\S]{0,300}setTimeout[\s\S]{0,600}connectRaw\(await wsUrl\(\), 45000\)/.test(brSrc), "every Relaymote wake (bridge.sendMessage) sets the tier first, bounded so the wake is never blocked");
     const d3 = { readTier: async () => { throw new Error('bridge down'); } }; tp._setDesktop(d3);
     r = await tp.beforeWake('s3', { settings: S() });
     ok(r.ok === false && r.skipped === 'ERROR', 'an unreadable session never throws into the wake');

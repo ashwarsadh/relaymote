@@ -1,4 +1,4 @@
-// smoke.js — boot Baton in a throwaway data folder on spare ports and check the basics.
+// smoke.js — boot Relaymote in a throwaway data folder on spare ports and check the basics.
 // It never talks to Claude Desktop: the debugger port points at nothing and every module that
 // drives the desktop is switched off.
 'use strict';

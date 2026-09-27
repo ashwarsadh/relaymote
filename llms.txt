@@ -1,18 +1,18 @@
-# Baton
+# Relaymote
 
 > A phone and desktop client for the Code tab of Claude Desktop: every session live, auto-resume after usage limits and crashes, one app across several Claude accounts, automatic grouping of sessions by project, and a Conductor + per-project masters for running many sessions. Windows is fully supported; macOS is experimental.
 
 ## Install (for AI agents)
 
-- [INSTALL-FOR-AI.md](https://github.com/ashwarsadh/baton/blob/main/INSTALL-FOR-AI.md): step-by-step setup an agent can follow, including connecting Claude Desktop's debugger and pairing a phone.
+- [INSTALL-FOR-AI.md](https://github.com/ashwarsadh/relaymote/blob/main/INSTALL-FOR-AI.md): step-by-step setup an agent can follow, including connecting Claude Desktop's debugger and pairing a phone.
 
 ## Docs
 
-- [README](https://github.com/ashwarsadh/baton/blob/main/README.md): features, settings, the conductor and masters, accounts, CLI, platform support.
-- [Architecture](https://github.com/ashwarsadh/baton/blob/main/docs/ARCHITECTURE.md): how Baton reads files and acts through Claude Desktop.
-- [Board](https://github.com/ashwarsadh/baton/blob/main/docs/BOARD.md): the optional to-do board format.
-- [Security](https://github.com/ashwarsadh/baton/blob/main/SECURITY.md)
+- [README](https://github.com/ashwarsadh/relaymote/blob/main/README.md): features, settings, the conductor and masters, accounts, CLI, platform support.
+- [Architecture](https://github.com/ashwarsadh/relaymote/blob/main/docs/ARCHITECTURE.md): how Relaymote reads files and acts through Claude Desktop.
+- [Board](https://github.com/ashwarsadh/relaymote/blob/main/docs/BOARD.md): the optional to-do board format.
+- [Security](https://github.com/ashwarsadh/relaymote/blob/main/SECURITY.md)
 
 ## Releases
 
-- [Latest release](https://github.com/ashwarsadh/baton/releases/latest): Windows installer (.exe), macOS disk images (.dmg, experimental).
+- [Latest release](https://github.com/ashwarsadh/relaymote/releases/latest): Windows installer (.exe), macOS disk images (.dmg, experimental).

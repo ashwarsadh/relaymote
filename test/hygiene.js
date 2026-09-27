@@ -386,17 +386,17 @@ function wakesTests() {
     reply(t0 + 11 * MIN, { cache_read_input_tokens: 9000, cache_creation_input_tokens: 100 }),
     userMsg(t0 + 100 * MIN, 'plain text from a peer', { origin: { kind: 'peer', from: 'local_bbbb' } }),
     reply(t0 + 101 * MIN, { cache_read_input_tokens: 0, cache_creation_input_tokens: 190000 }),
-    userMsg(t0 + 110 * MIN, '[Baton goals] 1 goal for this session, in one message so you are woken once.'),
+    userMsg(t0 + 110 * MIN, '[Relaymote goals] 1 goal for this session, in one message so you are woken once.'),
     reply(t0 + 111 * MIN),
     userMsg(t0 + 112 * MIN, 'the user typing'),
   ]);
   const sc = wakes.scanTranscript(f, {});
-  check(sc.wakes.length === 3, 'wakes found: cross-session text, origin peer, and Baton\'s own message (a human turn is not a wake)', sc.wakes);
+  check(sc.wakes.length === 3, 'wakes found: cross-session text, origin peer, and Relaymote\'s own message (a human turn is not a wake)', sc.wakes);
   check(sc.wakes[0].from === 'local_aaaa' && sc.wakes[0].warm && sc.wakes[0].cacheRead === 9000, 'a warm wake with its woken turn\'s REAL cache tokens', sc.wakes[0]);
   check(sc.wakes[1].from === 'local_bbbb' && !sc.wakes[1].warm && sc.wakes[1].cacheWrite === 190000, 'an origin-peer wake after 89 min is COLD and shows the cache re-write', sc.wakes[1]);
-  check(sc.wakes[2].from === 'baton:chase', 'Baton\'s own chase is labelled as its sender');
+  check(sc.wakes[2].from === 'baton:chase', 'Relaymote\'s own chase is labelled as its sender');
   const d = wakes.daily({ now: NOW, hours: 24 });
-  check(d.wakes >= 3 && d.cold >= 1 && d.cacheTokens.coldWrite >= 190000 && d.baton.warm >= 1, 'daily(): warm/cold, cold by sender, cache tokens, Baton\'s share', d);
+  check(d.wakes >= 3 && d.cold >= 1 && d.cacheTokens.coldWrite >= 190000 && d.baton.warm >= 1, 'daily(): warm/cold, cold by sender, cache tokens, Relaymote\'s share', d);
 
   const log = path.join(TMP, 'wl.jsonl'), chase = path.join(TMP, 'chase.jsonl');
   wakes.logWake({ file: log, to: 'local_x', kind: 'compact', warmth: { known: true, warm: true, ageMin: 40 }, now: NOW - HOUR });
@@ -418,10 +418,10 @@ function wakesTests() {
 async function instrumentTest() {
   fs.rmSync(wakes.WAKELOG(), { force: true });
   const w = wakes.instrument(async (sid) => ({ ok: sid !== 'local_fail' }), 'notify', { warmth: async () => ({ known: true, warm: true, ageMin: 3 }) });
-  await w('local_ok', '[Baton] Fleet update\nmore');
+  await w('local_ok', '[Relaymote] Fleet update\nmore');
   await w('local_fail', 'x');
   const rows = fs.readFileSync(wakes.WAKELOG(), 'utf8').trim().split('\n').map(l => JSON.parse(l));
-  check(rows.length === 1 && rows[0].to === 'local_ok' && rows[0].kind === 'notify' && rows[0].inside === true && rows[0].what === '[Baton] Fleet update',
+  check(rows.length === 1 && rows[0].to === 'local_ok' && rows[0].kind === 'notify' && rows[0].inside === true && rows[0].what === '[Relaymote] Fleet update',
     'instrument(): a successful send is logged with its warmth (inside the window); a failed send is not', rows);
 }
 

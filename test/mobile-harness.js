@@ -128,9 +128,9 @@ function subuser(w, name, sessionIds) {
 /**
  * A stand-in for Claude Desktop's main-process debugger: an HTTP /json endpoint plus a WebSocket
  * that answers Runtime.evaluate by running the expression in a sandbox. The sandbox offers the two
- * things Baton's bridge scripts reach for — electron.webContents (one "claude.ai" renderer) and,
+ * things Relaymote's bridge scripts reach for — electron.webContents (one "claude.ai" renderer) and,
  * inside that renderer, window['claude.web'].LocalSessions — backed by `sessions`, a plain object
- * the test reads and mutates. Anything else a script touches throws, which Baton must survive.
+ * the test reads and mutates. Anything else a script touches throws, which Relaymote must survive.
  * Point a world at it with settings { cdpPort: fake.port }.
  */
 async function fakeDesktop(sessions = {}) {
@@ -173,7 +173,7 @@ async function fakeDesktop(sessions = {}) {
     async interrupt(id) { calls.push(['interrupt', id]); const s = sess(id); s.interrupted = (s.interrupted || 0) + 1; turnEnds(s); },
   };
   // Delivery writes a user row into the session's transcript (and its .jsonl file, if `file` is set),
-  // which is where Baton looks for proof of arrival.
+  // which is where Relaymote looks for proof of arrival.
   function deliver(s, text) {
     const row = { type: 'user', timestamp: new Date().toISOString(), message: { role: 'user', content: text } };
     (s.transcript = s.transcript || []).push(row);

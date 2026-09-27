@@ -1,5 +1,9 @@
 Baton puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.26
+
+**Baton is now Relaymote.** Same app, new name: the old name clashed with other apps and made it hard to find. Your install updates itself as usual. The `baton` command, the `baton_*` tools, your settings and data in `~/.baton`, the install folder and the scheduled tasks keep their names, so nothing needs redoing. The installer is now Relaymote-Setup-<version>-x64.exe; each release also carries a signed Baton-Setup copy so installs from before the rename keep updating.
+
 ## 0.2.25
 
 **Baton puts you back on the session you were on.** When a call has to open another session (a goal, a chip start, a picker change, a compaction, an answer), Baton now routes you back, reveals your session's row if the sidebar had scrolled it out of view, and checks that it worked. Before, it clicked the row only if it was visible and never checked, and a goal that hit an error skipped the step entirely.

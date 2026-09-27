@@ -1,4 +1,4 @@
-// test/models.js - model and effort identity, everywhere Baton compares them.
+// test/models.js - model and effort identity, everywhere Relaymote compares them.
 //
 // A family compare ("opus" === "opus") must never stand in for an identity compare. It lit BOTH
 // "Opus 5.5" and "Opus 5" on the phone's session sheet for a session on claude-opus-5-5, and it

@@ -1,4 +1,4 @@
-﻿; baton.iss - Inno Setup 6 script for Baton. Build with installer\windows\build.ps1, which stages the
+﻿; baton.iss - Inno Setup 6 script for Relaymote. Build with installer\windows\build.ps1, which stages the
 ; app, the production node_modules and a verified portable node.exe, then calls:
 ;   ISCC /DAppVersion=<x.y.z> /DSourceDir=<stage> /DOutputDir=<dist> baton.iss
 ; This file must stay UTF-8 WITH a BOM: Inno reads a BOM-less script as ANSI and mangles the dashes.
@@ -10,7 +10,7 @@
   #define AppVersion "0.0.0"
 #endif
 #ifndef SourceDir
-  #define SourceDir "..\..\dist\build\win\Baton"
+  #define SourceDir "..\..\dist\build\win\Relaymote"
 #endif
 #ifndef OutputDir
   #define OutputDir "..\..\dist"
@@ -18,26 +18,26 @@
 
 [Setup]
 AppId={{0762B4E7-45DD-40C5-B58F-E0456E54DC08}
-AppName=Baton
+AppName=Relaymote
 AppVersion={#AppVersion}
-AppVerName=Baton {#AppVersion}
-AppPublisher=Baton contributors
-AppPublisherURL=https://github.com/ashwarsadh/baton
-AppSupportURL=https://github.com/ashwarsadh/baton/issues
-AppUpdatesURL=https://github.com/ashwarsadh/baton/releases
+AppVerName=Relaymote {#AppVersion}
+AppPublisher=Relaymote contributors
+AppPublisherURL=https://github.com/ashwarsadh/relaymote
+AppSupportURL=https://github.com/ashwarsadh/relaymote/issues
+AppUpdatesURL=https://github.com/ashwarsadh/relaymote/releases
 AppComments=Your Claude Code sessions, in your pocket.
 VersionInfoVersion={#AppVersion}
 PrivilegesRequired=lowest
 DefaultDirName={localappdata}\Programs\Baton
-DefaultGroupName=Baton
+DefaultGroupName=Relaymote
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=Baton-Setup-{#AppVersion}-x64
+OutputBaseFilename=Relaymote-Setup-{#AppVersion}-x64
 SetupIconFile=baton.ico
 UninstallDisplayIcon={app}\baton.ico
-UninstallDisplayName=Baton
+UninstallDisplayName=Relaymote
 WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
@@ -67,14 +67,14 @@ Type: filesandordirs; Name: "{app}\node_modules"
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Baton"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\scripts\run-hidden.vbs"" ""{app}\runtime\node.exe"" ""{app}\bin\baton.js"" open"; WorkingDir: "{app}"; IconFilename: "{app}\baton.ico"; Comment: "Open Baton (starts it in the background if needed)"
-Name: "{group}\Baton — Pair a phone"; Filename: "{app}\baton-pair.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\baton.ico"; Comment: "Show the QR code that signs your phone in"
-Name: "{group}\Baton — Status"; Filename: "{app}\baton-status.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\baton.ico"; Comment: "Check that Claude Desktop, the debugger and Baton are working"
+Name: "{group}\Relaymote"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\scripts\run-hidden.vbs"" ""{app}\runtime\node.exe"" ""{app}\bin\baton.js"" open"; WorkingDir: "{app}"; IconFilename: "{app}\baton.ico"; Comment: "Open Relaymote (starts it in the background if needed)"
+Name: "{group}\Relaymote — Pair a phone"; Filename: "{app}\baton-pair.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\baton.ico"; Comment: "Show the QR code that signs your phone in"
+Name: "{group}\Relaymote — Status"; Filename: "{app}\baton-status.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\baton.ico"; Comment: "Check that Claude Desktop, the debugger and Relaymote are working"
 
 [Run]
 ; Finish page. Autostart runs first so that setup (told --no-autostart) does not override an unticked box.
-Filename: "{app}\runtime\node.exe"; Parameters: """{app}\bin\baton.js"" autostart"; Description: "Start Baton when I sign in"; Flags: postinstall skipifsilent runhidden waituntilterminated
-Filename: "{app}\baton-setup.cmd"; Parameters: "--no-autostart"; WorkingDir: "{app}"; Description: "Run first-time setup (turns on Claude Desktop's Developer Mode and debugger, registers the tools, opens Baton)"; Flags: postinstall skipifsilent shellexec nowait
+Filename: "{app}\runtime\node.exe"; Parameters: """{app}\bin\baton.js"" autostart"; Description: "Start Relaymote when I sign in"; Flags: postinstall skipifsilent runhidden waituntilterminated
+Filename: "{app}\baton-setup.cmd"; Parameters: "--no-autostart"; WorkingDir: "{app}"; Description: "Run first-time setup (turns on Claude Desktop's Developer Mode and debugger, registers the tools, opens Relaymote)"; Flags: postinstall skipifsilent shellexec nowait
 
 [Code]
 const
@@ -139,9 +139,9 @@ begin
     RemoveFromPath(ExpandConstant('{app}'));
     Data := GetEnv('BATON_HOME');
     if Data = '' then Data := GetEnv('USERPROFILE') + '\.baton';
-    Log('Baton data folder left in place: ' + Data);
+    Log('Relaymote data folder left in place: ' + Data);
     if (not UninstallSilent) and DirExists(Data) then
-      MsgBox('Baton was removed. Your settings, pairing key and history were kept in:' + #13#10 + #13#10 + Data + #13#10 + #13#10 +
+      MsgBox('Relaymote was removed. Your settings, pairing key and history were kept in:' + #13#10 + #13#10 + Data + #13#10 + #13#10 +
         'Delete that folder yourself if you no longer need it.', mbInformation, MB_OK);
   end;
 end;

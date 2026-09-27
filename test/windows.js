@@ -1,4 +1,4 @@
-// windows.js — nothing Baton starts may flash a console window on Windows.
+// windows.js — nothing Relaymote starts may flash a console window on Windows.
 // Every child_process call in the shipped code must pass windowsHide, unless it is listed below with
 // the reason it cannot open a Windows console. A new unhidden spawn fails here, by file and line.
 // Also shown FIRING: the scanner catches an unhidden call in a sample, so a pass is not a blind scan.

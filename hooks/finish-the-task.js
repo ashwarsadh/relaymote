@@ -11,7 +11,7 @@
 //
 // Never installed by default. `baton hooks install` adds it to <CLAUDE_CONFIG_DIR>/settings.json and
 // turns on modules.finishHook; switching the module off in Settings makes it a no-op without editing
-// settings.json. Tuning lives in Baton settings under `finishHook` (see lib/config.js).
+// settings.json. Tuning lives in Relaymote settings under `finishHook` (see lib/config.js).
 //
 // Input (stdin JSON): { session_id, transcript_path, stop_hook_active, hook_event_name }
 // Output: {"decision":"block","reason":"…"} on stdout to block; nothing to allow.

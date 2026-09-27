@@ -146,7 +146,7 @@ async function debuggerTick() {
   orch.log('debugger auto-enable: failed (' + debuggerTries + '/3, exit ' + r.code + ') — ' + r.message + (r.detail ? ' [' + r.detail + ']' : ''));
 }
 
-// followClaude (lib/follow.js): the tray starts Baton when Claude Desktop opens; this stops it after
+// followClaude (lib/follow.js): the tray starts Relaymote when Claude Desktop opens; this stops it after
 // Desktop exits, once the exit-window account sync has run.
 const claudeUp = () => new Promise(r => execFile('tasklist', ['/FI', 'IMAGENAME eq claude.exe', '/NH'], { windowsHide: true },
   (e, out) => r(e ? null : /claude\.exe/i.test(String(out)))));
@@ -167,7 +167,7 @@ const follow = require('./lib/follow').makeFollow({
     try { await sync.transferTick({ exited: true }); } catch (e) { out += '; account-switch transfer failed: ' + e.message; }
     return out;
   },
-  // run-daemon.cmd sees this marker and starts Baton again the moment claude.exe reappears.
+  // run-daemon.cmd sees this marker and starts Relaymote again the moment claude.exe reappears.
   stop: () => { try { fs.writeFileSync(path.join(registry.STATE_DIR, 'follow-sleep.json'), JSON.stringify({ at: new Date().toISOString(), pid: process.pid })); } catch {} shutdown('follow-claude'); },
   log: (m) => orch.log('follow Claude: ' + m),
 });
@@ -333,7 +333,7 @@ let inFlight = 0;
 const server = http.createServer(async (req, res) => {
   if (shuttingDown) {
     return json(res, 503, { ok: false, error: 'daemon-shutting-down',
-      message: 'The Baton daemon is restarting and did not start this request. Nothing was done; retry in a few seconds.' });
+      message: 'The Relaymote daemon is restarting and did not start this request. Nothing was done; retry in a few seconds.' });
   }
   inFlight++;
   res.on('close', () => { inFlight--; });
@@ -532,7 +532,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-const HTML = '<!doctype html><meta charset=utf-8><title>Baton</title><body style="font:15px system-ui;padding:2rem">Baton control API. Open the app: run <code>baton open</code>.</body>';
+const HTML = '<!doctype html><meta charset=utf-8><title>Relaymote</title><body style="font:15px system-ui;padding:2rem">Relaymote control API. Open the app: run <code>baton open</code>.</body>';
 
 function probeExisting() {
   return new Promise(resolve => {
@@ -593,7 +593,7 @@ async function evictWedgedHolder(reason) {
       try {
         notify.pushEvent({
           key: `daemon-restart:${INSTANCE}`, kind: 'daemon-restart', source: 'daemon',
-          line: `Baton daemon restarted: the previous process (pid ${prev.pid}) EXITED ITSELF with code ${prev.code} after ${prev.uptimeSec}s, using ${prev.rssMb}MB. Now pid ${process.pid}. Check baton.log around ${prev.at} for what led to it; baton_await watches and the notify queue both survived.`,
+          line: `Relaymote daemon restarted: the previous process (pid ${prev.pid}) EXITED ITSELF with code ${prev.code} after ${prev.uptimeSec}s, using ${prev.rssMb}MB. Now pid ${process.pid}. Check baton.log around ${prev.at} for what led to it; baton_await watches and the notify queue both survived.`,
         });
       } catch {}
       return;
@@ -652,7 +652,7 @@ async function evictWedgedHolder(reason) {
       try {
         notify.pushEvent({
           key: `daemon-restart:${INSTANCE}`, kind: 'daemon-restart', source: 'daemon',
-          line: `Baton daemon restarted (now pid ${process.pid}). Cause: ${why}.${deployNote}` +
+          line: `Relaymote daemon restarted (now pid ${process.pid}). Cause: ${why}.${deployNote}` +
                 ` Read ${AGOLOG} around that time; node's own dying output, when there is any, is in ${STDIO}.` +
                 ` To check yourself: Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational | Where-Object { $_.Message -like '*Baton*' } | Select-Object TimeCreated,Id -First 20` +
                 ` — 330 = stopped by request, 111 = terminated, 110 = started by request, 107 = time trigger, 322 = skipped because already running.` +
@@ -665,7 +665,7 @@ async function evictWedgedHolder(reason) {
   server.listen(PORT, '127.0.0.1', () => {
     if (started) return;
     started = true;
-    orch.log(`Baton daemon on http://127.0.0.1:${PORT} (pid ${process.pid})`);
+    orch.log(`Relaymote daemon on http://127.0.0.1:${PORT} (pid ${process.pid})`);
     reportPreviousExit();
     try { fs.unlinkSync(path.join(registry.STATE_DIR, 'follow-sleep.json')); } catch {}   // awake again
     Promise.resolve(orch.recover())
@@ -682,7 +682,7 @@ async function evictWedgedHolder(reason) {
     setInterval(() => serialise(debuggerTick), 60000);
     setInterval(() => { follow.tick().catch(e => orch.log('follow Claude: ' + e.message)); }, 5000);
     setInterval(() => { if (config.mod('accounts')) require('./lib/account-sync').autoTick().then(r => { if (r && (r.applied || r.error)) orch.log('accounts auto-sync: ' + (r.error || r.applied + ' change(s) written')); }).catch(e => orch.log('accounts auto-sync: ' + e.message)); }, 15000);
-    // Boot window: Desktop not running yet when Baton starts -> the pass that waits for a closed Desktop runs now.
+    // Boot window: Desktop not running yet when Relaymote starts -> the pass that waits for a closed Desktop runs now.
     if (config.mod('accounts')) require('./lib/account-sync').bootPass().then(r => { if (r && (r.applied || r.error)) orch.log('accounts boot pass: ' + (r.error || (r.applied.count || 0) + ' change(s) written')); }).catch(e => orch.log('accounts boot pass: ' + e.message));
     setTimeout(() => serialise(resumeTick), 20000);
     setInterval(() => { if (!config.mod('organizer')) indexTick(); }, INDEX_MS);

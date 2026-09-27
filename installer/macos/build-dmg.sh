@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-dmg.sh - build Baton.app, a DMG and a portable tarball for macOS.
+# build-dmg.sh - build Relaymote.app, a DMG and a portable tarball for macOS.
 #
 #   installer/macos/build-dmg.sh            # arch of this Mac
 #   ARCH=x64 installer/macos/build-dmg.sh   # or arm64; the app is plain JavaScript, so either
@@ -8,8 +8,8 @@
 #   (or: npm run build:mac)
 #
 # Output in dist/:
-#   Baton-<version>-<arch>.dmg                   drag Baton.app to Applications
-#   Baton-<version>-macos-<arch>-portable.tar.gz unpack anywhere, run ./baton or start-baton.command
+#   Relaymote-<version>-<arch>.dmg                   drag Relaymote.app to Applications
+#   Relaymote-<version>-macos-<arch>-portable.tar.gz unpack anywhere, run ./baton or start-baton.command
 #
 # Unsigned and not notarized: see installer/RELEASE_NOTES.md for how to open it the first time.
 set -euo pipefail
@@ -53,7 +53,7 @@ say "Node $NODE_VERSION ($ARCH) verified"
 
 # --- 2. Stage the app -------------------------------------------------------------------------
 rm -rf "$REPO/dist/build/mac"
-APPDIR="$WORK/app"            # the app itself; becomes Baton.app/Contents/Resources/app
+APPDIR="$WORK/app"            # the app itself; becomes Relaymote.app/Contents/Resources/app
 mkdir -p "$APPDIR/runtime"
 # Everything at the top level ships except development-only folders and files.
 for f in "$REPO"/* "$REPO"/.[!.]*; do
@@ -72,39 +72,39 @@ chmod +x "$APPDIR/runtime/node"
 
 cat > "$APPDIR/baton" <<'EOF'
 #!/bin/sh
-# baton - the Baton command line, run with the Node.js bundled next to it.
+# baton - the Relaymote command line, run with the Node.js bundled next to it.
 D="$(cd "$(dirname "$0")" && pwd)"
 exec "$D/runtime/node" "$D/bin/baton.js" "$@"
 EOF
 cat > "$APPDIR/start-baton.command" <<'EOF'
 #!/bin/sh
-# Double-click in Finder: starts Baton in the background and opens it in your browser.
+# Double-click in Finder: starts Relaymote in the background and opens it in your browser.
 D="$(cd "$(dirname "$0")" && pwd)"
 "$D/runtime/node" "$D/bin/baton.js" open
 EOF
 chmod +x "$APPDIR/baton" "$APPDIR/start-baton.command"
 
-# --- 3. Baton.app -----------------------------------------------------------------------------
-BUNDLE="$WORK/dmg/Baton.app"
+# --- 3. Relaymote.app -----------------------------------------------------------------------------
+BUNDLE="$WORK/dmg/Relaymote.app"
 mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
-cat > "$BUNDLE/Contents/MacOS/Baton" <<'EOF'
+cat > "$BUNDLE/Contents/MacOS/Relaymote" <<'EOF'
 #!/bin/bash
-# Baton.app launcher: the first launch runs `baton setup` (turns on Claude Desktop's Developer Mode,
-# registers the tools, starts Baton); later launches start Baton if needed and open it.
+# Relaymote.app launcher: the first launch runs `baton setup` (turns on Claude Desktop's Developer Mode,
+# registers the tools, starts Relaymote); later launches start Relaymote if needed and open it.
 APP="$(cd "$(dirname "$0")/../Resources/app" && pwd)"
 DATA="${BATON_HOME:-$HOME/.baton}"
 # Finder starts apps with a bare PATH; add the usual places the `claude` CLI lives.
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.claude/local:$PATH"
 mkdir -p "$DATA/state"
 LOG="$DATA/state/launcher.log"
-echo "--- $(date) Baton.app" >>"$LOG"
+echo "--- $(date) Relaymote.app" >>"$LOG"
 if [ ! -f "$DATA/state/app-setup-done" ]; then
   "$APP/runtime/node" "$APP/bin/baton.js" setup >>"$LOG" 2>&1 && touch "$DATA/state/app-setup-done"
 else
   "$APP/runtime/node" "$APP/bin/baton.js" open >>"$LOG" 2>&1
 fi
 EOF
-chmod +x "$BUNDLE/Contents/MacOS/Baton"
+chmod +x "$BUNDLE/Contents/MacOS/Relaymote"
 cp -R "$APPDIR" "$BUNDLE/Contents/Resources/app"
 
 ICON_KEY=""
@@ -119,7 +119,7 @@ if command -v iconutil >/dev/null 2>&1 && command -v sips >/dev/null 2>&1; then
   iconutil -c icns "$SET" -o "$BUNDLE/Contents/Resources/baton.icns"
   ICON_KEY="<key>CFBundleIconFile</key><string>baton</string>"
 else
-  say "iconutil/sips not found - Baton.app will use the generic icon"
+  say "iconutil/sips not found - Relaymote.app will use the generic icon"
 fi
 
 cat > "$BUNDLE/Contents/Info.plist" <<EOF
@@ -127,43 +127,43 @@ cat > "$BUNDLE/Contents/Info.plist" <<EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Baton</string>
-  <key>CFBundleDisplayName</key><string>Baton</string>
+  <key>CFBundleName</key><string>Relaymote</string>
+  <key>CFBundleDisplayName</key><string>Relaymote</string>
   <key>CFBundleIdentifier</key><string>org.baton-cc.baton</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleExecutable</key><string>Baton</string>
+  <key>CFBundleExecutable</key><string>Relaymote</string>
   $ICON_KEY
   <key>LSMinimumSystemVersion</key><string>11.0</string>
-  <key>NSHumanReadableCopyright</key><string>MIT License, Baton contributors</string>
+  <key>NSHumanReadableCopyright</key><string>MIT License, Relaymote contributors</string>
 </dict>
 </plist>
 EOF
 
-cat > "$WORK/dmg/If macOS will not open Baton.txt" <<'EOF'
-Baton is not signed with an Apple Developer ID, so macOS blocks the first launch.
+cat > "$WORK/dmg/If macOS will not open Relaymote.txt" <<'EOF'
+Relaymote is not signed with an Apple Developer ID, so macOS blocks the first launch.
 
-1. Drag Baton.app into Applications.
-2. Either right-click Baton.app > Open > Open (macOS 14 and older), or try to open it once and then
+1. Drag Relaymote.app into Applications.
+2. Either right-click Relaymote.app > Open > Open (macOS 14 and older), or try to open it once and then
    go to System Settings > Privacy & Security and click "Open Anyway" (macOS 15 and newer).
-   Or, in Terminal:  xattr -dr com.apple.quarantine /Applications/Baton.app
+   Or, in Terminal:  xattr -dr com.apple.quarantine /Applications/Relaymote.app
 
 The command line lives inside the app:
-   /Applications/Baton.app/Contents/Resources/app/baton status
+   /Applications/Relaymote.app/Contents/Resources/app/baton status
 EOF
 ln -s /Applications "$WORK/dmg/Applications"
 
 # --- 4. DMG and portable tarball ----------------------------------------------------------------
-DMG="$DIST/Baton-$VERSION-$ARCH.dmg"
-PORTABLE="$DIST/Baton-$VERSION-macos-$ARCH-portable.tar.gz"
+DMG="$DIST/Relaymote-$VERSION-$ARCH.dmg"
+PORTABLE="$DIST/Relaymote-$VERSION-macos-$ARCH-portable.tar.gz"
 rm -f "$DMG" "$PORTABLE"
 if command -v hdiutil >/dev/null 2>&1; then
-  hdiutil create -volname "Baton $VERSION" -srcfolder "$WORK/dmg" -ov -format UDZO "$DMG" >/dev/null
+  hdiutil create -volname "Relaymote $VERSION" -srcfolder "$WORK/dmg" -ov -format UDZO "$DMG" >/dev/null
   say "dmg: $DMG"
 else
   say "hdiutil not found (not a Mac?) - skipped the DMG"
 fi
-mv "$APPDIR" "$WORK/Baton"
-tar -czf "$PORTABLE" -C "$WORK" Baton
+mv "$APPDIR" "$WORK/Relaymote"
+tar -czf "$PORTABLE" -C "$WORK" Relaymote
 say "portable: $PORTABLE"

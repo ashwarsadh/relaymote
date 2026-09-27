@@ -76,7 +76,7 @@ kid('buried', 'Alpha child: schema migration', (c, s) => [
   A(c, s, txt('The migration plan is ready. Should I run the migration now?'), 69),
   U(c, s, '<cross-session-message from="x" name="helper">Status from helper: nightly build finished</cross-session-message>', 68),
   A(c, s, txt('Noted the helper status.'), 67),
-  U(c, s, '[Baton] Fleet update for project "alpha" — 1 event.', 66),
+  U(c, s, '[Relaymote] Fleet update for project "alpha" — 1 event.', 66),
   A(c, s, txt('Acknowledged.'), 65),
 ]);
 kid('open', 'Alpha child: docs sweep', (c, s) => [

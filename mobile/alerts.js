@@ -64,7 +64,7 @@ function httpPost(target, body, headers) {
     const req = lib.request({
       method: 'POST', hostname: u.hostname, port: u.port || undefined, path: u.pathname + u.search,
       timeout: TIMEOUT_MS,
-      headers: { 'Content-Length': buf.length, 'User-Agent': 'Baton', ...headers },
+      headers: { 'Content-Length': buf.length, 'User-Agent': 'Relaymote', ...headers },
     }, res => {
       res.resume();
       res.on('end', () => resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode }));
@@ -104,7 +104,7 @@ function runCommand(cmd, evt) {
 async function viaChannel(s, evt) {
   if (s.kind === 'ntfy') {
     if (!s.url) return { ok: false, error: 'no ntfy topic URL set' };
-    const h = { 'Content-Type': 'text/plain; charset=utf-8', Title: headerSafe(String(evt.title || 'Baton').slice(0, 120)),
+    const h = { 'Content-Type': 'text/plain; charset=utf-8', Title: headerSafe(String(evt.title || 'Relaymote').slice(0, 120)),
                 Tags: evt.kind === 'awaiting' || evt.kind === 'question' ? 'bell' : 'white_check_mark' };
     if (/^https?:\/\//i.test(evt.url || '')) h.Click = evt.url;
     return httpPost(s.url, String(evt.body || evt.title || ''), h);

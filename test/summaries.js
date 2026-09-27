@@ -1,5 +1,5 @@
 // summaries.js — the model engine (lib/engine.js), session overviews (lib/summarize.js) and the roles DB
-// (lib/roles.js), against a stub OpenAI-compatible server, a fake `claude` CLI and a stub Baton daemon.
+// (lib/roles.js), against a stub OpenAI-compatible server, a fake `claude` CLI and a stub Relaymote daemon.
 // Never calls a real model, never touches real data: APPDATA / CLAUDE_CONFIG_DIR / BATON_HOME point into a
 // temp folder and the "daemon" is a stub on a random port.
 'use strict';
@@ -45,7 +45,7 @@ const aiServer = http.createServer(async (req, res) => {
   try { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ model, choices: [{ message: { role: 'assistant', content } }], usage: { prompt_tokens: 10, completion_tokens: 5 } })); } catch {}
 });
 
-// ------------------------------------------------------------------ stub Baton daemon (/api/health, /api/task)
+// ------------------------------------------------------------------ stub Relaymote daemon (/api/health, /api/task)
 const daemon = { healthDelay: 0, posts: [] };
 const daemonServer = http.createServer(async (req, res) => {
   const body = await readBody(req);
@@ -273,7 +273,7 @@ process.stdin.on('end', () => {
   const db1 = R.loadDb();
   check(r1.heuristic === 5 && db1.sessions.local_x.engine === 'heuristic' && db1.sessions.local_x.owns_topics.includes('imgsvc') && db1.sessions.local_x.owns_topics.includes('thumbnail') && !db1.sessions.local_old,
     'roles: engine none = free heuristic (title + tags + project), live sessions only');
-  check(R.DB() === path.join(config.DATA, 'conductor', 'roles.json') && Object.keys(owner.readRoles()).length === 5, 'owner.js reads Baton\'s own roles.json by default');
+  check(R.DB() === path.join(config.DATA, 'conductor', 'roles.json') && Object.keys(owner.readRoles()).length === 5, 'owner.js reads Relaymote\'s own roles.json by default');
   fs.writeFileSync(R.LOCK(), 'x');
   check((await R.build({ index: rix })).skipped === 'locked', 'roles: one builder at a time (lock file)');
   fs.unlinkSync(R.LOCK());

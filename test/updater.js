@@ -26,20 +26,20 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
   check(U.installKind(mk(['.git']), 'win32') === 'source', 'a git checkout is "source" (never replaces itself)');
   const inst = mk([]); fs.writeFileSync(path.join(inst, 'unins000.exe'), '');
   check(U.installKind(inst, 'win32') === 'windows-installer' && U.installKind(inst, 'linux') === 'portable', 'unins000.exe on Windows = an installer copy; elsewhere portable');
-  check(U.installKind(path.join(TMP, 'Baton.app', 'Contents', 'Resources', 'app'), 'darwin') === 'macos-app', 'inside Baton.app = macos-app');
-  check(U.assetName('windows-installer', '0.3.0') === 'Baton-Setup-0.3.0-x64.exe' && U.assetName('portable', '0.3.0') === null, 'only the installer copy has an asset to install');
+  check(U.installKind(path.join(TMP, 'Relaymote.app', 'Contents', 'Resources', 'app'), 'darwin') === 'macos-app', 'inside Relaymote.app = macos-app');
+  check(U.assetName('windows-installer', '0.3.0') === 'Relaymote-Setup-0.3.0-x64.exe' && U.assetName('portable', '0.3.0') === null, 'only the installer copy has an asset to install');
   check(U.installKind() === 'source', 'this test runs from a checkout, so the daemon here would only report');
 
   // Signatures: a throwaway key signs; the embedded key must NOT accept it (and does accept a real one in CI).
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
   const pub = publicKey.export({ type: 'spki', format: 'pem' });
-  const sums = 'a'.repeat(64) + '  Baton-Setup-9.9.9-x64.exe\n' + 'b'.repeat(64) + '  SHA256SUMS-other.txt\n';
+  const sums = 'a'.repeat(64) + '  Relaymote-Setup-9.9.9-x64.exe\n' + 'b'.repeat(64) + '  SHA256SUMS-other.txt\n';
   const sig = crypto.sign(null, Buffer.from(sums), privateKey).toString('base64');
   check(U.verifySums(sums, sig, pub), 'a signature verifies with its own key');
   check(!U.verifySums(sums.replace('a', 'c'), sig, pub), 'one changed character in SHA256SUMS.txt breaks it');
   check(!U.verifySums(sums, sig), 'a signature by any other key is refused by the embedded release key');
   check(!U.verifySums(sums, 'not-base64!!'), 'garbage is refused, not thrown');
-  check(U.listedHash(sums, 'Baton-Setup-9.9.9-x64.exe') === 'a'.repeat(64) && U.listedHash(sums, 'Baton-Setup-9.9.9') === null, 'the hash is looked up by exact file name');
+  check(U.listedHash(sums, 'Relaymote-Setup-9.9.9-x64.exe') === 'a'.repeat(64) && U.listedHash(sums, 'Relaymote-Setup-9.9.9') === null, 'the hash is looked up by exact file name');
   check(/-----BEGIN PUBLIC KEY-----\nMCowBQYDK2Vw/.test(U.PUBLIC_KEY), 'the embedded key is an Ed25519 SPKI key');
 
   // sign-release.js: refuses a key that does not match the embedded one; no key + required = error.
@@ -76,24 +76,32 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
   const exe = Buffer.from('MZ fake installer');
   const exeHash = crypto.createHash('sha256').update(exe).digest('hex');
   const assets = n => Object.fromEntries(n.map(x => [x, 'https://example.invalid/dl/' + x]));
-  const c = { kind: 'windows-installer', latest: '9.9.9', assets: assets(['Baton-Setup-9.9.9-x64.exe', 'SHA256SUMS.txt', 'SHA256SUMS.txt.sig']) };
-  const goodSums = exeHash + '  Baton-Setup-9.9.9-x64.exe\n';
+  const c = { kind: 'windows-installer', latest: '9.9.9', assets: assets(['Relaymote-Setup-9.9.9-x64.exe', 'SHA256SUMS.txt', 'SHA256SUMS.txt.sig']) };
+  const goodSums = exeHash + '  Relaymote-Setup-9.9.9-x64.exe\n';
   const goodSig = crypto.sign(null, Buffer.from(goodSums), privateKey).toString('base64');
   try {
     // The throwaway key is not the release key, so even a consistent release is refused.
-    serve({ 'Baton-Setup-9.9.9-x64.exe': exe, 'SHA256SUMS.txt': goodSums, 'SHA256SUMS.txt.sig': goodSig });
+    serve({ 'Relaymote-Setup-9.9.9-x64.exe': exe, 'SHA256SUMS.txt': goodSums, 'SHA256SUMS.txt.sig': goodSig });
     let f = await U.fetchVerified(c);
     check(!f.ok && /signature does not verify/.test(f.error), 'a release signed by a different key is refused before any download', f);
-    check(!fs.existsSync(path.join(process.env.BATON_HOME, 'updates', 'Baton-Setup-9.9.9-x64.exe')), 'and nothing was saved');
+    check(!fs.existsSync(path.join(process.env.BATON_HOME, 'updates', 'Relaymote-Setup-9.9.9-x64.exe')), 'and nothing was saved');
     f = await U.fetchVerified(c, { key: pub });
-    const saved = path.join(process.env.BATON_HOME, 'updates', 'Baton-Setup-9.9.9-x64.exe');
+    const saved = path.join(process.env.BATON_HOME, 'updates', 'Relaymote-Setup-9.9.9-x64.exe');
     check(f.ok && f.sha256 === exeHash && fs.readFileSync(saved).equals(exe), 'signed by the trusted key and matching its line: downloaded and kept', f);
     fs.unlinkSync(saved);
-    serve({ 'Baton-Setup-9.9.9-x64.exe': Buffer.from('MZ tampered'), 'SHA256SUMS.txt': goodSums, 'SHA256SUMS.txt.sig': goodSig });
+    serve({ 'Relaymote-Setup-9.9.9-x64.exe': Buffer.from('MZ tampered'), 'SHA256SUMS.txt': goodSums, 'SHA256SUMS.txt.sig': goodSig });
     f = await U.fetchVerified(c, { key: pub });
     check(!f.ok && /does not match the signed/.test(f.error) && !fs.existsSync(saved) && !fs.existsSync(saved + '.part'), 'an installer that differs from its signed hash is refused and deleted', f);
-    f = await U.fetchVerified({ ...c, assets: assets(['Baton-Setup-9.9.9-x64.exe', 'SHA256SUMS.txt']) });
+    f = await U.fetchVerified({ ...c, assets: assets(['Relaymote-Setup-9.9.9-x64.exe', 'SHA256SUMS.txt']) });
     check(!f.ok && /not signed/.test(f.error), 'a release without SHA256SUMS.txt.sig is refused', f);
+    // g589: a release published before the rename carries only Baton-Setup-*.exe; it must still install.
+    const oldSums = exeHash + '  Baton-Setup-9.9.9-x64.exe\n';
+    const oldSig = crypto.sign(null, Buffer.from(oldSums), privateKey).toString('base64');
+    serve({ 'Baton-Setup-9.9.9-x64.exe': exe, 'SHA256SUMS.txt': oldSums, 'SHA256SUMS.txt.sig': oldSig });
+    f = await U.fetchVerified({ ...c, assets: assets(['Baton-Setup-9.9.9-x64.exe', 'SHA256SUMS.txt', 'SHA256SUMS.txt.sig']) }, { key: pub });
+    check(f.ok && f.sha256 === exeHash, 'a release with only the pre-rename installer name still updates', f);
+    try { fs.unlinkSync(path.join(process.env.BATON_HOME, 'updates', 'Baton-Setup-9.9.9-x64.exe')); } catch {}
+    check(U.legacyAssetName('windows-installer', '9.9.9') === 'Baton-Setup-9.9.9-x64.exe', 'the pre-rename installer name is still known');
     f = await U.fetchVerified({ ...c, kind: 'source' });
     check(!f.ok && /does not update itself/.test(f.error), 'a source copy never fetches an installer');
   } finally { https.get = realGet; }
@@ -102,15 +110,15 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
   const reg = require('../lib/registry');
   const realBy = reg.byStatus;
   reg.byStatus = s => s === 'running' ? [{ id: 't1' }] : [];
-  check(/1 Baton task\(s\) running/.test(U.busyReason() || ''), 'a running task holds the update back');
+  check(/1 Relaymote task\(s\) running/.test(U.busyReason() || ''), 'a running task holds the update back');
   reg.byStatus = () => [];
   check(U.busyReason() === null, 'and nothing running lets it through');
   reg.byStatus = realBy;
 
   // The apply script (written, not run): silent install over THIS folder, then start.
-  const a = U.apply(path.join(TMP, 'Baton-Setup-9.9.9-x64.exe'), '9.9.9', { dry: true });
+  const a = U.apply(path.join(TMP, 'Relaymote-Setup-9.9.9-x64.exe'), '9.9.9', { dry: true });
   const script = fs.readFileSync(a.script, 'utf8');
-  check(a.dry && /\/VERYSILENT \/SUPPRESSMSGBOXES \/NORESTART \/DIR="/.test(script) && /bin\\baton\.js" start|bin\/baton\.js" start/.test(script), 'the apply script installs silently over this folder, then starts Baton', script);
+  check(a.dry && /\/VERYSILENT \/SUPPRESSMSGBOXES \/NORESTART \/DIR="/.test(script) && /bin\\baton\.js" start|bin\/baton\.js" start/.test(script), 'the apply script installs silently over this folder, then starts Relaymote', script);
 
   // Who starts the apply script. WMI first; refused (ReturnValue 2, as measured for a standard user on
   // Windows Server) it goes to a one-shot scheduled task; both refused, a detached child.

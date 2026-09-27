@@ -1,5 +1,5 @@
 #!/bin/sh
-# run-daemon.sh - start the Baton daemon so that what node writes when it dies is kept.
+# run-daemon.sh - start the Relaymote daemon so that what node writes when it dies is kept.
 # The macOS/Linux twin of run-daemon.cmd (see lib/launch.js for why): rotate the capture at 10 MB
 # before node starts (one generation kept), write a launch line, append node's STDERR only, then an
 # exit line with the code. A launchd or systemd --user unit can run this script directly.

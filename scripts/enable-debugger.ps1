@@ -1,10 +1,10 @@
 param([switch]$Force, [int]$Port = 9229, [int]$Countdown = 3, [switch]$DryRun, [int]$SnoozeMs = 5000, [int]$MaxSnoozeMs = 60000)
-# enable-debugger.ps1 - switch on Claude Desktop's main-process debugger for Baton (Windows).
+# enable-debugger.ps1 - switch on Claude Desktop's main-process debugger for Relaymote (Windows).
 #
 # Clicks Menu > Developer > Enable Main Process Debugger in the Claude Desktop window through UI
 # Automation, then dismisses the confirmation dialog. Developer mode must be on in Claude Desktop
 # (Help > Troubleshooting > Enable Developer Mode). A small click-through bar on screen counts down
-# ("Baton: turning on Claude's debugger in 3, 2, 1") and then shows the result. Any mouse or keyboard
+# ("Relaymote: turning on Claude's debugger in 3, 2, 1") and then shows the result. Any mouse or keyboard
 # input during the countdown snoozes it: it waits until you have been still for SnoozeMs (5 s), then
 # counts down again; still busy after MaxSnoozeMs (60 s), it gives up for now (exit 12, retried later).
 # The mouse pointer goes back to where it was; both positions are logged.
@@ -106,7 +106,7 @@ function Finish([int]$code, [string]$msg) {
     }
   } catch {}
   if ($script:bar) {
-    if ($code -eq 0) { Say "Baton: Claude's debugger is on" $GREEN } else { Say ("Baton could not turn the debugger on: " + $msg) $RED }
+    if ($code -eq 0) { Say "Relaymote: Claude's debugger is on" $GREEN } else { Say ("Relaymote could not turn the debugger on: " + $msg) $RED }
     $t = [Environment]::TickCount; while ([Environment]::TickCount - $t -lt 1800) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50 }
     try { $script:bar.Close() } catch {}
   }
@@ -141,7 +141,7 @@ try {
   while ($true) {
     $base = [N]::LastInput(); $busy = $false; $p0 = [System.Windows.Forms.Cursor]::Position
     for ($i = $Countdown; $i -ge 1 -and -not $busy; $i--) {
-      Say ("Baton: turning on Claude's debugger in $i" + $(if ($i -gt 1) { '...' } else { ' - hands off the keyboard' })) $WHITE
+      Say ("Relaymote: turning on Claude's debugger in $i" + $(if ($i -gt 1) { '...' } else { ' - hands off the keyboard' })) $WHITE
       $t = [Environment]::TickCount
       while ([Environment]::TickCount - $t -lt 1000) {
         [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50
@@ -161,14 +161,14 @@ try {
     Log ("snoozed - " + $why + " during the countdown (snooze " + $script:snoozes + ")")
     $last = [N]::LastInput(); $quiet = [Environment]::TickCount
     while ([Environment]::TickCount - $quiet -lt $SnoozeMs) {
-      if ([Environment]::TickCount - $snoozeStart -gt $MaxSnoozeMs) { Finish 12 'you kept using the computer, so Baton will try again in a minute' }
+      if ([Environment]::TickCount - $snoozeStart -gt $MaxSnoozeMs) { Finish 12 'you kept using the computer, so Relaymote will try again in a minute' }
       $left = [Math]::Ceiling(($SnoozeMs - ([Environment]::TickCount - $quiet)) / 1000)
-      Say ("Baton: snoozed - " + $why + ". Trying again in ${left}s") $WHITE
+      Say ("Relaymote: snoozed - " + $why + ". Trying again in ${left}s") $WHITE
       [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 100
       $now = [N]::LastInput(); if ($now -ne $last) { if ((InputKind $p0) -eq 'key pressed') { $quiet = [Environment]::TickCount }; $p0 = [System.Windows.Forms.Cursor]::Position; $last = $now }
     }
   }
-  Say "Baton: turning on Claude's debugger..." $WHITE
+  Say "Relaymote: turning on Claude's debugger..." $WHITE
 } catch { Log ("countdown bar unavailable: " + $_.Exception.Message); $script:bar = $null }
 if ((IsUp) -and (-not $DryRun)) { Finish 0 "debugger on (port $Port)" }
 
@@ -193,7 +193,7 @@ if ([N]::GetForegroundWindow() -ne $h) {
     Start-Sleep -Milliseconds 120
     if ([N]::GetForegroundWindow() -eq $h) { $raised = $true; break }
   }
-  if (-not $raised) { Finish 7 'Windows would not let Baton bring Claude Desktop to the front' }
+  if (-not $raised) { Finish 7 'Windows would not let Relaymote bring Claude Desktop to the front' }
 }
 $root = [System.Windows.Automation.AutomationElement]::FromHandle($h)
 

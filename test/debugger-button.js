@@ -29,10 +29,10 @@ const ok = (c, name) => { assert.ok(c, name); n++; console.log('ok ' + name); };
   ok(!/Start-Sleep -Milliseconds 1[2-9]\d\d/.test(ps1) && /function WaitFind/.test(ps1), 'fixed long sleeps are replaced by polling');
   {
     // g546: input during the 3-2-1 snoozes it; the pointer goes back where it was, both logged.
-    const cd = ps1.slice(ps1.indexOf('$script:bar.Show()'), ps1.indexOf('Say "Baton: turning on Claude\'s debugger..."'));
+    const cd = ps1.slice(ps1.indexOf('$script:bar.Show()'), ps1.indexOf('Say "Relaymote: turning on Claude\'s debugger..."'));
     ok(/if \(\$i -eq 1 -and \$kind -eq 'key pressed'\) \{ \$busy = \$true/.test(cd) && !/\$busy = \$true; \$why = InputKind/.test(cd) && /-lt \$SnoozeMs/.test(cd) && /Finish 12/.test(cd), 'only a key pressed during the last second snoozes it (the mouse never does); a busy user ends it as exit 12');
     ok(ps1.indexOf('$script:cur0 = [System.Windows.Forms.Cursor]::Position') < ps1.indexOf('RealClick $menu') && /cursor before: /.test(ps1) && /SetCursorPos\(\$script:cur0\.X, \$script:cur0\.Y\)[\s\S]{0,200}cursor after: /.test(ps1), 'the pointer is recorded before the clicks and put back after, both positions logged');
-    ok(/Say \("Baton: snoozed - " \+ \$why/.test(ps1) && /return 'mouse moved'/.test(ps1) && /return 'key pressed'/.test(ps1), 'the bar says why it snoozed: mouse moved, mouse clicked or key pressed');
+    ok(/Say \("Relaymote: snoozed - " \+ \$why/.test(ps1) && /return 'mouse moved'/.test(ps1) && /return 'key pressed'/.test(ps1), 'the bar says why it snoozed: mouse moved, mouse clicked or key pressed');
     ok(/\$script:bar\.Top = \[int\]\(\$wa\.Top \+ 8\)/.test(ps1), 'the bar sits at the top of the screen, clear of the Claude text box');
     ok(/new Set\(\[1, 8, 9, 10, 12\]\)/.test(srv), 'a snoozed-out run is retried in a minute, not counted as a failure');
   }

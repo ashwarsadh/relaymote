@@ -565,7 +565,7 @@ function sentFileHtml(t) {
     if (/^(wav|mp3|ogg|oga|opus|m4a|aac|flac)$/.test(e)) out += `<audio controls preload="metadata" src="${esc(url)}"></audio>`;
     else if (/^(mp4|webm|mov)$/.test(e)) out += `<video controls playsinline preload="metadata" src="${esc(url)}"></video>`;
     else if (/^(png|jpe?g|gif|webp|svg)$/.test(e)) out += `<a href="${esc(url)}" target="_blank" rel="noopener"><img loading="lazy" alt="${esc(name)}" src="${esc(url)}"></a>`;
-    // A text file opens in Baton's own file viewer (a .md one formatted); the href stays as a fallback.
+    // A text file opens in Relaymote's own file viewer (a .md one formatted); the href stays as a fallback.
     const view = /^(md|markdown|txt|log|json|csv|py|js|ts|sh|ps1|yml|yaml|xml|sql)$/.test(e) ? ` data-sent="${esc(url)}" data-p="${esc(f)}"` : '';
     out += `<a class="sf-name" href="${esc(url)}"${view} target="_blank" rel="noopener">\ud83d\udcce ${esc(name)}</a></div>`;
   }
@@ -1084,7 +1084,7 @@ async function loadSessions() {
   } catch (e) { toast('List failed: ' + e.message, true); }
 }
 
-// With no session open, the header dot beside "Baton" says whether Baton is connected (g454): green when
+// With no session open, the header dot beside "Relaymote" says whether Relaymote is connected (g454): green when
 // the live stream from the PC is up and Claude Desktop answers, red when Desktop's link is down, grey
 // while connecting or unreachable. It was the session-state dot with no session, so it stayed grey.
 // Inside a session it is that session's state (renderHeader), as before.
@@ -3032,7 +3032,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 window.addEventListener('appinstalled', () => {
   $('install').classList.add('hidden');
-  toast('Installed — open Baton from your home screen');
+  toast('Installed — open Relaymote from your home screen');
 });
 $('btn-install').onclick = async () => {
   if (!installEvent) return toast('Use the Chrome menu → Add to Home screen', true);
@@ -3184,7 +3184,7 @@ const tmark = (k) => { try { window.__batonT[k] = Math.round(performance.now());
     setTimeout(registerSW, 0);
     if (e.message === 'signin-required') return;
     document.body.insertAdjacentHTML('beforeend',
-      '<div class="reauth"><div><b>Could not reach Baton</b>' +
+      '<div class="reauth"><div><b>Could not reach Relaymote</b>' +
       `<p>${esc(e.message)}</p>` +
       '<button onclick="location.reload()">Retry</button></div></div>');
   }

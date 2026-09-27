@@ -22,7 +22,7 @@
     ['digests', 'Digests', 'Off by default. A lean per-session digest (your turns and the answers, no tool traffic) for masters and overviews.'],
     ['osTasks', 'Scheduled-task inventory', 'Off by default. Lists Windows Task Scheduler, launchd or cron entries with the project each belongs to.'],
     ['hygiene', 'Context hygiene', 'Every 30 min, says what each session’s context needs (compact, write state first, rotate, archive, hold). Writes a report only.'],
-    ['autoUpdate', 'Automatic updates', 'On by default. Every 6 hours Baton checks GitHub for a new release and, on a Windows install, installs it and restarts by itself (about 15 seconds; never while a task runs). A release is installed only when its checksum file carries a valid signature by the Baton release key. Other copies only tell you (`baton update`).'],
+    ['autoUpdate', 'Automatic updates', 'On by default. Every 6 hours Relaymote checks GitHub for a new release and, on a Windows install, installs it and restarts by itself (about 15 seconds; never while a task runs). A release is installed only when its checksum file carries a valid signature by the Relaymote release key. Other copies only tell you (`baton update`).'],
     ['reaper', 'Idle-CLI reaper', 'Off by default. Frees the memory (~400 MB each) of sessions idle 3 h or more, using Claude’s own teardown; the next message resumes them. Only logs for its first 24 h. Never touches a session that is running, unread, waiting on you, on Remote Control, or owns a goal.'],
     ['autoCompact', 'Auto-compact', 'Off by default. Types /compact only in a session’s last warm cache cycle, when it is idle and has written its state down. Never cold, running or waiting on you.'],
     ['directives', 'Directives', 'Off by default. Daily, collects your own instructions per project into DIRECTIVES.md in that folder. Never overwrites a file you wrote.'],
@@ -32,7 +32,7 @@
     ['off', 'This computer only', 'The app answers on 127.0.0.1. Nothing is exposed.'],
     ['tailscale', 'Tailscale', 'Reachable from your devices on your tailnet. Install Tailscale on both.'],
     ['lan', 'Same Wi-Fi', 'Reachable from devices on your local network (plain HTTP, no push notifications).'],
-    ['cloudflare-quick', 'Anywhere — quick link', 'A free random https://….trycloudflare.com address. No account. Changes when Baton restarts.'],
+    ['cloudflare-quick', 'Anywhere — quick link', 'A free random https://….trycloudflare.com address. No account. Changes when Relaymote restarts.'],
     ['cloudflare-named', 'Anywhere — my own address', 'A fixed https address on your domain through your free Cloudflare account. Best for daily use.'],
   ];
 
@@ -145,7 +145,7 @@
     return '<p class="set-lead">Turn features on or off. Changes apply within a minute; the app module needs a restart.</p>' +
       moduleGroups(m) +
       '<h3>While you work</h3>' +
-      field('idleGateSeconds', 'Idle gate (seconds)', S.idleGateSeconds, 'Baton drives the Claude Desktop window. It waits until you have not touched keyboard or mouse for this long. 0 = never wait.', 'number');
+      field('idleGateSeconds', 'Idle gate (seconds)', S.idleGateSeconds, 'Relaymote drives the Claude Desktop window. It waits until you have not touched keyboard or mouse for this long. 0 = never wait.', 'number');
   }
 
   function loadDesk() {
@@ -159,20 +159,20 @@
       ' › <b>Troubleshooting</b> › <b>Enable Developer Mode</b>. This menu is hidden until you do it; afterwards a new <b>Developer</b> menu appears.</li>' +
       '<li><b>Turn on the Main Process Debugger.</b> ' + (mac ? 'Menu bar' : '☰') + ' › <b>Developer</b> › <b>Enable Main Process Debugger</b>, then press OK.</li>' +
       '<li>Press <b>Check again</b>.</li></ol>' +
-      '<p class="set-small">The debugger switches itself off whenever Claude Desktop restarts. ' + (mac ? 'On macOS, repeat step 2 after a restart (automatic re-enabling is Windows-only for now).' : 'Baton turns it back on for you once Claude Desktop is signed in, after a 3-2-1 countdown on the computer (Advanced › Re-enable automatically).') +
+      '<p class="set-small">The debugger switches itself off whenever Claude Desktop restarts. ' + (mac ? 'On macOS, repeat step 2 after a restart (automatic re-enabling is Windows-only for now).' : 'Relaymote turns it back on for you once Claude Desktop is signed in, after a 3-2-1 countdown on the computer (Advanced › Re-enable automatically).') +
       ' It listens on this computer only (127.0.0.1).</p>';
   }
 
   function renderDesktop() {
     if (!desk) { loadDesk(); return '<div class="empty">Checking Claude Desktop…</div>'; }
-    var h = '<p class="set-lead">Baton reads your sessions from disk and acts through Claude Desktop’s own main-process debugger. Nothing else to install, no Remote Control to switch on.</p>';
+    var h = '<p class="set-lead">Relaymote reads your sessions from disk and acts through Claude Desktop’s own main-process debugger. Nothing else to install, no Remote Control to switch on.</p>';
     if (!desk.desktopData) h += '<div class="set-card set-warn">Claude Desktop’s data was not found on this computer. Install Claude Desktop, sign in and open the Code tab once.</div>';
     h += desk.cdp
       ? '<div class="set-card"><b>✔ Connected.</b> The debugger answers on port ' + esc(desk.cdpPort) + '. Everything works.</div>'
       : '<div class="set-card set-warn"><b>Not connected.</b> Reading sessions works; sending, answering and resuming need the debugger.</div>';
     if (!desk.cdp && desk.desktopData) h += desk.devMode
       ? '<p class="set-small">✔ Developer Mode is on.</p>'
-      : '<div class="set-card"><b>Developer Mode is off.</b><p>Baton can switch it on for you. Then quit Claude Desktop completely and open it again.</p><button class="ghost primary" id="set-dev-mode">Turn on Developer Mode</button></div>';
+      : '<div class="set-card"><b>Developer Mode is off.</b><p>Relaymote can switch it on for you. Then quit Claude Desktop completely and open it again.</p><button class="ghost primary" id="set-dev-mode">Turn on Developer Mode</button></div>';
     h += '<div class="set-inline"><button class="ghost" id="set-desk-check">Check again</button>' +
       (!desk.cdp && desk.canAutoEnable && desk.devMode ? '<button class="ghost primary" id="set-desk-enable">Turn it on for me</button>' : '') + '</div>';
     if (deskMsg) h += '<div class="set-card' + (deskMsg.err ? ' set-warn' : '') + '" id="set-desk-result">' + esc(deskMsg.text) + '</div>';
@@ -189,15 +189,15 @@
     var mo = modelList.map(function (m) { return [m, m]; });
     var eo = EFFORTS.map(function (e) { return [e, e]; });
     var n = S.newSession || {}, lv = S.levels || {};
-    var h = '<p class="set-lead">Which model and effort Baton uses. The list comes from your Claude Desktop model picker.</p>' +
-      '<h3>New sessions you start from Baton</h3>' +
+    var h = '<p class="set-lead">Which model and effort Relaymote uses. The list comes from your Claude Desktop model picker.</p>' +
+      '<h3>New sessions you start from Relaymote</h3>' +
       sel('newSession.model', 'Default model', n.model || '', [['', 'Same as Claude Desktop']].concat(mo)) +
       sel('newSession.effort', 'Default effort', n.effort || '', [['', 'Same as Claude Desktop']].concat(eo)) +
-      '<label class="set-field"><span><b>Default instructions</b><small>Added to the first message of every session you start from Baton, e.g. “Keep replies short. Run the tests before you say done.”</small></span>' +
+      '<label class="set-field"><span><b>Default instructions</b><small>Added to the first message of every session you start from Relaymote, e.g. “Keep replies short. Run the tests before you say done.”</small></span>' +
       '<textarea data-field="newSession.instructions" rows="3">' + esc(n.instructions || '') + '</textarea></label>' +
-      toggle('tierBeforeWake', 'Use these before a wake', 'Before the Conductor or a master wakes an existing session, switch it to the default model and effort above. Every session Baton starts gets them before its first message.', S.tierBeforeWake !== false) +
-      field('tierOverrideHours', 'Keep my own changes for (hours)', S.tierOverrideHours != null ? S.tierOverrideHours : 4, 'A model or effort you change by hand in a session is left alone this long; after that Baton may put the default back.', 'number') +
-      '<h3>Workers by difficulty</h3><p class="set-small">When a master or the Conductor spawns a worker, Baton grades the task and starts it on the model below. A task that fails can be escalated one level.</p>';
+      toggle('tierBeforeWake', 'Use these before a wake', 'Before the Conductor or a master wakes an existing session, switch it to the default model and effort above. Every session Relaymote starts gets them before its first message.', S.tierBeforeWake !== false) +
+      field('tierOverrideHours', 'Keep my own changes for (hours)', S.tierOverrideHours != null ? S.tierOverrideHours : 4, 'A model or effort you change by hand in a session is left alone this long; after that Relaymote may put the default back.', 'number') +
+      '<h3>Workers by difficulty</h3><p class="set-small">When a master or the Conductor spawns a worker, Relaymote grades the task and starts it on the model below. A task that fails can be escalated one level.</p>';
     LEVELS.forEach(function (L) {
       var cur = lv[L[0]] || {};
       h += '<div class="set-level"><b>' + esc(L[1]) + '</b><small>' + esc(L[2]) + '</small><div class="set-inline">' +
@@ -237,7 +237,7 @@
         h += '<b>Step 2 — choose your address</b>' +
           '<div class="set-inline"><input id="set-cf-host" placeholder="baton.example.com" value="' + esc(r.hostname || '') + '"><button class="ghost primary" id="set-cf-setup"' + (t.loggedIn ? '' : ' disabled') + '>Create</button></div>';
         if (r.hostname) h += '<p>Status: <b>' + esc(t.status || 'stopped') + '</b>' + (t.error ? ' — <span class="set-err">' + esc(t.error) + '</span>' : '') + '</p>';
-        h += '<details><summary>Optional: Cloudflare Access (email login)</summary><p>Protect the address with Cloudflare Zero Trust Access. Enter your team name and the application AUD tag; Baton then accepts verified Access logins without the key.</p>' +
+        h += '<details><summary>Optional: Cloudflare Access (email login)</summary><p>Protect the address with Cloudflare Zero Trust Access. Enter your team name and the application AUD tag; Relaymote then accepts verified Access logins without the key.</p>' +
           field('remote.access.team', 'Team domain', (r.access || {}).team || '', 'e.g. myteam.cloudflareaccess.com') +
           field('remote.access.aud', 'Application AUD tag', (r.access || {}).aud || '', '') + '</details>';
       }
@@ -251,7 +251,7 @@
     if (!pairData) { loadPair(); return '<div class="empty">Loading…</div>'; }
     var links = pairData.links || [];
     var best = links[0];
-    var h = '<p class="set-lead">Scan with your phone’s camera. The link signs the phone in and remembers it. Then use your browser’s <b>Add to Home screen</b> to install Baton like an app.</p>';
+    var h = '<p class="set-lead">Scan with your phone’s camera. The link signs the phone in and remembers it. Then use your browser’s <b>Add to Home screen</b> to install Relaymote like an app.</p>';
     if (best && best.kind === 'local') h += '<div class="set-card set-warn">This computer is not reachable from your phone yet. Choose an option in <a href="#" id="go-remote">Remote access</a> first.</div>';
     h += links.map(function (l, i) {
       return '<div class="set-qr' + (i ? ' small' : '') + '"><div class="qr">' + (l.qr || '') + '</div><div><b>' + esc(l.label) + '</b><code class="set-url">' + esc(l.url) + '</code>' +
@@ -297,20 +297,20 @@
 
   function renderAdvanced() {
     var w = S.workers || {};
-    return '<p class="set-lead">Ports apply after restarting Baton.</p>' +
+    return '<p class="set-lead">Ports apply after restarting Relaymote.</p>' +
       field('appPort', 'App port', S.appPort, 'The phone/desktop app.', 'number') +
       field('port', 'Control port', S.port, 'Local API used by the CLI and MCP tools (loopback only).', 'number') +
       field('cdpPort', 'Claude Desktop debugger port', S.cdpPort, 'Developer › Enable Main Process Debugger in Claude Desktop.', 'number') +
-      toggle('autoEnableDebugger', 'Re-enable the debugger automatically', 'Windows: when Claude Desktop starts and you are signed in, Baton shows a 3-2-1 countdown on the computer and switches the debugger on in a few seconds. The window keeps its size.', S.autoEnableDebugger !== false) +
-      toggle('followClaude', 'Run Baton only while Claude Desktop is open', 'Windows, with the tray icon: Baton starts when Claude Desktop opens. When Desktop exits, Baton runs the account sync (if it is on) and then stops. It waits for running Baton tasks first.', S.followClaude === true) +
+      toggle('autoEnableDebugger', 'Re-enable the debugger automatically', 'Windows: when Claude Desktop starts and you are signed in, Relaymote shows a 3-2-1 countdown on the computer and switches the debugger on in a few seconds. The window keeps its size.', S.autoEnableDebugger !== false) +
+      toggle('followClaude', 'Run Relaymote only while Claude Desktop is open', 'Windows, with the tray icon: Relaymote starts when Claude Desktop opens. When Desktop exits, Relaymote runs the account sync (if it is on) and then stops. It waits for running Relaymote tasks first.', S.followClaude === true) +
       '<h3>Workers</h3>' +
-      '<label class="set-field"><span><b>Trusted project folders</b><small>Headless workers may open any folder directly inside these without Claude Code’s trust prompt, e.g. your projects folder. One absolute path per line; a whole drive is refused. Empty = only Baton’s own folders and each task’s folder.</small></span>' +
+      '<label class="set-field"><span><b>Trusted project folders</b><small>Headless workers may open any folder directly inside these without Claude Code’s trust prompt, e.g. your projects folder. One absolute path per line; a whole drive is refused. Empty = only Relaymote’s own folders and each task’s folder.</small></span>' +
       '<textarea data-field="trustedRoots" data-list="1" rows="2" autocomplete="off">' + esc((S.trustedRoots || []).join('\n')) + '</textarea></label>' +
       field('workers.concurrency', 'Headless workers at once', w.concurrency, '', 'number') +
       field('workers.guiConcurrency', 'Desktop workers at once', w.guiConcurrency, '', 'number') +
       '<h3>Conductor</h3>' +
       field('conductorSession', 'Conductor session id', S.conductorSession || '', 'Set when a session calls baton_become_conductor: the one session above all projects. Masters report to it and the Board sends your taps to it.') +
-      field('board.dir', 'Board folder', (S.board || {}).dir || '', 'Folder containing board.json. Blank = the default in Baton’s data folder.') +
+      field('board.dir', 'Board folder', (S.board || {}).dir || '', 'Folder containing board.json. Blank = the default in Relaymote’s data folder.') +
       field('ownerIndex', 'Owner index folder', S.ownerIndex || '', 'Optional folder describing which session owns which topic.') +
       '<h3>Goals and cache</h3>' +
       toggle('goals.autoSpawn', 'Start a session for unowned goals', 'When no session owns a goal, start one in its project folder.', !!(S.goals || {}).autoSpawn) +
@@ -326,7 +326,7 @@
     var e = S.engine || {}, o = e.openai || {}, k = e.kind || 'none', sm = S.summaries || {}, ro = S.roles || {};
     var plan = k === 'claude-cli' || k === 'baton-worker';
     return '<p class="set-lead">The model that writes session overviews and the roles database. Off by default: with <b>None</b>, nothing is ever sent to a model and roles use a free heuristic.</p>' +
-      sel('engine.kind', 'Engine', k, [['none', 'None (off)'], ['openai', 'OpenAI-compatible server'], ['claude-cli', 'Claude CLI (your Claude plan)'], ['baton-worker', 'Baton worker (your Claude plan)']]) +
+      sel('engine.kind', 'Engine', k, [['none', 'None (off)'], ['openai', 'OpenAI-compatible server'], ['claude-cli', 'Claude CLI (your Claude plan)'], ['baton-worker', 'Relaymote worker (your Claude plan)']]) +
       (plan ? '<div class="set-card set-warn"><b>Uses your own Claude plan.</b> Every overview and role is a real request that counts toward your usage limits. Keep the caps below small and pick a small model.</div>' : '') +
       (k === 'none' ? '' : field('engine.model', 'Model', e.model || '', plan ? 'Blank = haiku. A small model is enough.' : 'The model id your server serves.')) +
       (k === 'openai' ? field('engine.openai.baseUrl', 'Server address', o.baseUrl || '', 'Base URL ending in /v1, e.g. http://127.0.0.1:8080/v1') +
@@ -342,15 +342,15 @@
   }
 
   function renderAbout(extra) {
-    return '<div class="set-about"><img src="/icon.svg" width="64" height="64" alt=""><div><b>Baton</b> ' + esc(S.__version || '') +
+    return '<div class="set-about"><img src="/icon.svg" width="64" height="64" alt=""><div><b>Relaymote</b> ' + esc(S.__version || '') +
       '<p>Your Claude Code sessions, in your pocket.</p></div></div>' +
       '<p class="set-small">Data folder: <code>' + esc(S.__dataDir || '') + '</code></p>' +
-      '<p class="set-small">Baton is an independent open-source project and is not affiliated with Anthropic. It drives the Claude Desktop app you are already signed in to; it never sees your password.</p>' +
+      '<p class="set-small">Relaymote is an independent open-source project and is not affiliated with Anthropic. It drives the Claude Desktop app you are already signed in to; it never sees your password.</p>' +
       '<p><button class="ghost" id="set-welcome">Show the welcome tour</button></p>';
   }
 
   function renderWelcome() {
-    return '<div class="set-about"><img src="/icon.svg" width="64" height="64" alt=""><div><b>Welcome to Baton</b><p>Your Claude Code sessions, in your pocket.</p></div></div>' +
+    return '<div class="set-about"><img src="/icon.svg" width="64" height="64" alt=""><div><b>Welcome to Relaymote</b><p>Your Claude Code sessions, in your pocket.</p></div></div>' +
       '<ol class="set-steps">' +
       '<li><b>Your sessions, anywhere.</b> Every Claude Code session from the desktop app, live: read, reply, answer questions and permissions, switch model and effort, start new sessions.</li>' +
       '<li><b>Nothing stalls.</b> Sessions stopped by a usage limit continue when it resets; sessions cut off by a crash pick up again.</li>' +
@@ -420,7 +420,7 @@
     };
     if ((x = $('set-rotate'))) x.onclick = function (e) {
       e.preventDefault();
-      if (!confirm('Issue a new access key? Every paired phone and browser will need to scan again after Baton restarts.')) return;
+      if (!confirm('Issue a new access key? Every paired phone and browser will need to scan again after Relaymote restarts.')) return;
       req('/api/token/rotate', {}).then(function (r) { note(r.note || 'Done'); });
     };
     if ((x = $('set-desk-check'))) x.onclick = function () { desk = null; render(); loadDesk(); };

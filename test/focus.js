@@ -1,5 +1,5 @@
 'use strict';
-// focus.js (g580): a Baton call that opens a session must put the user back on the session they were on.
+// focus.js (g580): a Relaymote call that opens a session must put the user back on the session they were on.
 // restoreActive used to click the sidebar row only if it was rendered, never checked, and had no fallback;
 // the goal path skipped the restore entirely when it threw. Behaviour is tested with a fake app below.
 const assert = require('assert');

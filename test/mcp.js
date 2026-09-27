@@ -1,4 +1,4 @@
-// mcp.js — the Baton MCP server over real stdio JSON-RPC: handshake, tool list, the slave/master gate
+// mcp.js — the Relaymote MCP server over real stdio JSON-RPC: handshake, tool list, the slave/master gate
 // (every control tool refused for a slave, the slave-safe ones open), claiming, a second session
 // refused, takeover, release, and the audit log. Offline: temp BATON_HOME, spare ports with no daemon
 // on them, fake session ids. Nothing here reaches Claude Desktop or a real session.

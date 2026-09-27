@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Baton control</title>
+<title>Relaymote control</title>
 <style>
 :root{--bg:#faf9f7;--panel:#fff;--line:#e5e2dd;--txt:#1a1a1a;--dim:#6b6b6b;--acc:#c4623f;
 --run:#2f7fd8;--wait:#a8841f;--done:#2f9a5e;--fail:#c9443d;--yellow:#b8860b;--blue:#2f7fd8;--idle:#9aa0a8}
@@ -47,7 +47,7 @@ button.mini{padding:2px 8px;font-size:11px;font-weight:500}
 </style>
 
 <header>
-  <h1>Baton · control</h1>
+  <h1>Relaymote · control</h1>
   <span class="pill p-run" id="s-run">running 0</span>
   <span class="pill p-wait" id="s-wait">queued 0</span>
   <span class="pill p-done" id="s-done">done 0</span>
@@ -60,12 +60,12 @@ button.mini{padding:2px 8px;font-size:11px;font-weight:500}
 
 <main>
   <section style="grid-column:1/-1">
-    <h2>Submit a task — Baton picks the model and effort</h2>
+    <h2>Submit a task — Relaymote picks the model and effort</h2>
     <form id="f">
       <textarea id="prompt" placeholder="Describe the task. The router grades it easy…extra hard and starts a worker on the model and effort set for that level (Settings › Models)."></textarea>
       <select id="level" title="Force a difficulty level"><option value="">auto level</option></select>
       <select id="effort" title="Override only the effort"><option value="">auto effort</option><option>low</option><option>medium</option><option>high</option><option>max</option></select>
-      <input id="cwd" placeholder="folder (optional)" style="flex:0 1 220px" title="The folder the worker runs in. Blank = Baton's home folder.">
+      <input id="cwd" placeholder="folder (optional)" style="flex:0 1 220px" title="The folder the worker runs in. Blank = Relaymote's home folder.">
       <label class="dim" style="display:flex;align-items:center;gap:5px"><input type="checkbox" id="isolate" style="width:auto"> isolate</label>
       <button class="primary" type="submit">Dispatch</button>
     </form>

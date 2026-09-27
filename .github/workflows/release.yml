@@ -66,32 +66,32 @@ jobs:
           $setup = Resolve-Path "dist/Relaymote-Setup-$v-x64.exe"
           $dir = Join-Path $env:RUNNER_TEMP 'baton-install'
           $log = Join-Path $env:RUNNER_TEMP 'baton-setup.log'
-          $env:BATON_HOME = Join-Path $env:RUNNER_TEMP 'baton-home'
-          $env:BATON_PORT = '18788'; $env:BATON_APP_PORT = '18790'
+          $env:RELAYMOTE_HOME = Join-Path $env:RUNNER_TEMP 'baton-home'
+          $env:RELAYMOTE_PORT = '18788'; $env:RELAYMOTE_APP_PORT = '18790'
           $env:APPDATA = Join-Path $env:RUNNER_TEMP 'appdata'
 
           $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$dir`"", '/TASKS=""', "/LOG=`"$log`"" -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content $log -Tail 60; throw "setup exited $($p.ExitCode)" }
-          foreach ($f in 'baton.cmd', 'runtime\node.exe', 'bin\baton.js', 'server.js', 'node_modules\ws\package.json', 'node_modules\qrcode\package.json', 'stop-baton.ps1', 'unins000.exe') {
+          foreach ($f in 'relaymote.cmd', 'runtime\node.exe', 'bin\relaymote.js', 'server.js', 'node_modules\ws\package.json', 'node_modules\qrcode\package.json', 'stop-relaymote.ps1', 'unins000.exe') {
             if (-not (Test-Path (Join-Path $dir $f))) { throw "installed tree is missing $f" }
           }
 
-          & "$dir\baton.cmd" help
-          if ($LASTEXITCODE -ne 0) { throw "baton help exited $LASTEXITCODE" }
-          $got = (& "$dir\baton.cmd" --version | Out-String).Trim()
-          if ($got -ne $v) { throw "baton --version said '$got', expected $v" }
-          & "$dir\baton.cmd" status
-          if ($LASTEXITCODE -ne 0) { throw "baton status exited $LASTEXITCODE" }
+          & "$dir\relaymote.cmd" help
+          if ($LASTEXITCODE -ne 0) { throw "relaymote help exited $LASTEXITCODE" }
+          $got = (& "$dir\relaymote.cmd" --version | Out-String).Trim()
+          if ($got -ne $v) { throw "relaymote --version said '$got', expected $v" }
+          & "$dir\relaymote.cmd" status
+          if ($LASTEXITCODE -ne 0) { throw "relaymote status exited $LASTEXITCODE" }
 
-          & "$dir\baton.cmd" start
-          $h = Invoke-RestMethod "http://127.0.0.1:$($env:BATON_PORT)/api/health" -TimeoutSec 10
-          if ($h.app -ne 'baton') { throw 'the installed daemon did not answer /api/health' }
-          & "$dir\baton.cmd" stop
+          & "$dir\relaymote.cmd" start
+          $h = Invoke-RestMethod "http://127.0.0.1:$($env:RELAYMOTE_PORT)/api/health" -TimeoutSec 10
+          if ($h.app -ne 'relaymote') { throw 'the installed daemon did not answer /api/health' }
+          & "$dir\relaymote.cmd" stop
 
           Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
-          for ($i = 0; $i -lt 60 -and (Test-Path (Join-Path $dir 'bin\baton.js')); $i++) { Start-Sleep -Seconds 1 }
-          if (Test-Path (Join-Path $dir 'bin\baton.js')) { throw 'uninstall left the app files behind' }
-          if (-not (Test-Path (Join-Path $env:BATON_HOME 'mobile\secret.json'))) { throw 'uninstall removed the data folder, which it must keep' }
+          for ($i = 0; $i -lt 60 -and (Test-Path (Join-Path $dir 'bin\relaymote.js')); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path (Join-Path $dir 'bin\relaymote.js')) { throw 'uninstall left the app files behind' }
+          if (-not (Test-Path (Join-Path $env:RELAYMOTE_HOME 'mobile\secret.json'))) { throw 'uninstall removed the data folder, which it must keep' }
           Write-Host "installer self-test passed for $v"
 
       - uses: actions/upload-artifact@v4
@@ -140,16 +140,16 @@ jobs:
           c="$mnt/Relaymote.app/Contents"
           test -x "$c/MacOS/Relaymote"
           bash -n "$c/MacOS/Relaymote"
-          test -f "$c/Resources/baton.icns"
+          test -f "$c/Resources/relaymote.icns"
           plutil -lint "$c/Info.plist"
           node_bin="$c/Resources/app/runtime/node"
           file "$node_bin"
-          export BATON_HOME="$RUNNER_TEMP/baton-home" BATON_PORT=18788 BATON_APP_PORT=18790 APPDATA="$RUNNER_TEMP/appdata"
+          export RELAYMOTE_HOME="$RUNNER_TEMP/baton-home" RELAYMOTE_PORT=18788 RELAYMOTE_APP_PORT=18790 APPDATA="$RUNNER_TEMP/appdata"
           "$node_bin" --version
-          "$node_bin" "$c/Resources/app/bin/baton.js" help
-          got="$("$node_bin" "$c/Resources/app/bin/baton.js" --version)"
-          [ "$got" = "$v" ] || { echo "baton --version said '$got', expected $v"; exit 1; }
-          "$c/Resources/app/baton" status
+          "$node_bin" "$c/Resources/app/bin/relaymote.js" help
+          got="$("$node_bin" "$c/Resources/app/bin/relaymote.js" --version)"
+          [ "$got" = "$v" ] || { echo "relaymote --version said '$got', expected $v"; exit 1; }
+          "$c/Resources/app/relaymote" status
           hdiutil detach "$mnt"
           echo "DMG self-test passed for $v (${{ matrix.arch }})"
 
@@ -180,8 +180,6 @@ jobs:
           v="$(node -p "require('./package.json').version")"
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "tag=v$v" >> "$GITHUB_OUTPUT"
-          # Installs from before the rename look for Baton-Setup-<v>-x64.exe: ship a signed copy under that name.
-          if [ -f "dist/Relaymote-Setup-$v-x64.exe" ]; then cp "dist/Relaymote-Setup-$v-x64.exe" "dist/Baton-Setup-$v-x64.exe"; fi
           (cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
           cp installer/RELEASE_NOTES.md "$RUNNER_TEMP/notes.md"
           sed -i "s/<version>/$v/g" "$RUNNER_TEMP/notes.md"
@@ -191,8 +189,8 @@ jobs:
 
       - name: Sign SHA256SUMS.txt (installed copies refuse an update without a valid signature)
         env:
-          BATON_SIGNING_KEY: ${{ secrets.BATON_SIGNING_KEY }}
-          BATON_REQUIRE_SIGNATURE: ${{ github.repository == 'ashwarsadh/relaymote' && '1' || '' }}
+          RELAYMOTE_SIGNING_KEY: ${{ secrets.BATON_SIGNING_KEY }}
+          RELAYMOTE_REQUIRE_SIGNATURE: ${{ github.repository == 'ashwarsadh/relaymote' && '1' || '' }}
         run: node scripts/sign-release.js dist/SHA256SUMS.txt
 
       - uses: softprops/action-gh-release@v2

@@ -9,13 +9,13 @@
 | Time | Picture | Voice-over / caption |
 |---|---|---|
 | 0–5s | Desktop with six Claude Code sessions, you stand up and leave | "I run a lot of Claude Code sessions. The moment I walk away, they stall." |
-| 5–12s | Phone: session list, a red *needs you* dot, push notification arrives | "Baton puts every desktop session on my phone — exactly as they are." |
+| 5–12s | Phone: session list, a red *needs you* dot, push notification arrives | "Relaymote puts every desktop session on my phone — exactly as they are." |
 | 12–20s | Answer a permission on the phone; desktop continues the same session | "Not a copy. The same session. Reply here, continue at the desk." |
 | 20–28s | Usage limit hit → timer → session resumes by itself | "Usage limit? It resumes when the limit resets. Crash? It picks up again." |
 | 28–38s | Board: questions, notes, goals; tap three answers, *Send 3 replies* | "Everything that needs me, on one board. Answers go out in one batch." |
-| 38–48s | Add a goal; Baton routes it to the right project, opens a new session, groups it | "Give it a goal. It finds the right project and session, and keeps chasing until it's done." |
+| 38–48s | Add a goal; Relaymote routes it to the right project, opens a new session, groups it | "Give it a goal. It finds the right project and session, and keeps chasing until it's done." |
 | 48–55s | Settings › Modules toggles, Models tab | "Every feature is a switch. Map easy to hard tasks to the model you want." |
-| 55–60s | Logo, GitHub URL | "Baton. Free and open source." |
+| 55–60s | Logo, GitHub URL | "Relaymote. Free and open source." |
 
 ## B. Deep dives (2–4 minutes each)
 
@@ -30,7 +30,7 @@
    (idle 30 min → nudged before the 60-minute cache expiry) and why it saves tokens.
 5. **The Board** — pending decisions, things to tell you, goals; batch replies; how the Conductor reads them.
 6. **Two Claude accounts, one app** — the drift view; *Preview sync*; the three merge modes; *Add an account*
-   walkthrough (log out, log in, copy sessions across; Baton closes and reopens Claude only after you confirm).
+   walkthrough (log out, log in, copy sessions across; Relaymote closes and reopens Claude only after you confirm).
 7. **Context care** — the hygiene report (compact / write state first / rotate / archive), archive candidates
    with reasons, and why auto-compact waits for the last warm cycle.
 8. **Models by difficulty** — easy/medium/hard/extra-hard mapping; defaults for new sessions; standing
@@ -41,5 +41,5 @@
 - Demo data with 6–8 sessions across 3 projects, one waiting on a question, one on a permission, one at a
   usage limit, two goals (one late), one inbox note.
 - Phone frame template; captions in the brand coral (`#d97757`) on dark.
-- Logo animation: the baton sweeping across (from `assets/logo.svg`).
+- Logo animation: the relaymote sweeping across (from `assets/logo.svg`).
 - Screen recordings at 60 fps, cursor highlighting on for desktop shots.

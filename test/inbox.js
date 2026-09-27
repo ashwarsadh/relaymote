@@ -1,6 +1,6 @@
 // inbox.js — the inbox ledger (lib/inbox.js), its auto-resolver, Board answers landing on cards, the
 // Board's inbox drawers, the one chip/list predicate, the board.html build check, and the MCP inbox
-// tools over real stdio. Temp BATON_HOME / APPDATA / CLAUDE_CONFIG_DIR, stub sender; nothing reaches
+// tools over real stdio. Temp RELAYMOTE_HOME / APPDATA / CLAUDE_CONFIG_DIR, stub sender; nothing reaches
 // Claude Desktop or a real session.
 'use strict';
 const fs = require('fs');
@@ -9,10 +9,10 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-inbox-'));
-process.env.BATON_HOME = path.join(TMP, 'baton');
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
 process.env.APPDATA = path.join(TMP, 'appdata');
 process.env.CLAUDE_CONFIG_DIR = path.join(TMP, 'claude');
-delete process.env.BATON_STATE_DIR;
+delete process.env.RELAYMOTE_STATE_DIR;
 
 const config = require('../lib/config');
 const inbox = require('../lib/inbox');
@@ -219,7 +219,7 @@ const item = (n) => inbox.fold().items.get(n);
   check(!w.written && /unclosed string/.test(w.reason) && !fs.existsSync(htmlFile), 'board.html is NOT written when its script would not parse');
   w = boardBuild.writeHtml(bj, { file: htmlFile });
   const html = fs.readFileSync(htmlFile, 'utf8');
-  check(w.written && /generator" content="baton"/.test(html) && /NO QUESTION/.test(html) && /Probably handled/.test(html) && /Reinstate/.test(html) && /outside the cache window|outside/.test(html), 'board.html is written with the inbox sections and the hygiene wake line');
+  check(w.written && /generator" content="relaymote"/.test(html) && /NO QUESTION/.test(html) && /Probably handled/.test(html) && /Reinstate/.test(html) && /outside the cache window|outside/.test(html), 'board.html is written with the inbox sections and the hygiene wake line');
   fs.writeFileSync(htmlFile, '<html>someone else\'s board</html>');
   w = boardBuild.writeHtml(bj, { file: htmlFile });
   check(!w.written && fs.readFileSync(htmlFile, 'utf8').includes('someone else'), 'a board.html written by something else is left alone');
@@ -228,9 +228,9 @@ const item = (n) => inbox.fold().items.get(n);
 
   // ---------------------------------------------------------------- MCP tools over stdio
   const mcp = (sessionId) => {
-    const env = { ...process.env, BATON_HOME: process.env.BATON_HOME, BATON_PORT: '9', BATON_APP_PORT: '9', BATON_CDP_PORT: '9', CLAUDE_CODE_HOST_SESSION_ID: sessionId };
+    const env = { ...process.env, RELAYMOTE_HOME: process.env.RELAYMOTE_HOME, RELAYMOTE_PORT: '9', RELAYMOTE_APP_PORT: '9', RELAYMOTE_CDP_PORT: '9', CLAUDE_CODE_HOST_SESSION_ID: sessionId };
     delete env.CLAUDE_CODE_SESSION_ID;
-    const child = spawn(process.execPath, [path.join(__dirname, '..', 'mcp', 'baton-mcp.js')], { cwd: TMP, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [path.join(__dirname, '..', 'mcp', 'relaymote-mcp.js')], { cwd: TMP, env, stdio: ['pipe', 'pipe', 'pipe'] });
     let buf = '', seq = 0; const waiting = new Map();
     child.stdout.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); let m; try { m = JSON.parse(line); } catch { continue; } if (m.id != null && waiting.has(m.id)) { waiting.get(m.id)(m); waiting.delete(m.id); } } });
     child.stderr.on('data', () => {});
@@ -243,12 +243,12 @@ const item = (n) => inbox.fold().items.get(n);
   try {
     await S.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'inbox-test', version: '0' } });
     const names = (await S.rpc('tools/list', {})).result.tools.map(t => t.name);
-    check(['baton_inbox_add', 'baton_inbox', 'baton_inbox_update'].every(n => names.includes(n)), 'MCP: baton_inbox_add, baton_inbox and baton_inbox_update are listed');
-    const added = await S.call('baton_inbox_add', { text: 'Decide which of the two layouts ships in the next release', ask_kind: 'decide', ask: 'Layout A or B?' });
+    check(['relaymote_inbox_add', 'relaymote_inbox', 'relaymote_inbox_update'].every(n => names.includes(n)), 'MCP: relaymote_inbox_add, relaymote_inbox and relaymote_inbox_update are listed');
+    const added = await S.call('relaymote_inbox_add', { text: 'Decide which of the two layouts ships in the next release', ask_kind: 'decide', ask: 'Layout A or B?' });
     check(added && added.ok && added.item.session === sid(21) && item(added.n).ask === 'Layout A or B?', 'a slave may add; its own session is recorded and the ask is set', added);
-    const listed = await S.call('baton_inbox', {});
+    const listed = await S.call('relaymote_inbox', {});
     check(listed && listed.ok && listed.items.length === 1, 'a slave may read the inbox');
-    const upd = await S.call('baton_inbox_update', { op: 'done', n: added.n });
+    const upd = await S.call('relaymote_inbox_update', { op: 'done', n: added.n });
     check(upd && upd.error === 'NOT_MASTER' && item(added.n).status === 'open', 'a slave may NOT change items (guard fires)', upd);
   } finally { S.close(); }
 

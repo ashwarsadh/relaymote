@@ -3,7 +3,7 @@ node_modules/
 *.bak
 *.bak-*
 .env
-# runtime data lives in ~/.baton, never in the repo
+# runtime data lives in ~/.relaymote, never in the repo
 state/
 results/
 uploads/

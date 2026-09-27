@@ -1,11 +1,11 @@
-# stop-baton.ps1 - stop the Relaymote that runs from THIS folder, so its files can be replaced or removed.
+# stop-relaymote.ps1 - stop the Relaymote that runs from THIS folder, so its files can be replaced or removed.
 # Called by the installer before an upgrade and by the uninstaller (with -Unregister).
-# Leaves the data folder (~\.baton) alone.
+# Leaves the data folder (~\.relaymote) alone.
 param([switch]$Unregister)
 $ErrorActionPreference = 'SilentlyContinue'
 $Root = $PSScriptRoot
 $Node = Join-Path $Root 'runtime\node.exe'
-$Cli = Join-Path $Root 'bin\baton.js'
+$Cli = Join-Path $Root 'bin\relaymote.js'
 
 # 1. The tray restarts the daemon every 20 s, so it goes first.
 $tray = (Join-Path $Root 'scripts\tray.ps1').ToLower()
@@ -13,7 +13,7 @@ Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'"
   Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Contains($tray) } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 
-# 2. Ask the daemon to shut down (baton stop only talks to a Relaymote, never to another program on the port).
+# 2. Ask the daemon to shut down (relaymote stop only talks to a Relaymote, never to another program on the port).
 if ((Test-Path $Node) -and (Test-Path $Cli)) {
   & $Node $Cli stop | Out-Null
   if ($Unregister) {

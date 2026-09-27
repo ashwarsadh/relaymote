@@ -3,7 +3,7 @@
 ```
  phone / browser ──HTTPS (Cloudflare) or Tailscale/LAN──►  app port 8790  ─┐
                                                                           │   Relaymote daemon (Node.js)
- Claude Code sessions ──MCP (stdio)── mcp/baton-mcp.js ──► control 8788 ─┤    server.js
+ Claude Code sessions ──MCP (stdio)── mcp/relaymote-mcp.js ──► control 8788 ─┤    server.js
                                                                           │
          reads files ◄────────────────────────────────────────────────────┤
    %APPDATA%\Claude\claude-code-sessions\…\local_*.json   (session list)  │
@@ -34,7 +34,7 @@
 |---|---|
 | App | `mobile/` — HTTP server, server-sent events, push (`mobile/push.js`), the web app in `mobile/public/` |
 | Auto-resume | `lib/resume.js` — usage-limit and crash resume |
-| Orchestrator | `lib/orchestrator.js`, `lib/worker.js`, `lib/gui-worker.js`, `lib/router.js`, `mcp/baton-mcp.js` |
+| Orchestrator | `lib/orchestrator.js`, `lib/worker.js`, `lib/gui-worker.js`, `lib/router.js`, `mcp/relaymote-mcp.js` |
 | Wake the master | `lib/notify.js`, `lib/await.js`, `lib/goal.js` (types `/goal` and `/compact` into the real composer) |
 | Auto-start chips | `lib/chipwatch.js` |
 | Board | `lib/board-build.js` (writes `board.json` + `board.html`), `mobile/board.js`, `mobile/public/board-ui.js` |
@@ -53,11 +53,11 @@
 | Finish-the-task hook | `hooks/finish-the-task.js`, `hooks/install.js` |
 | Operations | `lib/heal.js`, `lib/launch.js`, `scripts/register-autostart.ps1`, `lib/salvage.js`, `lib/import-ago.js` (import from the predecessor's state format), `lib/dashboard.html` (loopback control page) |
 | Remote access | `lib/tunnel.js` (cloudflared), `lib/pair.js` (links + QR), `mobile/access.js` (Cloudflare Access) |
-| Settings | `lib/config.js` (`~/.baton/settings.json`, hot-reloaded), `mobile/public/settings-ui.js` |
+| Settings | `lib/config.js` (`~/.relaymote/settings.json`, hot-reloaded), `mobile/public/settings-ui.js` |
 
 ## Workers
 
-`baton_spawn` runs a task either **headless** (`claude -p`, fast, invisible, needs the Claude Code
+`relaymote_spawn` runs a task either **headless** (`claude -p`, fast, invisible, needs the Claude Code
 CLI to be logged in) or as a **visible Desktop session** (uses the account you are signed in to in
 the app). `auto` picks headless when the CLI is logged in. Model and effort are chosen per task by
 `lib/router.js` from the difficulty levels in Settings › Models (easy / medium / hard / extra hard); a failed
@@ -72,5 +72,5 @@ next start and continued. Sessions the app will resume on its own are left alone
 ## Limits
 
 Claude Desktop's UI and debugger are not a public API. A desktop update can change the markup Relaymote
-drives; reads keep working because they only use files. File an issue with `baton status` output
+drives; reads keep working because they only use files. File an issue with `relaymote status` output
 when an action stops working.

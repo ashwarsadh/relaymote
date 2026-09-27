@@ -2,7 +2,7 @@
 // On Windows, spawn(cmd, { detached: true }) is DETACHED_PROCESS: cmd gets no console, so the node.exe it
 // starts is given a new, VISIBLE one (windowsHide cannot reach it). Every background start therefore goes
 // through wscript + scripts/run-hidden.vbs, which gives cmd a hidden console that node shares.
-// Static checks always; BATON_LIVE_WINDOWS=1 on Windows also launches a real node both ways and counts
+// Static checks always; RELAYMOTE_LIVE_WINDOWS=1 on Windows also launches a real node both ways and counts
 // the visible console windows (the old way is the control: it must show one).
 'use strict';
 const fs = require('fs');
@@ -24,7 +24,7 @@ check(fs.existsSync(path.join(ROOT, 'scripts', 'run-hidden.vbs')), 'run-hidden.v
 
 // Every detached spawn of a console program goes through spawnHidden. The one allowed exception opens a URL
 // (`cmd /c start "" url` starts a GUI browser; cmd's builtin `start` needs no console).
-const files = ['bin/baton.js', 'server.js', ...fs.readdirSync(path.join(ROOT, 'lib')).filter(f => f.endsWith('.js')).map(f => 'lib/' + f),
+const files = ['bin/relaymote.js', 'server.js', ...fs.readdirSync(path.join(ROOT, 'lib')).filter(f => f.endsWith('.js')).map(f => 'lib/' + f),
   ...fs.readdirSync(path.join(ROOT, 'mobile')).filter(f => f.endsWith('.js')).map(f => 'mobile/' + f)];
 const offenders = (src, file) => src.split('\n').map((l, i) => ({ l, i: i + 1 }))
   .filter(({ l }) => /detached: true/.test(l) && !/^\s*(\*|\/\/)/.test(l))
@@ -37,7 +37,7 @@ check(bad.length === 0, 'no other detached spawn of a console program (daemon, t
 check(offenders("  const child = spawn(w.cmd, w.args, {\n    detached: true, stdio: 'ignore', windowsHide: true, env,", 'lib/launch.js').length === 1,
   'control: the old spawnDaemon shape is caught');
 const L = fs.readFileSync(path.join(ROOT, 'lib', 'launch.js'), 'utf8');
-check(/function spawnDaemon[\s\S]*?spawnHidden\(w\.cmd, w\.args/.test(L), 'spawnDaemon (baton start/open/restart, heal) uses spawnHidden');
+check(/function spawnDaemon[\s\S]*?spawnHidden\(w\.cmd, w\.args/.test(L), 'spawnDaemon (relaymote start/open/restart, heal) uses spawnHidden');
 const U = fs.readFileSync(path.join(ROOT, 'lib', 'updater.js'), 'utf8');
 check(/spawnHidden\(process\.env\.ComSpec \|\| 'cmd\.exe', \['\/d', '\/c', cmd\]/.test(U) && /function startTray\(\) \{[\s\S]*?spawnHidden\('powershell\.exe'/.test(U)
   && /wscript\.exe "\$\{vbs\}" cmd\.exe/.test(U), 'the update script (every route) and the tray restart are hidden');
@@ -45,8 +45,8 @@ const T = fs.readFileSync(path.join(ROOT, 'scripts', 'tray.ps1'), 'utf8');
 check(/\$p\.CreateNoWindow = \$true/.test(T) && /\$p\.UseShellExecute = \$false/.test(T), 'the tray\'s crash respawn starts cmd with CreateNoWindow');
 
 (async () => {
-  if (process.platform !== 'win32' || process.env.BATON_LIVE_WINDOWS !== '1') {
-    console.log('(live window count skipped: set BATON_LIVE_WINDOWS=1 on Windows)');
+  if (process.platform !== 'win32' || process.env.RELAYMOTE_LIVE_WINDOWS !== '1') {
+    console.log('(live window count skipped: set RELAYMOTE_LIVE_WINDOWS=1 on Windows)');
   } else {
     const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-hidden-'));
     fs.writeFileSync(path.join(TMP, 'idle.js'), 'setTimeout(function () {}, 12000);\n');

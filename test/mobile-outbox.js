@@ -1,6 +1,6 @@
 // mobile-outbox.js — nothing the user typed may be forgotten until the transcript proves it arrived.
 // Ported from the private tool's test-outbox.js. Every case is about one rule: a QUEUED message is
-// not a DELIVERED message. Runs against a temp BATON_HOME, so it can never touch a real outbox.
+// not a DELIVERED message. Runs against a temp RELAYMOTE_HOME, so it can never touch a real outbox.
 'use strict';
 const H = require('./mobile-harness');
 const W = H.world('outbox', { env: true });

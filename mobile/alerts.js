@@ -7,7 +7,7 @@
 //
 //   ntfy     POST the text to an ntfy topic URL (https://ntfy.sh/<topic> or your own server)
 //   webhook  POST the alert as JSON to any URL (Slack/Discord bridges, home automation, ...)
-//   command  run a local command; the alert arrives in BATON_ALERT_* env vars and as JSON on stdin
+//   command  run a local command; the alert arrives in RELAYMOTE_ALERT_* env vars and as JSON on stdin
 //
 // Rules carried over from the private tool this was ported from:
 //   * Push first. The backup is used when no push subscription succeeded, or always if asked.
@@ -87,8 +87,8 @@ function runCommand(cmd, evt) {
     try {
       child = spawn(cmd, { shell: true, windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'], env: {
         ...process.env,
-        BATON_ALERT_TITLE: String(evt.title || ''), BATON_ALERT_BODY: String(evt.body || ''),
-        BATON_ALERT_KIND: String(evt.kind || ''), BATON_ALERT_URL: String(evt.url || ''),
+        RELAYMOTE_ALERT_TITLE: String(evt.title || ''), RELAYMOTE_ALERT_BODY: String(evt.body || ''),
+        RELAYMOTE_ALERT_KIND: String(evt.kind || ''), RELAYMOTE_ALERT_URL: String(evt.url || ''),
       } });
     } catch (e) { return resolve({ ok: false, error: e.message }); }
     let err = '';
@@ -111,7 +111,7 @@ async function viaChannel(s, evt) {
   }
   if (s.kind === 'webhook') {
     if (!s.url) return { ok: false, error: 'no webhook URL set' };
-    const payload = { source: 'baton', kind: evt.kind || null, title: evt.title || '', body: evt.body || '',
+    const payload = { source: 'relaymote', kind: evt.kind || null, title: evt.title || '', body: evt.body || '',
                       text: textOf(evt), url: evt.url || null, tag: evt.tag || null, at: new Date().toISOString() };
     return httpPost(s.url, JSON.stringify(payload), { 'Content-Type': 'application/json' });
   }

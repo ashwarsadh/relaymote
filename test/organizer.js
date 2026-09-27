@@ -10,8 +10,8 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-organizer-'));
 execFileSync(process.execPath, [path.join(__dirname, 'make-demo.js'), TMP]);
 process.env.APPDATA = path.join(TMP, 'appdata');
 process.env.CLAUDE_CONFIG_DIR = path.join(TMP, 'claude');
-process.env.BATON_HOME = path.join(TMP, 'baton');
-delete process.env.BATON_STATE_DIR;
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
+delete process.env.RELAYMOTE_STATE_DIR;
 
 let failed = 0;
 const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); if (!ok) failed++; };
@@ -77,7 +77,7 @@ const owner = require('../lib/owner');
   const ro = owner.readIndex();
   check(ro && Object.keys(ro.sessions).length === 14, 'owner.js reads the index by default (no ownerIndex setting)');
   const r = owner.resolve('fix the flaky checkout test in web-app');
-  check(r.ok && r.owner === id('Fix flaky checkout e2e test'), 'baton_route_owner resolves against it', r.ok ? r.title : JSON.stringify(r).slice(0, 120));
+  check(r.ok && r.owner === id('Fix flaky checkout e2e test'), 'relaymote_route_owner resolves against it', r.ok ? r.title : JSON.stringify(r).slice(0, 120));
   check(require('../lib/master-protocol').conductorId() === ix.conductor, 'conductorId() reads settings first');
 
   const calls = [];

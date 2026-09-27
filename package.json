@@ -1,10 +1,10 @@
 {
-  "name": "baton-cc",
-  "version": "0.2.26",
+  "name": "relaymote",
+  "version": "0.2.27",
   "description": "Your Claude Code sessions, in your pocket: a phone + desktop client for Claude Desktop's Code tab with multi-session control, auto-resume and a master/worker orchestrator.",
   "license": "MIT",
   "bin": {
-    "baton": "bin/baton.js"
+    "relaymote": "bin/relaymote.js"
   },
   "main": "server.js",
   "scripts": {

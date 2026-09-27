@@ -1,7 +1,7 @@
 // mobile-live-ui.js — the app must keep itself current, and must not carry a private copy of the
 // desktop's vocabulary. Ported from the private tool's test-live-ui.js: mostly assertions on the
 // source (each names the incident it pins down), plus the parts that can run against the
-// stand-in desktop. Adapted for Relaymote's names (__batonLastKey, baton-mcp.js). Not ported: the
+// stand-in desktop. Adapted for Relaymote's names (__batonLastKey, relaymote-mcp.js). Not ported: the
 // board / goals-register checks (that code is owned and tested by the board work package) and
 // the checks that need a real Electron renderer (model menu contents, timer throttling, the
 // modal-blocker scrape) — listed as SKIP.
@@ -227,7 +227,7 @@ const { check: chk, src } = H;
     chk(body.indexOf('log(') > 0 && body.indexOf('opts.by') > 0, 'and logs it itself, so every caller is covered');
     chk(src('server.js').indexOf('orch.stopTask(id, { by })') > 0, 'the HTTP route passes the actor through');
     chk(src('mobile/index.js').indexOf("orch.stopTask(String(body.id || ''), { by:") > 0, 'the phone names itself when it stops a worker');
-    chk(src('mcp/baton-mcp.js').indexOf('/stop?by=') > 0, 'and the stop tool tells the daemon which session asked');
+    chk(src('mcp/relaymote-mcp.js').indexOf('/stop?by=') > 0, 'and the stop tool tells the daemon which session asked');
   }
 
   console.log('\nSKIP (need a real Claude Desktop renderer): model menu contents, renderer timer throttling, modal-blocker scrape.');

@@ -14,7 +14,7 @@ const SHIPPED = ['bin', 'lib', 'mobile', 'hooks', 'mcp', 'scripts', 'installer',
 
 // file + the start of the call -> why it may go without windowsHide.
 const EXEMPT = [
-  ['bin/baton.js', "spawn(process.platform === 'darwin' ? 'open' : 'xdg-open'", 'macOS/Linux only'],
+  ['bin/relaymote.js', "spawn(process.platform === 'darwin' ? 'open' : 'xdg-open'", 'macOS/Linux only'],
   ['lib/heal.js', "execFileSync('ps',", 'macOS/Linux only'],
   ['lib/idle.js', "execFile('ioreg',", 'macOS only'],
   ['lib/idle.js', "execFile('xprintidle',", 'Linux only'],

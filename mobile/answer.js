@@ -25,14 +25,14 @@ const BOX = `function batonBox(){
   }
   return null;
 }`;
-const CHROME_RX = `var BATON_CHROME = /^(back|skip|submit|next)$/i;`;
+const CHROME_RX = `var RELAYMOTE_CHROME = /^(back|skip|submit|next)$/i;`;
 const OPTIONS = `function batonOptions(){
   var box = batonBox(); if(!box) return [];
   return Array.from(box.querySelectorAll('button')).filter(function(b){
     if (b.offsetParent === null) return false;
     if (b.getAttribute('aria-label')) return false;      // chrome is aria-labelled, options are not
     var t = batonClean(b);
-    return t && !BATON_CHROME.test(t);
+    return t && !RELAYMOTE_CHROME.test(t);
   });
 }`;
 const CHROME = `function batonChrome(name){

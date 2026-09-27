@@ -85,7 +85,7 @@
     const open = all.filter(g => g.status === 'open');
     const closed = all.filter(g => g.status !== 'open').slice(-20).reverse();
     $('goals-list').innerHTML = (open.length ? open.map(card).join('')
-      : '<div class="empty">No open goals. Add one above, or let a master add them with baton_goal_add.</div>')
+      : '<div class="empty">No open goals. Add one above, or let a master add them with relaymote_goal_add.</div>')
       + (closed.length ? '<details class="goals-done"><summary>Finished <span class="n">' + closed.length + '</span></summary>'
         + closed.map(card).join('') + '</details>' : '');
   }

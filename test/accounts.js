@@ -1,6 +1,6 @@
 // accounts.js — the account sync against throwaway fake Claude profiles.
 // It never reads or writes the real Claude folders: APPDATA, LOCALAPPDATA, CLAUDE_CONFIG_DIR and
-// BATON_HOME all point into a temp dir before anything is loaded, and every phase rebuilds the
+// RELAYMOTE_HOME all point into a temp dir before anything is loaded, and every phase rebuilds the
 // fake profile from scratch, so each mode is proven on its own fresh copy.
 'use strict';
 const fs = require('fs');
@@ -11,8 +11,8 @@ const crypto = require('crypto');
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-accounts-'));
 const APPDATA = path.join(ROOT, 'appdata');
 Object.assign(process.env, {
-  APPDATA, LOCALAPPDATA: path.join(ROOT, 'Local'), BATON_LOCALAPPDATA: path.join(ROOT, 'Local'),
-  CLAUDE_CONFIG_DIR: path.join(ROOT, 'claude'), BATON_HOME: path.join(ROOT, 'baton'),
+  APPDATA, LOCALAPPDATA: path.join(ROOT, 'Local'), RELAYMOTE_LOCALAPPDATA: path.join(ROOT, 'Local'),
+  CLAUDE_CONFIG_DIR: path.join(ROOT, 'claude'), RELAYMOTE_HOME: path.join(ROOT, 'relaymote'),
 });
 
 const A = { acct: '11111111-1111-4111-8111-111111111111', org: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
@@ -54,7 +54,7 @@ const GROUPS = {
 
 let hasLevel = false;
 async function build() {
-  for (const d of ['appdata', 'claude', path.join('baton', 'accounts')]) fs.rmSync(path.join(ROOT, d), { recursive: true, force: true });
+  for (const d of ['appdata', 'claude', path.join('relaymote', 'accounts')]) fs.rmSync(path.join(ROOT, d), { recursive: true, force: true });
   const now = Date.now();
   writeScope(A, [[1, { la: 1800000000000, model: 'model-b' }], [2, {}], [3, { archived: true }], [4, {}]],
     [task('daily-report', true, now - 86400000), task('weekly-cleanup', false, now - 86400000 * 7)], now - 60000);
@@ -97,7 +97,7 @@ const lsLog = f => /[\\/]leveldb[\\/](LOG|LOG\.old|LOCK)$/.test(f);
 const ids = s => fs.readdirSync(dirOf(s)).filter(f => f.startsWith('local_')).sort();
 const tasksOf = s => JSON.parse(fs.readFileSync(path.join(dirOf(s), 'scheduled-tasks.json'), 'utf8')).scheduledTasks;
 const rec = (s, n) => JSON.parse(fs.readFileSync(path.join(dirOf(s), sid(n) + '.json'), 'utf8'));
-const notBaton = f => f.startsWith(path.join(ROOT, 'baton'));
+const notBaton = f => f.startsWith(path.join(ROOT, 'relaymote'));
 
 (async () => {
   await build();
@@ -159,7 +159,7 @@ const notBaton = f => f.startsWith(path.join(ROOT, 'baton'));
     const L = require('classic-level').ClassicLevel, db = new L(LEVELDB, { keyEncoding: 'buffer', valueEncoding: 'buffer', createIfMissing: false });
     await db.open(); const other = groups.decode(await db.get(Buffer.from('_https://claude.ai\x00\x01other-key'))); await db.close();
     check(other === '"untouched"', 'other localStorage keys untouched');
-    check(fs.readdirSync(path.join(ROOT, 'baton', 'accounts', 'backups')).some(d => d.startsWith('groups-')), 'both group stores backed up before the write');
+    check(fs.readdirSync(path.join(ROOT, 'relaymote', 'accounts', 'backups')).some(d => d.startsWith('groups-')), 'both group stores backed up before the write');
   } else console.log('skip groups checks: classic-level not installed');
   const again = await sync.run({ presence: 'absent', mode: 'two-way', foldGroups: true });
   check(again.changeCount === 0 && again.pendingCount === 0, 'second dry run: scopes already match', JSON.stringify(again.totals.now));
@@ -189,7 +189,7 @@ const notBaton = f => f.startsWith(path.join(ROOT, 'baton'));
   check(ar.ok && hashTree(dirOf(A)) === addA, 'add: the source account is not written');
   check(ids(B).length === 5 && tasksOf(B).length === 3, 'add: target received the missing records and routines');
   check(JSON.stringify(rec(B, 1)) === JSON.stringify(b1), 'add with archive/details sync off: an existing record in the target is not overwritten');
-  check(fs.readdirSync(path.join(ROOT, 'baton', 'accounts', 'backups')).length > 0, 'add: backups taken before writing');
+  check(fs.readdirSync(path.join(ROOT, 'relaymote', 'accounts', 'backups')).length > 0, 'add: backups taken before writing');
   if (hasLevel) {
     const st = await groups.readStores({ dir: PROFILE, prefix: '' });
     const gb = st.ls.scopes[keyOf(B)];

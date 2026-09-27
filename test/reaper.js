@@ -1,4 +1,4 @@
-// reaper.js — the idle-CLI reaper, against a fake LocalSessionManager and a temp BATON_HOME. Never talks
+// reaper.js — the idle-CLI reaper, against a fake LocalSessionManager and a temp RELAYMOTE_HOME. Never talks
 // to Claude Desktop. Every guard is shown SPARING its session; only a session that passes all of them is
 // torn down, and only in live mode.
 'use strict';
@@ -7,10 +7,10 @@ const os = require('os');
 const path = require('path');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-reaper-'));
-process.env.BATON_HOME = path.join(TMP, 'baton');
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
 process.env.CLAUDE_CONFIG_DIR = path.join(TMP, 'claude');
 process.env.APPDATA = path.join(TMP, 'appdata');
-delete process.env.BATON_STATE_DIR;
+delete process.env.RELAYMOTE_STATE_DIR;
 
 let failed = 0;
 const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra !== undefined && !ok ? '  ' + JSON.stringify(extra).slice(0, 400) : ''}`); if (!ok) failed++; };

@@ -27,8 +27,8 @@ const PUMP_MS = 5000;
 const DESKTOP_MS = 30000;
 const NOTIFY_MS = 15000;
 const RESUME_MS = 60000;
-const CHIPWATCH_MS = Number(process.env.BATON_CHIPWATCH_MS || 60000);
-const idleMinMs = () => Number(process.env.BATON_IDLE_MIN_MS ?? (config.get().idleGateSeconds * 1000));
+const CHIPWATCH_MS = Number(process.env.RELAYMOTE_CHIPWATCH_MS || 60000);
+const idleMinMs = () => Number(process.env.RELAYMOTE_IDLE_MIN_MS ?? (config.get().idleGateSeconds * 1000));
 
 const serialise = desktop.serializeUi;
 // Every master notification is a wake: log it (with the warmth it went at) in <data>/conductor/wakes.jsonl.
@@ -516,7 +516,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && u.pathname === '/api/health') {
       return json(res, 200, {
-        ok: true, app: 'baton', port: PORT, pid: process.pid,
+        ok: true, app: 'relaymote', port: PORT, pid: process.pid,
         cdp: lastCdpOk,
         cdpCheckedSecAgo: lastCdpAt ? Math.round((Date.now() - lastCdpAt) / 1000) : null,
         uptimeSec: Math.round(process.uptime()),
@@ -532,7 +532,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-const HTML = '<!doctype html><meta charset=utf-8><title>Relaymote</title><body style="font:15px system-ui;padding:2rem">Relaymote control API. Open the app: run <code>baton open</code>.</body>';
+const HTML = '<!doctype html><meta charset=utf-8><title>Relaymote</title><body style="font:15px system-ui;padding:2rem">Relaymote control API. Open the app: run <code>relaymote open</code>.</body>';
 
 function probeExisting() {
   return new Promise(resolve => {
@@ -593,7 +593,7 @@ async function evictWedgedHolder(reason) {
       try {
         notify.pushEvent({
           key: `daemon-restart:${INSTANCE}`, kind: 'daemon-restart', source: 'daemon',
-          line: `Relaymote daemon restarted: the previous process (pid ${prev.pid}) EXITED ITSELF with code ${prev.code} after ${prev.uptimeSec}s, using ${prev.rssMb}MB. Now pid ${process.pid}. Check baton.log around ${prev.at} for what led to it; baton_await watches and the notify queue both survived.`,
+          line: `Relaymote daemon restarted: the previous process (pid ${prev.pid}) EXITED ITSELF with code ${prev.code} after ${prev.uptimeSec}s, using ${prev.rssMb}MB. Now pid ${process.pid}. Check relaymote.log around ${prev.at} for what led to it; relaymote_await watches and the notify queue both survived.`,
         });
       } catch {}
       return;
@@ -601,7 +601,7 @@ async function evictWedgedHolder(reason) {
     function lastTaskExitCode() {
       try {
         const ps = "$e = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-TaskScheduler/Operational'; Id=201; StartTime=(Get-Date).AddMinutes(-10)} -EA SilentlyContinue | " +
-                   "Where-Object { $_.Message -like '*Baton*' } | Select-Object -First 1; " +
+                   "Where-Object { $_.Message -like '*Relaymote*' } | Select-Object -First 1; " +
                    "if ($e -and $e.Message -match 'return code (-?\\d+)') { $matches[1] } else { '' }";
         const out = require('child_process').execFileSync('powershell',
           ['-NoProfile', '-NonInteractive', '-Command', ps], { timeout: 8000, windowsHide: true, encoding: 'utf8' });
@@ -630,7 +630,7 @@ async function evictWedgedHolder(reason) {
     const code = lastTaskExitCode();
     const dep = recentlyDeployed();
     const stoppedByRequest = code === '2147943691';
-    const AGOLOG = path.join(registry.STATE_DIR, 'baton.log');
+    const AGOLOG = path.join(registry.STATE_DIR, 'relaymote.log');
     const STDIO = path.join(registry.STATE_DIR, 'daemon-stdio.log');
 
     const why = stoppedByRequest
@@ -654,9 +654,9 @@ async function evictWedgedHolder(reason) {
           key: `daemon-restart:${INSTANCE}`, kind: 'daemon-restart', source: 'daemon',
           line: `Relaymote daemon restarted (now pid ${process.pid}). Cause: ${why}.${deployNote}` +
                 ` Read ${AGOLOG} around that time; node's own dying output, when there is any, is in ${STDIO}.` +
-                ` To check yourself: Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational | Where-Object { $_.Message -like '*Baton*' } | Select-Object TimeCreated,Id -First 20` +
+                ` To check yourself: Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational | Where-Object { $_.Message -like '*Relaymote*' } | Select-Object TimeCreated,Id -First 20` +
                 ` — 330 = stopped by request, 111 = terminated, 110 = started by request, 107 = time trigger, 322 = skipped because already running.` +
-                ` baton_await watches and the notify queue both survived; only work in flight was lost.`,
+                ` relaymote_await watches and the notify queue both survived; only work in flight was lost.`,
         });
       } catch {}
     }

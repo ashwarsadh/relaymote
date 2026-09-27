@@ -9,7 +9,7 @@
 #
 # Output in dist/:
 #   Relaymote-<version>-<arch>.dmg                   drag Relaymote.app to Applications
-#   Relaymote-<version>-macos-<arch>-portable.tar.gz unpack anywhere, run ./baton or start-baton.command
+#   Relaymote-<version>-macos-<arch>-portable.tar.gz unpack anywhere, run ./relaymote or start-relaymote.command
 #
 # Unsigned and not notarized: see installer/RELEASE_NOTES.md for how to open it the first time.
 set -euo pipefail
@@ -70,38 +70,38 @@ mv "$WORK/$NODE_NAME/LICENSE" "$APPDIR/runtime/LICENSE-node.txt"
 rm -rf "$WORK/$NODE_NAME"
 chmod +x "$APPDIR/runtime/node"
 
-cat > "$APPDIR/baton" <<'EOF'
+cat > "$APPDIR/relaymote" <<'EOF'
 #!/bin/sh
-# baton - the Relaymote command line, run with the Node.js bundled next to it.
+# relaymote - the Relaymote command line, run with the Node.js bundled next to it.
 D="$(cd "$(dirname "$0")" && pwd)"
-exec "$D/runtime/node" "$D/bin/baton.js" "$@"
+exec "$D/runtime/node" "$D/bin/relaymote.js" "$@"
 EOF
-cat > "$APPDIR/start-baton.command" <<'EOF'
+cat > "$APPDIR/start-relaymote.command" <<'EOF'
 #!/bin/sh
 # Double-click in Finder: starts Relaymote in the background and opens it in your browser.
 D="$(cd "$(dirname "$0")" && pwd)"
-"$D/runtime/node" "$D/bin/baton.js" open
+"$D/runtime/node" "$D/bin/relaymote.js" open
 EOF
-chmod +x "$APPDIR/baton" "$APPDIR/start-baton.command"
+chmod +x "$APPDIR/relaymote" "$APPDIR/start-relaymote.command"
 
 # --- 3. Relaymote.app -----------------------------------------------------------------------------
 BUNDLE="$WORK/dmg/Relaymote.app"
 mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
 cat > "$BUNDLE/Contents/MacOS/Relaymote" <<'EOF'
 #!/bin/bash
-# Relaymote.app launcher: the first launch runs `baton setup` (turns on Claude Desktop's Developer Mode,
+# Relaymote.app launcher: the first launch runs `relaymote setup` (turns on Claude Desktop's Developer Mode,
 # registers the tools, starts Relaymote); later launches start Relaymote if needed and open it.
 APP="$(cd "$(dirname "$0")/../Resources/app" && pwd)"
-DATA="${BATON_HOME:-$HOME/.baton}"
+DATA="${RELAYMOTE_HOME:-$HOME/.relaymote}"
 # Finder starts apps with a bare PATH; add the usual places the `claude` CLI lives.
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.claude/local:$PATH"
 mkdir -p "$DATA/state"
 LOG="$DATA/state/launcher.log"
 echo "--- $(date) Relaymote.app" >>"$LOG"
 if [ ! -f "$DATA/state/app-setup-done" ]; then
-  "$APP/runtime/node" "$APP/bin/baton.js" setup >>"$LOG" 2>&1 && touch "$DATA/state/app-setup-done"
+  "$APP/runtime/node" "$APP/bin/relaymote.js" setup >>"$LOG" 2>&1 && touch "$DATA/state/app-setup-done"
 else
-  "$APP/runtime/node" "$APP/bin/baton.js" open >>"$LOG" 2>&1
+  "$APP/runtime/node" "$APP/bin/relaymote.js" open >>"$LOG" 2>&1
 fi
 EOF
 chmod +x "$BUNDLE/Contents/MacOS/Relaymote"
@@ -109,15 +109,15 @@ cp -R "$APPDIR" "$BUNDLE/Contents/Resources/app"
 
 ICON_KEY=""
 if command -v iconutil >/dev/null 2>&1 && command -v sips >/dev/null 2>&1; then
-  SET="$WORK/baton.iconset"
+  SET="$WORK/relaymote.iconset"
   mkdir -p "$SET"
   for s in 16 32 128 256 512; do
     sips -z $s $s "$REPO/assets/logo-1024.png" --out "$SET/icon_${s}x${s}.png" >/dev/null
     d=$((s * 2))
     sips -z $d $d "$REPO/assets/logo-1024.png" --out "$SET/icon_${s}x${s}@2x.png" >/dev/null
   done
-  iconutil -c icns "$SET" -o "$BUNDLE/Contents/Resources/baton.icns"
-  ICON_KEY="<key>CFBundleIconFile</key><string>baton</string>"
+  iconutil -c icns "$SET" -o "$BUNDLE/Contents/Resources/relaymote.icns"
+  ICON_KEY="<key>CFBundleIconFile</key><string>relaymote</string>"
 else
   say "iconutil/sips not found - Relaymote.app will use the generic icon"
 fi
@@ -129,7 +129,7 @@ cat > "$BUNDLE/Contents/Info.plist" <<EOF
 <dict>
   <key>CFBundleName</key><string>Relaymote</string>
   <key>CFBundleDisplayName</key><string>Relaymote</string>
-  <key>CFBundleIdentifier</key><string>org.baton-cc.baton</string>
+  <key>CFBundleIdentifier</key><string>org.relaymote.relaymote</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -150,7 +150,7 @@ Relaymote is not signed with an Apple Developer ID, so macOS blocks the first la
    Or, in Terminal:  xattr -dr com.apple.quarantine /Applications/Relaymote.app
 
 The command line lives inside the app:
-   /Applications/Relaymote.app/Contents/Resources/app/baton status
+   /Applications/Relaymote.app/Contents/Resources/app/relaymote status
 EOF
 ln -s /Applications "$WORK/dmg/Applications"
 

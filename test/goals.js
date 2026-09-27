@@ -6,10 +6,10 @@ const os = require('os');
 const path = require('path');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-goals-'));
-process.env.BATON_HOME = path.join(TMP, 'baton');
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
 process.env.APPDATA = path.join(TMP, 'appdata');
 process.env.CLAUDE_CONFIG_DIR = path.join(TMP, 'claude');
-delete process.env.BATON_STATE_DIR;
+delete process.env.RELAYMOTE_STATE_DIR;
 
 const goals = require('../lib/goals');
 const boardBuild = require('../lib/board-build');
@@ -370,13 +370,13 @@ function told(owner, title, quietH, extra = {}) {
   const pq = (s) => s.id === sid(3) ? { id: 'q1', questions: [{ question: 'Deploy now or tomorrow?' }] } : null;
   let b = await boardBuild.build({ now: NOW, sessions: bsessions, pendingQuestion: pq, conductor: CONDUCTOR });
   const bj = JSON.parse(fs.readFileSync(boardBuild.boardFile(), 'utf8'));
-  check(b.written && bj.generator === 'baton' && bj.built_at && bj.conductor === CONDUCTOR, 'board.json written, stamped as Relaymote\'s');
+  check(b.written && bj.generator === 'relaymote' && bj.built_at && bj.conductor === CONDUCTOR, 'board.json written, stamped as Relaymote\'s');
   check(['rows', 'inbox', 'goals', 'labels', 'hints', 'counts'].every(k => k in bj), 'board.json has the documented sections');
   const bucket = (id) => (bj.rows.find(r => r.id === id) || {}).bucket;
   check(bucket(sid(3)) === 'decide' && /Deploy now/.test(bj.rows.find(r => r.id === sid(3)).ask), 'a session awaiting you is a Decide row with its question');
   check(bucket(sid(4)) === 'nudge', 'a stuck session is a Nudge row');
   check(bucket('g2') === 'un' && bucket('g1') === 'open' && bucket('g3') === 'decide', 'unrouted, blocked and delivered goals get rows');
-  check(bj.inbox.length === 1 && bj.inbox[0].n === 1 && bj.inbox[0].status === 'open' && bj.inbox[0].ask_kind === 'do', 'baton_tell_user notes are the inbox');
+  check(bj.inbox.length === 1 && bj.inbox[0].n === 1 && bj.inbox[0].status === 'open' && bj.inbox[0].ask_kind === 'do', 'relaymote_tell_user notes are the inbox');
   check(bj.goals.length === 3 && bj.goals.every(g => g.id && g.title && g.status), 'goals come from the register');
   check(bj.rows.every(r => r.id && r.title && r.bucket && 'age' in r), 'every row has id, title, bucket and age');
   fs.writeFileSync(boardBuild.boardFile(), JSON.stringify({ rows: [], built_at: 'x' }));

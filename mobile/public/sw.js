@@ -47,7 +47,7 @@ self.addEventListener('push', (event) => {
     body: d.body || '',
     icon: '/icon-192.png',
     badge: '/badge-96.png',
-    tag: d.tag || 'baton',
+    tag: d.tag || 'relaymote',
     renotify: true,
     data: { url: d.url || '/', id: d.id || null },
   }));

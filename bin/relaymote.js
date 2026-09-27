@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// baton — command line entry point.
+// relaymote — command line entry point.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -12,7 +12,7 @@ const config = require('../lib/config');
 const args = process.argv.slice(2);
 const cmd = (args[0] || 'help').toLowerCase();
 const WIN = process.platform === 'win32';
-const TASK = 'Baton';
+const TASK = 'Relaymote';
 
 const C = { b: s => `\x1b[1m${s}\x1b[0m`, g: s => `\x1b[32m${s}\x1b[0m`, r: s => `\x1b[31m${s}\x1b[0m`,
             y: s => `\x1b[33m${s}\x1b[0m`, d: s => `\x1b[2m${s}\x1b[0m`, c: s => `\x1b[36m${s}\x1b[0m` };
@@ -32,7 +32,7 @@ function post(port, p) {
     r.on('error', () => resolve(null)); r.end();
   });
 }
-const running = async () => { const r = await get(config.get().port, '/api/health'); return !!(r && r.body && r.body.app === 'baton'); };
+const running = async () => { const r = await get(config.get().port, '/api/health'); return !!(r && r.body && r.body.app === 'relaymote'); };
 const token = () => { try { return JSON.parse(fs.readFileSync(path.join(config.MOBILE, 'secret.json'), 'utf8')).token; } catch { return null; } };
 const appUrl = () => `http://127.0.0.1:${config.get().appPort}/?k=${encodeURIComponent(token() || '')}`;
 function openBrowser(url) {
@@ -42,7 +42,7 @@ function openBrowser(url) {
 const cdpUp = () => get(config.get().cdpPort, '/json/version', 1500).then(r => !!r);
 
 const portClash = async () => !(await running()) && !!(await get(config.get().port, '/'));
-const clashHelp = () => `Port ${config.get().port} is used by another program. Pick free ports: set "port" and "appPort" in ${config.SETTINGS_FILE}, then run "baton start".`;
+const clashHelp = () => `Port ${config.get().port} is used by another program. Pick free ports: set "port" and "appPort" in ${config.SETTINGS_FILE}, then run "relaymote start".`;
 
 async function startBackground() {
   if (await running()) { console.log(C.g('Relaymote is already running.')); return true; }
@@ -52,7 +52,7 @@ async function startBackground() {
   launch.clearStopped();
   const { log: logFile } = launch.spawnDaemon();
   for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 250)); if (await running()) { console.log(C.g('Relaymote started.')); return true; } }
-  console.log(C.r('Relaymote did not answer within 10s. See ' + logFile + ' and ' + path.join(config.STATE, 'baton.log')));
+  console.log(C.r('Relaymote did not answer within 10s. See ' + logFile + ' and ' + path.join(config.STATE, 'relaymote.log')));
   return false;
 }
 
@@ -64,14 +64,14 @@ async function doctor() {
   ok(wsOk, 'dependencies installed', 'Run `npm install` in ' + ROOT);
   const claudeDir = path.join(config.APPDATA, 'Claude');
   ok(fs.existsSync(claudeDir), 'Claude Desktop data found', 'Install Claude Desktop and sign in: https://claude.ai/download');
-  if (fs.existsSync(claudeDir)) ok(devMode(false), 'Claude Desktop Developer Mode on', 'Run `baton setup`, or in Claude Desktop: Help > Troubleshooting > Enable Developer Mode.');
+  if (fs.existsSync(claudeDir)) ok(devMode(false), 'Claude Desktop Developer Mode on', 'Run `relaymote setup`, or in Claude Desktop: Help > Troubleshooting > Enable Developer Mode.');
   const cdp = await cdpUp();
-  ok(cdp, `Claude Desktop debugger on port ${config.get().cdpPort}`, 'In Claude Desktop: Help > Troubleshooting > Enable Developer Mode, then Developer > Enable Main Process Debugger. Or run `baton debugger`.');
+  ok(cdp, `Claude Desktop debugger on port ${config.get().cdpPort}`, 'In Claude Desktop: Help > Troubleshooting > Enable Developer Mode, then Developer > Enable Main Process Debugger. Or run `relaymote debugger`.');
   const up = await running();
-  ok(up, 'Relaymote daemon running', (await portClash()) ? clashHelp() : 'Run `baton start`.');
+  ok(up, 'Relaymote daemon running', (await portClash()) ? clashHelp() : 'Run `relaymote start`.');
   let mcp = false;
-  try { const j = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf8')); mcp = !!(j.mcpServers && j.mcpServers.baton); } catch {}
-  ok(mcp, 'MCP server registered with Claude Code (orchestrator tools)', 'Run `baton mcp install`.');
+  try { const j = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf8')); mcp = !!(j.mcpServers && j.mcpServers.relaymote); } catch {}
+  ok(mcp, 'MCP server registered with Claude Code (orchestrator tools)', 'Run `relaymote mcp install`.');
   const tunnel = require('../lib/tunnel');
   const mode = config.get().remote.mode;
   if (mode.startsWith('cloudflare')) ok(!!tunnel.binary(), 'cloudflared installed', WIN ? 'winget install Cloudflare.cloudflared' : 'brew install cloudflared');
@@ -84,10 +84,10 @@ async function doctor() {
   }
   if (WIN) {
     const a = require('../lib/heal').checkScheduledTask();
-    ok(a.healthy, `autostart: ${a.detail}`, 'Run `baton autostart`.');
+    ok(a.healthy, `autostart: ${a.detail}`, 'Run `relaymote autostart`.');
   }
   const stopped = require('../lib/launch').stoppedByUser();
-  if (stopped && !up) console.log(C.d(`  (you stopped Relaymote at ${stopped.at} via ${stopped.by}; the tray and watchdog leave it stopped until \`baton start\`)`));
+  if (stopped && !up) console.log(C.d(`  (you stopped Relaymote at ${stopped.at} via ${stopped.by}; the tray and watchdog leave it stopped until \`relaymote start\`)`));
   console.log(C.d(`\ndata: ${config.DATA}`));
 }
 
@@ -106,13 +106,13 @@ async function pairCmd() {
 }
 
 function mcpInstall(remove) {
-  const script = path.join(ROOT, 'mcp', 'baton-mcp.js');
-  const argv = remove ? ['mcp', 'remove', '--scope', 'user', 'baton'] : ['mcp', 'add', '--scope', 'user', 'baton', '--', process.execPath, script];
+  const script = path.join(ROOT, 'mcp', 'relaymote-mcp.js');
+  const argv = remove ? ['mcp', 'remove', '--scope', 'user', 'relaymote'] : ['mcp', 'add', '--scope', 'user', 'relaymote', '--', process.execPath, script];
   const r = spawnSync('claude', argv, { stdio: 'inherit', shell: WIN, windowsHide: true });
-  if (r.status === 0) return console.log(C.g(remove ? 'Removed.' : 'Registered MCP server "baton". Restart Claude Desktop to load the tools.'));
-  if (remove) return console.log(C.y('The `claude` CLI was not found or refused. If ~/.claude.json lists "baton" under "mcpServers", delete that entry by hand.'));
+  if (r.status === 0) return console.log(C.g(remove ? 'Removed.' : 'Registered MCP server "relaymote". Restart Claude Desktop to load the tools.'));
+  if (remove) return console.log(C.y('The `claude` CLI was not found or refused. If ~/.claude.json lists "relaymote" under "mcpServers", delete that entry by hand.'));
   console.log(C.y('The `claude` CLI was not found or refused. Add this to ~/.claude.json under "mcpServers" instead:'));
-  console.log(JSON.stringify({ baton: { type: 'stdio', command: process.execPath, args: [script] } }, null, 2));
+  console.log(JSON.stringify({ relaymote: { type: 'stdio', command: process.execPath, args: [script] } }, null, 2));
 }
 
 function autostart(action) {
@@ -120,10 +120,10 @@ function autostart(action) {
     console.log('Autostart is automated on Windows only. On macOS/Linux, add `' + process.execPath + ' ' + path.join(ROOT, 'server.js') + '` to your login items (launchd / systemd --user).');
     return;
   }
-  // scripts/register-autostart.ps1 does the work and reports what it ACTUALLY registered: the "Baton"
+  // scripts/register-autostart.ps1 does the work and reports what it ACTUALLY registered: the "Relaymote"
   // sign-in task (restart on failure, IgnoreNew) or, without admin rights, the per-user Run key; plus
-  // the 10-minute "Baton Watchdog" task. --headless: daemon only, as S4U when Windows allows it.
-  // The result is recorded in state/autostart.json so `baton status` and heal describe the truth.
+  // the 10-minute "Relaymote Watchdog" task. --headless: daemon only, as S4U when Windows allows it.
+  // The result is recorded in state/autostart.json so `relaymote status` and heal describe the truth.
   const act = action === 'remove' ? 'remove' : action === 'status' ? 'status' : 'install';
   const psArgs = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'scripts', 'register-autostart.ps1'),
     '-Action', act, '-Mode', args.includes('--headless') ? 'headless' : 'tray'];
@@ -148,14 +148,14 @@ function autostart(action) {
   if (!out.ok) return console.log(C.r('Could not set up autostart (scheduled task and Run key both refused).'));
   const what = args.includes('--headless') ? 'The Relaymote daemon' : 'Relaymote (with its tray icon)';
   console.log(C.g(`${what} will start when you sign in (${out.logon === 'task' ? 'scheduled task' + (out.s4u ? ', S4U' : '') : 'Run key'})` +
-    (out.watchdog ? ', and a watchdog checks every 10 minutes.' : '.')) + (args.includes('--headless') ? '' : ' Start it now with `baton tray`.'));
+    (out.watchdog ? ', and a watchdog checks every 10 minutes.' : '.')) + (args.includes('--headless') ? '' : ' Start it now with `relaymote tray`.'));
 }
 
 function tray() {
-  if (!WIN) return console.log('The tray icon is Windows-only for now. Use `baton open`.');
+  if (!WIN) return console.log('The tray icon is Windows-only for now. Use `relaymote open`.');
   const ps = path.join(ROOT, 'scripts', 'tray.ps1');
   require('../lib/launch').spawnHidden('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ps]);
-  console.log(C.g('Tray icon started (look for the baton in the notification area).'));
+  console.log(C.g('Tray icon started (look for the relaymote in the notification area).'));
 }
 
 // Claude Desktop keeps Help > Troubleshooting > Enable Developer Mode as {"allowDevTools": true} in
@@ -173,14 +173,14 @@ async function setup() {
   console.log(C.b('\nBaton setup\n'));
   await doctor();
   if (!(await cdpUp()) && devMode(true) === 'changed') {
-    console.log(C.y('\nTurned on Claude Desktop Developer Mode. Quit Claude Desktop (tray icon › Quit) and open it again, then run `baton debugger`' +
+    console.log(C.y('\nTurned on Claude Desktop Developer Mode. Quit Claude Desktop (tray icon › Quit) and open it again, then run `relaymote debugger`' +
       (WIN ? ' — or just leave it: Relaymote switches the debugger on by itself once Claude Desktop is signed in (a 3-2-1 countdown shows on screen first).' : '.')));
   } else if (!(await cdpUp()) && WIN) {
     console.log(C.y('\nTrying to switch on the Claude Desktop debugger for you (Claude will come to the front briefly)…'));
     spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'scripts', 'enable-debugger.ps1')], { stdio: 'inherit', windowsHide: true });
   }
   let mcp = false;
-  try { const j = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf8')); mcp = !!(j.mcpServers && j.mcpServers.baton); } catch {}
+  try { const j = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf8')); mcp = !!(j.mcpServers && j.mcpServers.relaymote); } catch {}
   if (!mcp) mcpInstall(false);
   if (WIN && !args.includes('--no-autostart')) autostart('install');
   await startBackground();
@@ -190,61 +190,61 @@ async function setup() {
 }
 
 function help() {
-  console.log(`${C.b('baton')} — your Claude Code sessions, in your pocket
+  console.log(`${C.b('relaymote')} — your Claude Code sessions, in your pocket
 
 ${C.b('Everyday')}
-  baton setup              one-time setup: checks, Developer Mode + debugger, MCP tools, autostart
+  relaymote setup              one-time setup: checks, Developer Mode + debugger, MCP tools, autostart
                            (--no-autostart to skip that), opens the app
-  baton open               open the app on this computer
-  baton pair               show the QR code / link that signs your phone in
-  baton status             is everything working? (alias: doctor)
+  relaymote open               open the app on this computer
+  relaymote pair               show the QR code / link that signs your phone in
+  relaymote status             is everything working? (alias: doctor)
 
 ${C.b('Daemon')}
-  baton start              start in the background     (baton start --foreground to debug)
-  baton stop | restart     stop the daemon (it stays stopped until baton start)
-  baton tray               Windows tray icon (open, pair, settings, restart, quit)
-  baton autostart [remove|status] start with Windows (tray + daemon) with a 10-minute watchdog
+  relaymote start              start in the background     (relaymote start --foreground to debug)
+  relaymote stop | restart     stop the daemon (it stays stopped until relaymote start)
+  relaymote tray               Windows tray icon (open, pair, settings, restart, quit)
+  relaymote autostart [remove|status] start with Windows (tray + daemon) with a 10-minute watchdog
                            (--headless: daemon only, S4U when allowed; --dry-run: show the plan)
-  baton debugger           switch on Claude Desktop's main-process debugger (Windows)
-  baton mcp install|remove register the orchestrator tools with Claude Code
-  baton hooks install|remove|status [--dry-run]   optional Stop hook: sessions may not end on a question
-  baton reaper [--dry|--live] [ids]              one idle-CLI reaper pass now (default: its current mode)
-  baton update [--apply|--status]                is a newer release out? --apply installs it now (Windows installer copies)
+  relaymote debugger           switch on Claude Desktop's main-process debugger (Windows)
+  relaymote mcp install|remove register the orchestrator tools with Claude Code
+  relaymote hooks install|remove|status [--dry-run]   optional Stop hook: sessions may not end on a question
+  relaymote reaper [--dry|--live] [ids]              one idle-CLI reaper pass now (default: its current mode)
+  relaymote update [--apply|--status]                is a newer release out? --apply installs it now (Windows installer copies)
                            they can answer themselves (never installed by default; backs up settings.json)
-  baton accounts           the Claude accounts on this computer and what a sync would change
-  baton accounts sync [--apply] [--two-way] [--to <n>]   preview (default) or write the account sync
+  relaymote accounts           the Claude accounts on this computer and what a sync would change
+  relaymote accounts sync [--apply] [--two-way] [--to <n>]   preview (default) or write the account sync
                            --fold: also fold sidebar groups across accounts; --copy-only: no archive/details;
                            --allow-delete (with --two-way): carry deletions
-  baton accounts undo [journal] · journals · hold on|off · freeze|unfreeze <record id> · frozen
-  baton accounts first-run baseline|archived-wins · groups-backups · groups-restore <stamp|latest>
-  baton accounts forget <scope> <group id>   a group deleted on purpose is never restored
-  baton accounts import-migrate [dir] [--apply] [--merge]   take over another sync tool's history
-  baton accounts launch-hook install|remove|status   start Claude through Relaymote (repair first) · verify
+  relaymote accounts undo [journal] · journals · hold on|off · freeze|unfreeze <record id> · frozen
+  relaymote accounts first-run baseline|archived-wins · groups-backups · groups-restore <stamp|latest>
+  relaymote accounts forget <scope> <group id>   a group deleted on purpose is never restored
+  relaymote accounts import-migrate [dir] [--apply] [--merge]   take over another sync tool's history
+  relaymote accounts launch-hook install|remove|status   start Claude through Relaymote (repair first) · verify
 
 ${C.b('Remote access')}   (also in Settings › Remote access)
-  baton tunnel quick                random https://….trycloudflare.com address, no account
-  baton tunnel login                authorise this computer with your Cloudflare account
-  baton tunnel setup <hostname>     fixed address, e.g. baton.example.com
-  baton tunnel off | status
+  relaymote tunnel quick                random https://….trycloudflare.com address, no account
+  relaymote tunnel login                authorise this computer with your Cloudflare account
+  relaymote tunnel setup <hostname>     fixed address, e.g. relaymote.example.com
+  relaymote tunnel off | status
 
 ${C.b('Orchestrator')}
-  baton run <task> · preview <task> · ls · show <id> · stop <id> · escalate <id>
-  baton sessions · archivable · health · prune [days]
-  baton salvage [file] [--apply]      recover tasks from a quarantined registry.json.corrupt-*
-  baton import-ago [dir] [--apply]    import tasks, masters, watches and the notify queue from AGO
-  baton index build|route|who|session|tree|masters|progress|buried|learn|tag|log|tasks|newproject|digest
-                                      project index + transcript intelligence (\`baton index help\`)
-  baton hygiene [compact [--send] [--cap N] | show]   what each session's context needs (HYGIENE.md); compact = last-warm-cycle /compact
-  baton archive-candidates [days]     sessions safe to archive, with reasons (never archives; default 14 days)
-  baton wakes [hours] | log [hours] | rollup [--force]   warm vs cold wakes; the wakes Relaymote itself sent
-  baton summarize [--cap N] [--budget-min M] [--days D] [--dry-run]   5-line overview per changed session
-  baton roles [--budget N] [--one <id>] [--stats]   the roles DB owner routing reads (free heuristic without an engine)
-  baton engine [status|test]          the model engine (off by default; Settings › Model engine)
-  baton directives [--dry-run] [project…]   your own words per project from the digests → <project>/DIRECTIVES.md
+  relaymote run <task> · preview <task> · ls · show <id> · stop <id> · escalate <id>
+  relaymote sessions · archivable · health · prune [days]
+  relaymote salvage [file] [--apply]      recover tasks from a quarantined registry.json.corrupt-*
+  relaymote import-ago [dir] [--apply]    import tasks, masters, watches and the notify queue from AGO
+  relaymote index build|route|who|session|tree|masters|progress|buried|learn|tag|log|tasks|newproject|digest
+                                      project index + transcript intelligence (\`relaymote index help\`)
+  relaymote hygiene [compact [--send] [--cap N] | show]   what each session's context needs (HYGIENE.md); compact = last-warm-cycle /compact
+  relaymote archive-candidates [days]     sessions safe to archive, with reasons (never archives; default 14 days)
+  relaymote wakes [hours] | log [hours] | rollup [--force]   warm vs cold wakes; the wakes Relaymote itself sent
+  relaymote summarize [--cap N] [--budget-min M] [--days D] [--dry-run]   5-line overview per changed session
+  relaymote roles [--budget N] [--one <id>] [--stats]   the roles DB owner routing reads (free heuristic without an engine)
+  relaymote engine [status|test]          the model engine (off by default; Settings › Model engine)
+  relaymote directives [--dry-run] [project…]   your own words per project from the digests → <project>/DIRECTIVES.md
                                       (never overwrites a hand-written file; hand edits below the last line survive)
-  baton inbox [--all] · add <text> [--session <id>] [--log] · ask <n> decide|do|fyi <text> · done|drop|wait <n>
-                                      things only you can do (\`baton inbox help\`)
-  baton goal list|show|add|progress|done|verify|judged|collected|health   the goal register (\`baton goal help\`)
+  relaymote inbox [--all] · add <text> [--session <id>] [--log] · ask <n> decide|do|fyi <text> · done|drop|wait <n>
+                                      things only you can do (\`relaymote inbox help\`)
+  relaymote goal list|show|add|progress|done|verify|judged|collected|health   the goal register (\`relaymote goal help\`)
   control dashboard: http://127.0.0.1:${config.get().port}/  (this computer only)
 
 ${C.d('data: ' + config.DATA)}`);
@@ -282,7 +282,7 @@ async function accountsCmd() {
     case 'launch-hook': {
       const v = (args[2] || 'status').toLowerCase();
       const r = v === 'install' ? await lnch().hookInstall() : v === 'remove' ? await lnch().hookRemove() : await lnch().hookStatus();
-      if (v === 'status') return console.log(r.supported ? (r.installed ? C.g('Claude Desktop starts through Relaymote.') + C.d(' Undo: baton accounts launch-hook remove') : 'Claude Desktop starts on its own.') : r.message);
+      if (v === 'status') return console.log(r.supported ? (r.installed ? C.g('Claude Desktop starts through Relaymote.') + C.d(' Undo: relaymote accounts launch-hook remove') : 'Claude Desktop starts on its own.') : r.message);
       return say(r);
     }
     case 'verify': {
@@ -296,7 +296,7 @@ async function accountsCmd() {
   const first = await sync.status();
   const pick = opt('--to');
   const target = pick ? (first.scopes[Number(pick) - 1] || first.scopes.find(s => s.key.startsWith(pick)) || {}).key : null;
-  if (pick && !target) return console.log(C.r('No account ' + pick + '. Run "baton accounts" to see the numbers.'));
+  if (pick && !target) return console.log(C.r('No account ' + pick + '. Run "relaymote accounts" to see the numbers.'));
   const r = sub === 'sync'
     ? await sync.run({ apply: args.includes('--apply'), mode: args.includes('--two-way') ? 'two-way' : undefined, target,
         ...(args.includes('--fold') ? { foldGroups: true } : {}), ...(args.includes('--copy-only') ? { syncArchive: false, syncState: false } : {}),
@@ -311,7 +311,7 @@ async function accountsCmd() {
       (drift ? (r.applied ? C.g('  written: ' + drift) : C.y('  to bring in: ' + drift)) : '') + (wait ? C.d('  waits for Desktop to close: ' + wait) : ''));
   });
   if (!r.ok) return console.log(C.r(r.lines[0] || r.error));
-  if (r.applied) console.log(C.g(`Written: ${r.changeCount} change(s).`) + (r.applied.journal ? C.d(' Undo: baton accounts undo ' + r.applied.journal) : ''));
+  if (r.applied) console.log(C.g(`Written: ${r.changeCount} change(s).`) + (r.applied.journal ? C.d(' Undo: relaymote accounts undo ' + r.applied.journal) : ''));
   else if (sub === 'sync') console.log(r.changeCount ? C.y(`Preview only: ${r.changeCount} change(s). Add --apply to write them.`) : C.g('Nothing to change.'));
   if (r.pendingCount) console.log(C.d(r.pendingCount + ' change(s) wait until Claude Desktop is closed.'));
 }
@@ -324,7 +324,7 @@ async function accountsCmd() {
       if (args.includes('--foreground') || args.includes('-f')) return require('../server.js');
       return void (await startBackground());
     case 'stop': {
-      // `baton stop <task-id>` stops ONE worker (cli.js); only a bare `baton stop` stops the daemon.
+      // `relaymote stop <task-id>` stops ONE worker (cli.js); only a bare `relaymote stop` stops the daemon.
       if (args[1] && !args[1].startsWith('-')) {
         process.argv = [process.argv[0], path.join(ROOT, 'cli.js'), ...args];
         return require('../cli.js');
@@ -332,8 +332,8 @@ async function accountsCmd() {
       // Only ask Relaymote to shut down: never POST /api/shutdown at another program on the same port.
       const s = (await running()) && await post(config.get().port, '/api/shutdown');
       // Remembered, so the tray's health poll and the 10-minute watchdog leave it stopped.
-      if (s) require('../lib/launch').markStopped('baton stop');
-      return console.log(s ? C.g('Stopping…') + C.d(' (it stays stopped until `baton start`)') : C.y('Relaymote was not running.'));
+      if (s) require('../lib/launch').markStopped('relaymote stop');
+      return console.log(s ? C.g('Stopping…') + C.d(' (it stays stopped until `relaymote start`)') : C.y('Relaymote was not running.'));
     }
     case 'salvage': {
       const r = require('../lib/salvage').run({ src: args[1] && !args[1].startsWith('-') ? args[1] : undefined, apply: args.includes('--apply') || args.includes('--write') });
@@ -354,7 +354,7 @@ async function accountsCmd() {
       for (const w of r.warnings) console.log(C.y('  ! ' + w));
       if (r.applied) console.log(C.g(`Imported: ${r.wrote.join(', ')}.`) + (r.backup ? C.d(` Previous Relaymote files saved in ${r.backup}.`) : '') + C.d(' The source was not modified.'));
       else console.log(r.wouldWrite.length ? C.y(`Dry run: would write ${r.wouldWrite.join(', ')}. Add --apply to import (the source is never modified).`) : C.g('Nothing to import.'));
-      if (r.applied && await running()) console.log(C.d('Restart Relaymote (`baton restart`) so the notify queue and watches are re-read.'));
+      if (r.applied && await running()) console.log(C.d('Restart Relaymote (`relaymote restart`) so the notify queue and watches are re-read.'));
       return;
     }
     case 'restart':
@@ -381,7 +381,7 @@ async function accountsCmd() {
     case 'hygiene': return void (await require('../lib/hygiene').cli(args.slice(1)));
     case 'archive-candidates': {
       const r = require('../lib/archive').report({ days: /^\d+$/.test(args[1] || '') ? Number(args[1]) : undefined });
-      if (r.error) return console.log(C.r(r.error + ' — run `baton index build` first'));
+      if (r.error) return console.log(C.r(r.error + ' — run `relaymote index build` first'));
       for (const c of r.candidates) console.log(`  ${c.sessionId}  ${String(c.title).slice(0, 50)}  ${C.d(c.reason)}`);
       return console.log(`${r.count} candidate(s), ${r.heldBack.length} held back. ${C.d('Written: ' + r.report + ' — archive only what the user approves.')}`);
     }
@@ -416,10 +416,10 @@ async function accountsCmd() {
     case 'tunnel': {
       const tunnel = require('../lib/tunnel');
       const sub = (args[1] || 'status').toLowerCase();
-      if (sub === 'quick') { config.set({ remote: { mode: 'cloudflare-quick' } }); console.log('Remote access: Cloudflare quick tunnel. Restart Relaymote (`baton restart`), then `baton pair`.'); return; }
-      if (sub === 'off') { config.set({ remote: { mode: 'off' } }); return console.log('Remote access off. `baton restart` to apply.'); }
+      if (sub === 'quick') { config.set({ remote: { mode: 'cloudflare-quick' } }); console.log('Remote access: Cloudflare quick tunnel. Restart Relaymote (`relaymote restart`), then `relaymote pair`.'); return; }
+      if (sub === 'off') { config.set({ remote: { mode: 'off' } }); return console.log('Remote access off. `relaymote restart` to apply.'); }
       if (sub === 'login') { const r = await tunnel.login(); if (r.loginUrl) { console.log('Opening: ' + r.loginUrl); openBrowser(r.loginUrl); } else console.log(r); return; }
-      if (sub === 'setup') { const r = await tunnel.setupNamed(args[2], args[3]); tunnel.stop(); console.log(r.ok ? C.g(`Ready: https://${r.hostname} — run \`baton restart\`, then \`baton pair\`.`) : C.r(r.error + (r.detail ? '\n' + r.detail : ''))); return; }
+      if (sub === 'setup') { const r = await tunnel.setupNamed(args[2], args[3]); tunnel.stop(); console.log(r.ok ? C.g(`Ready: https://${r.hostname} — run \`relaymote restart\`, then \`relaymote pair\`.`) : C.r(r.error + (r.detail ? '\n' + r.detail : ''))); return; }
       const st = await get(config.get().appPort, '/api/tunnel?k=' + encodeURIComponent(token() || ''));
       return console.log(JSON.stringify((st && st.body && st.body.tunnel) || tunnel.status(), null, 2));
     }

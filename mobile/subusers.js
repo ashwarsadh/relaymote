@@ -83,7 +83,7 @@ module.exports = { list, find, create, grant, revokeSessions, revoke, remove };
 
 if (require.main === module) {
   const [, , cmd, ...rest] = process.argv;
-  const PORT = Number(process.env.BATON_MOBILE_PORT || require('../lib/config').get().appPort);
+  const PORT = Number(process.env.RELAYMOTE_MOBILE_PORT || require('../lib/config').get().appPort);
   const printLink = (token) => {
     console.log('  link: http://<this-machine>:' + PORT + '/?k=' + token);
     console.log('  (or through your public URL, if remote access is set up: https://<your-domain>/?k=' + token + ')');

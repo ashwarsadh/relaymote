@@ -449,7 +449,7 @@
           ? '<details class="goals-done"' + (B.goalsDoneOpen ? ' open' : '') + ' id="goals-done">'
             + '<summary>Finished — last ' + esc(d.finished_keep_days || 3) + ' days <span class="n">' + done.length + '</span></summary>'
             + done.map(card).join('')
-            + (d.finished_older ? '<p class="gmore">' + esc(d.finished_older) + ' finished earlier — <code>baton goal list --all</code></p>' : '')
+            + (d.finished_older ? '<p class="gmore">' + esc(d.finished_older) + ' finished earlier — <code>relaymote goal list --all</code></p>' : '')
             + '</details>'
           : '')
       + '</details>';
@@ -508,7 +508,7 @@
         + (h.wakes.baton24 != null ? ' · Relaymote sent ' + esc(h.wakes.baton24) + ' in 24 h' : '') + '</p>' : '') + '</summary>'
       + rows.slice(0, 40).map(r => '<div class="gcard"><div class="gtitle">' + esc(r.title || r.id || r.sessionId || '') + '</div><div class="gmeta">'
         + esc([r.verdict || r.state || '', r.reason || r.why || ''].filter(Boolean).join(' — ')) + '</div></div>').join('')
-      + (h.more ? '<p class="gmore">' + esc(h.more) + ' more — <code>baton hygiene</code></p>' : '')
+      + (h.more ? '<p class="gmore">' + esc(h.more) + ' more — <code>relaymote hygiene</code></p>' : '')
       + '</details>';
   }
 

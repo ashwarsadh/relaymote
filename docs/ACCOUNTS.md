@@ -21,7 +21,7 @@ Turn it on in **Settings › Modules › Accounts**, then open the 👤 button.
 
 Nothing is ever deleted by default. Something missing from one account is copied in, never taken
 as "delete it from the other". Before every write Relaymote keeps a backup and a journal, so any sync
-can be undone (`baton accounts undo`).
+can be undone (`relaymote accounts undo`).
 
 ## Three ways to sync
 
@@ -55,11 +55,11 @@ Without it: quit Claude Desktop yourself, press **Sync now**, and open Claude ag
 From the command line:
 
 ```sh
-baton accounts                        # accounts, and what a sync would change
-baton accounts sync                   # preview only
-baton accounts sync --apply           # write it
-baton accounts sync --two-way --to 2 --apply
-baton accounts undo                   # reverse the last sync (Claude Desktop must be closed)
+relaymote accounts                        # accounts, and what a sync would change
+relaymote accounts sync                   # preview only
+relaymote accounts sync --apply           # write it
+relaymote accounts sync --two-way --to 2 --apply
+relaymote accounts undo                   # reverse the last sync (Claude Desktop must be closed)
 ```
 
 **Sync by itself** (Settings) runs on a timer, on **every** Claude Desktop exit, and once when Relaymote
@@ -74,15 +74,15 @@ next exit (retried for up to 7 days). It never closes Claude for you.
 Under **Advanced** on the Accounts screen, or from the command line:
 
 ```sh
-baton accounts sync --fold --apply     # also fold sidebar groups across accounts (off by default)
-baton accounts sync --copy-only        # sessions and routines only: no archive marks, no details
-baton accounts hold on|off             # pause the session-details part only
-baton accounts freeze local_<id> [why] # this session keeps its own details; unfreeze to include again
-baton accounts first-run baseline|archived-wins   # how a first-seen archive clash is settled
-baton accounts journals | undo [journal]
-baton accounts groups-backups | groups-restore <stamp|latest>
-baton accounts forget <scope> <group id>          # a group you deleted on purpose is never restored
-baton accounts verify                  # the last relaunch check
+relaymote accounts sync --fold --apply     # also fold sidebar groups across accounts (off by default)
+relaymote accounts sync --copy-only        # sessions and routines only: no archive marks, no details
+relaymote accounts hold on|off             # pause the session-details part only
+relaymote accounts freeze local_<id> [why] # this session keeps its own details; unfreeze to include again
+relaymote accounts first-run baseline|archived-wins   # how a first-seen archive clash is settled
+relaymote accounts journals | undo [journal]
+relaymote accounts groups-backups | groups-restore <stamp|latest>
+relaymote accounts forget <scope> <group id>          # a group you deleted on purpose is never restored
+relaymote accounts verify                  # the last relaunch check
 ```
 
 - **Undo** backs up what is there now before it restores, so an undo can itself be undone, and it
@@ -97,8 +97,8 @@ baton accounts verify                  # the last relaunch check
 ### Start Claude through Relaymote (Windows, opt-in)
 
 ```sh
-baton accounts launch-hook install     # Claude's startup entry now runs Relaymote first
-baton accounts launch-hook remove      # puts Claude's own entry back, exactly as it was
+relaymote accounts launch-hook install     # Claude's startup entry now runs Relaymote first
+relaymote accounts launch-hook remove      # puts Claude's own entry back, exactly as it was
 ```
 
 At sign-in Relaymote runs the repair pass while Claude is still closed (at most 150 seconds), waits for any
@@ -108,8 +108,8 @@ Claude still starts.
 ### Coming from another sync tool
 
 ```sh
-baton accounts import-migrate <dir>            # preview only
-baton accounts import-migrate <dir> --apply    # import
+relaymote accounts import-migrate <dir>            # preview only
+relaymote accounts import-migrate <dir> --apply    # import
 ```
 
 Reads the other tool's `sync-state.json`, `account-labels.json`, `state-sync-freeze.json`,
@@ -124,7 +124,7 @@ setting, so one waits while the other writes.
 ## Where things are
 
 - Claude Desktop's data: `%APPDATA%\Claude` on Windows, `~/Library/Application Support/Claude` on macOS.
-- Relaymote's backups, journals, labels, snapshots and the sync lock: `~/.baton/accounts` (or `$BATON_HOME/accounts`).
+- Relaymote's backups, journals, labels, snapshots and the sync lock: `~/.relaymote/accounts` (or `$RELAYMOTE_HOME/accounts`).
 - Account names come from the Claude Code login (`~/.claude.json`) when they match; otherwise
   rename an account yourself on the Accounts screen.
 

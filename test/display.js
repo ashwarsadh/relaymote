@@ -35,9 +35,9 @@ check(/'--app-h',\s*\(h \/ z\)/.test(app), '--app-h from JS is divided by the zo
 check(/id="btn-display"/.test(html), 'the drawer has the Aa button');
 {
   const head = html.slice(0, html.indexOf('</head>'));
-  check(/localStorage\.getItem\('baton\.zoom'\)/.test(head) && head.indexOf('<script>') > head.indexOf('style.css'), 'zoom and density are applied in <head>, before first paint');
+  check(/localStorage\.getItem\('baton.zoom'\)/.test(head) && head.indexOf('<script>') > head.indexOf('style.css'), 'zoom and density are applied in <head>, before first paint');
   check(/<script src="\/display-ui\.js"><\/script>/.test(html), 'display-ui.js is loaded');
-  check(/'baton\.zoom'/.test(js) && /'baton\.density'/.test(js) && !/'ago\./.test(js + head), 'settings are stored under baton.* keys');
+  check(/'baton.zoom'/.test(js) && /'baton.density'/.test(js) && !/'ago\./.test(js + head), 'settings are stored under the baton.* keys (kept: renaming would reset every phone's display settings)');
 }
 {
   const clampZ = eval(js.match(/const clampZ = [^;]+;/)[0].replace('const clampZ = ', '(ZMIN,ZMAX,STEP)=>').replace(/;$/, ''))(0.7, 1.5, 0.05);

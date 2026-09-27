@@ -27,7 +27,7 @@ const colorStatus = s => s === 'done' ? C.g(s) : s === 'failed' ? C.r(s) : s ===
   switch (cmd) {
     case 'run': case 'do': {
       const prompt = args.slice(1).join(' ');
-      if (!prompt) return console.error('usage: baton run <task text>');
+      if (!prompt) return console.error('usage: relaymote run <task text>');
       const out = await api('POST', '/api/task', { prompt });
       if (!out.ok) return console.error('error:', out.error);
       const t = out.task;
@@ -63,14 +63,14 @@ const colorStatus = s => s === 'done' ? C.g(s) : s === 'failed' ? C.r(s) : s ===
       break;
     }
     case 'stop': {
-      // One task only. Stopping the whole daemon is `baton stop` with no id (bin/baton.js).
-      if (!args[1]) return console.error('usage: baton stop <task-id>   (a bare `baton stop` stops the daemon)');
+      // One task only. Stopping the whole daemon is `relaymote stop` with no id (bin/relaymote.js).
+      if (!args[1]) return console.error('usage: relaymote stop <task-id>   (a bare `relaymote stop` stops the daemon)');
       const r = await api('POST', `/api/task/${encodeURIComponent(args[1])}/stop?by=cli`);
       if (r && r.ok && !r.task) return console.error('no such task: ' + args[1]);
       console.log(JSON.stringify(r, null, 2)); break;
     }
     case 'escalate':
-      if (!args[1]) return console.error('usage: baton escalate <task-id>');
+      if (!args[1]) return console.error('usage: relaymote escalate <task-id>');
       console.log(JSON.stringify(await api('POST', `/api/task/${encodeURIComponent(args[1])}/escalate`), null, 2)); break;
     case 'prune':     console.log(await api('POST', `/api/prune?days=${args[1] || 14}`)); break;
     case 'health':    console.log(JSON.stringify(await api('GET', '/api/health'), null, 2)); break;
@@ -107,7 +107,7 @@ const colorStatus = s => s === 'done' ? C.g(s) : s === 'failed' ? C.r(s) : s ===
       const attn = desktop.needsAttention(snap.sessions);
       if (attn.length) console.log('\n' + C.y(`${attn.length} session(s) need your decision`));
       const arch = snap.sessions.filter(s => s.archiveCandidate);
-      if (arch.length) console.log(C.dim(`${arch.length} session(s) eligible for archiving — run: baton archivable`));
+      if (arch.length) console.log(C.dim(`${arch.length} session(s) eligible for archiving — run: relaymote archivable`));
       break;
     }
     case 'archivable': {
@@ -122,18 +122,18 @@ const colorStatus = s => s === 'done' ? C.g(s) : s === 'failed' ? C.r(s) : s ===
       break;
     }
     default:
-      console.log(`baton — Claude Code orchestrator
+      console.log(`relaymote — Claude Code orchestrator
 
-  baton run <task>        submit a task (auto-routed to model+effort)
-  baton preview <task>    show the routing decision without spending anything
-  baton ls                list tasks (works even if the daemon is down)
-  baton show <id>         full task record
-  baton stop <id>         kill ONE running worker (a bare "baton stop" stops the daemon)
-  baton escalate <id>     force a task up one rung
-  baton sessions          Desktop sessions by group, with dots (passive read)
-  baton archivable        sessions eligible for archiving
-  baton health            daemon health
-  baton prune [days]      drop old finished tasks
+  relaymote run <task>        submit a task (auto-routed to model+effort)
+  relaymote preview <task>    show the routing decision without spending anything
+  relaymote ls                list tasks (works even if the daemon is down)
+  relaymote show <id>         full task record
+  relaymote stop <id>         kill ONE running worker (a bare "relaymote stop" stops the daemon)
+  relaymote escalate <id>     force a task up one rung
+  relaymote sessions          Desktop sessions by group, with dots (passive read)
+  relaymote archivable        sessions eligible for archiving
+  relaymote health            daemon health
+  relaymote prune [days]      drop old finished tasks
 
 dashboard (this computer only): http://127.0.0.1:${PORT}/`);
   }

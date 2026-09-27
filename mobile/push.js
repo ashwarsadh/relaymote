@@ -13,11 +13,11 @@ const STORE = path.join(config.MOBILE, 'push.json');
 const PLACEHOLDER_SUBJECT = 'mailto:admin@localhost';
 const validSubject = (s) => /^mailto:[^@\s]+@[^@\s]+\.[^@\s]+$/i.test(s) || /^https:\/\/[^\s/]+\.[^\s]+/i.test(s);
 function subject() {
-  const set = String(process.env.BATON_PUSH_SUBJECT || (config.get().notifications || {}).pushSubject || '').trim();
+  const set = String(process.env.RELAYMOTE_PUSH_SUBJECT || (config.get().notifications || {}).pushSubject || '').trim();
   return validSubject(set) ? set : PLACEHOLDER_SUBJECT;
 }
 function subjectStatus() {
-  const set = String(process.env.BATON_PUSH_SUBJECT || (config.get().notifications || {}).pushSubject || '').trim();
+  const set = String(process.env.RELAYMOTE_PUSH_SUBJECT || (config.get().notifications || {}).pushSubject || '').trim();
   return { subject: subject(), set, valid: validSubject(set), placeholder: !validSubject(set) };
 }
 

@@ -1,4 +1,8 @@
-Baton puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
+Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
+
+## 0.2.27
+
+**The rename is complete.** Everything now carries the name Relaymote: the `relaymote` command, the `relaymote_*` tools (were `baton_*`), the data folder `~/.relaymote` (was `~/.baton`), the install folder `Programs\Relaymote`, the scheduled tasks "Relaymote" and "Relaymote Watchdog", and the environment variables `RELAYMOTE_*`. An install from before this release does not move by itself: run `scripts\migrate-from-baton.ps1 -Installer <this installer>`, which moves the data, registers the new names, checks the new copy runs, and only then removes the old ones. Releases no longer carry a Baton-Setup copy. GUI dispatch now matches the model and effort exactly ("Opus 5" is never taken for "Opus 5.5", "high" never for "Extra high").
 
 ## 0.2.26
 
@@ -221,7 +225,7 @@ the macOS downloads. Also fixed: account sync now copies a record's modified tim
 
 | File | For |
 |---|---|
-| `Baton-Setup-<version>-x64.exe` | **Windows 10/11 installer (recommended).** Installs for your user only and needs no admin rights. |
+| `Relaymote-Setup-<version>-x64.exe` | **Windows 10/11 installer (recommended).** Installs for your user only and needs no admin rights. |
 | `Baton-<version>-win-x64-portable.zip` | Windows without installing. Unzip it, then run `start-baton.cmd` (or `baton.cmd setup`). |
 | `Baton-<version>-arm64.dmg` | macOS on Apple Silicon (M1 and newer). **Untested, see below.** |
 | `Baton-<version>-x64.dmg` | macOS on Intel. **Untested, see below.** |
@@ -232,7 +236,7 @@ You also need **Claude Desktop**, installed and signed in: https://claude.ai/dow
 
 ## Windows
 
-1. Run `Baton-Setup-<version>-x64.exe`. Windows SmartScreen may say the publisher is unknown, because the installer is not code-signed. Click **More info › Run anyway**.
+1. Run `Relaymote-Setup-<version>-x64.exe`. Windows SmartScreen may say the publisher is unknown, because the installer is not code-signed. Click **More info › Run anyway**.
 2. Leave both boxes on the last page ticked:
    - **Start Baton when I sign in** starts Baton and its tray icon when you log in.
    - **Run first-time setup** checks Claude Desktop, turns on its **Developer Mode** and **main-process debugger** (Baton needs the debugger to send messages and resume sessions), registers Baton's tools with Claude Code, and opens Baton.

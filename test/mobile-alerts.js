@@ -95,18 +95,18 @@ function fakeSub(endpoint) {
   r = await alerts.deliver({ kind: 'done', title: 'Deploy', body: 'Finished', tag: 't1' });
   const h1 = hits[hits.length - 1]; let hj = {}; try { hj = JSON.parse(h1.body); } catch {}
   check(r.backup.ok && h1.path === '/hook' && /application\/json/.test(h1.headers['content-type']), 'the webhook receives a JSON POST', h1 && h1.headers['content-type']);
-  check(hj.title === 'Deploy' && hj.body === 'Finished' && hj.kind === 'done' && hj.text === 'Deploy\nFinished' && hj.source === 'baton', 'with title, body, kind and text', hj);
+  check(hj.title === 'Deploy' && hj.body === 'Finished' && hj.kind === 'done' && hj.text === 'Deploy\nFinished' && hj.source === 'relaymote', 'with title, body, kind and text', hj);
 
   console.log('\n--- local command ---');
   const outFile = path.join(W.dir, 'cmd-out.json');
   const script = path.join(W.dir, 'recv.js');
-  fs.writeFileSync(script, `let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{require('fs').writeFileSync(${JSON.stringify(outFile)},JSON.stringify({env:{t:process.env.BATON_ALERT_TITLE,b:process.env.BATON_ALERT_BODY,k:process.env.BATON_ALERT_KIND},stdin:JSON.parse(s)}));});`);
+  fs.writeFileSync(script, `let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{require('fs').writeFileSync(${JSON.stringify(outFile)},JSON.stringify({env:{t:process.env.RELAYMOTE_ALERT_TITLE,b:process.env.RELAYMOTE_ALERT_BODY,k:process.env.RELAYMOTE_ALERT_KIND},stdin:JSON.parse(s)}));});`);
   config.set({ notifications: { backup: { kind: 'command', url: '', command: `"${process.execPath}" "${script}"` } } });
   const evil = 'x" & echo pwned > "' + path.join(W.dir, 'pwned.txt') + '" & "';
   r = await alerts.deliver({ kind: 'awaiting', title: evil, body: '$(whoami) `id`' });
   let got = null; try { got = JSON.parse(fs.readFileSync(outFile, 'utf8')); } catch {}
   check(r.backup.ok && got, 'the command runs', r.backup);
-  check(got && got.env.t === evil && got.env.b === '$(whoami) `id`' && got.env.k === 'awaiting', 'the alert reaches it in BATON_ALERT_* env vars, verbatim', got && got.env);
+  check(got && got.env.t === evil && got.env.b === '$(whoami) `id`' && got.env.k === 'awaiting', 'the alert reaches it in RELAYMOTE_ALERT_* env vars, verbatim', got && got.env);
   check(got && got.stdin.title === evil, 'and as JSON on stdin');
   check(!fs.existsSync(path.join(W.dir, 'pwned.txt')), 'a session title cannot inject shell syntax (it is never on the command line)');
   config.set({ notifications: { backup: { kind: 'command', command: `"${process.execPath}" -e "process.exit(3)"` } } });

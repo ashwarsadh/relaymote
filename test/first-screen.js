@@ -87,7 +87,7 @@ function load({ place = null, sessions = [], open = null, sheet = null, drawerOp
   check(/document\.addEventListener\('visibilitychange', \(\) => \{ if \(document\.visibilityState === 'hidden'\) savePlace\(\); \}\);\s*window\.addEventListener\('pagehide', savePlace\);/.test(app), 'the place is saved when the app is hidden or closed');
   check(/state\.open = id;\s*try \{ localStorage\.setItem\(PLACE_KEY, JSON\.stringify\(\{ kind: 'chat', id, at: Date\.now\(\) \}\)\); \} catch \{\}/.test(app), 'opening a session records it');
   check(/const userMoved = navTouched !== bootTouched \|\| !!visibleSheetId\(\) \|\| !!state\.open;\s*if \(userMoved\) \{[^}]*\}\s*else if \(want\) openChat\(want\);\s*else firstScreen\(bootTouched\)/.test(app), 'boot: a ?s= link first, else firstScreen, only if nothing moved');
-  check(!/boardWaiting/.test(app) && !/boardWaiting/.test(P('board-ui.js')) && !/baton\.lastChat/.test(app), 'the Board-first rule and its old key are gone');
+  check(!/boardWaiting/.test(app) && !/boardWaiting/.test(P('board-ui.js')) && !/relaymote\.lastChat/.test(app), 'the Board-first rule and its old key are gone');
 
   // The connection dot (no session open): green when the stream is up and Desktop answers.
   {

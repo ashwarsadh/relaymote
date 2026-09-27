@@ -34,10 +34,10 @@ const subusers = require('./subusers');
 const DIR = __dirname;
 const PUBLIC = path.join(DIR, 'public');
 const UPLOADS = config.UPLOADS;
-const SECRET_FILE = process.env.BATON_MOBILE_SECRET || path.join(config.MOBILE, 'secret.json');
-const PORT = Number(process.env.BATON_MOBILE_PORT || config.get().appPort);
+const SECRET_FILE = process.env.RELAYMOTE_MOBILE_SECRET || path.join(config.MOBILE, 'secret.json');
+const PORT = Number(process.env.RELAYMOTE_MOBILE_PORT || config.get().appPort);
 const MAX_UPLOAD = 25 * 1024 * 1024;
-const ROUTE_DEADLINE_MS = Number(process.env.BATON_MOBILE_DEADLINE_MS || 20000);
+const ROUTE_DEADLINE_MS = Number(process.env.RELAYMOTE_MOBILE_DEADLINE_MS || 20000);
 
 const log = (m) => { try { orch.log('[mobile] ' + m); } catch { console.log('[mobile] ' + m); } };
 
@@ -715,9 +715,9 @@ async function handle(req, res) {
       const viaTunnel = !!(req.headers['cf-ray'] || req.headers['cf-access-jwt-assertion']);
       const msg = viaTunnel
         ? 'Signed in with Cloudflare Access, but the assertion could not be verified. ' +
-          'Check BATON_ACCESS_AUD and BATON_ACCESS_TEAM, then reload.'
+          'Check RELAYMOTE_ACCESS_AUD and RELAYMOTE_ACCESS_TEAM, then reload.'
         : 'This address is not behind Cloudflare Access, so it needs the access key. ' +
-          'Open Relaymote on your computer and scan the pairing QR code, or run <code>baton pair</code>.';
+          'Open Relaymote on your computer and scan the pairing QR code, or run <code>relaymote pair</code>.';
       res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end('<meta name=viewport content="width=device-width,initial-scale=1">' +
         '<body style="font:16px/1.6 system-ui;padding:2rem;background:#12110f;color:#e8e6e1">' +

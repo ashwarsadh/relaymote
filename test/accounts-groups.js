@@ -29,7 +29,7 @@ const { check } = fx;
     [keyB]: { groups: [{ id: 'g-b1', name: 'Work' }, { id: 'g-b2', name: 'Only in B' }], assignments: { [fx.skey(2)]: 'g-b2' }, order: { 'g-b2': [fx.skey(2)] } },
   });
   async function build() {
-    fx.reset([fx.PROFILE, fx.GW, fx.BATON_ACCOUNTS]);
+    fx.reset([fx.PROFILE, fx.GW, fx.RELAYMOTE_ACCOUNTS]);
     const now = Date.now();
     for (const [k, n, t] of [[AK, 1, now - 60000], [BK, 2, now - 3600000]]) {
       const d = fx.scopeDir(k.acct, k.org);
@@ -129,20 +129,20 @@ const { check } = fx;
   const gwBefore = fx.hashTree(fx.GW, fx.lsNoise);
   out = await sync.status({ presence: 'absent' });
   check(out.groups.gateway.origin === O3 && out.groups.gateway.scope === key3 && /seeded once from/.test(all(out)), 'one Gateway scope: origin discovered, scope named, a one-time seed from the signed-in account planned', all(out));
-  check(fx.hashTree(fx.GW, fx.lsNoise) === gwBefore && !fs.existsSync(path.join(fx.GW, 'claude_desktop_config.json')) && !fs.existsSync(path.join(fx.BATON_ACCOUNTS, 'group-snapshots-3p')), 'the dry run wrote nothing');
+  check(fx.hashTree(fx.GW, fx.lsNoise) === gwBefore && !fs.existsSync(path.join(fx.GW, 'claude_desktop_config.json')) && !fs.existsSync(path.join(fx.RELAYMOTE_ACCOUNTS, 'group-snapshots-3p')), 'the dry run wrote nothing');
   out = await run();
   const g3 = await fx.getGroups(fx.GW_LEVELDB, O3);
   check(g3 && g3[key3] && names(g3[key3]) === 'Work' && /\(verified in both stores\)/.test(all(out)), 'apply: the Gateway leveldb holds the seed from the account used last, verified', all(out));
   const mirror3 = fx.readMirror(fx.GW);
   check(mirror3[key3] && mirror3[key3].groups.length === 1, 'the Gateway config mirror was created');
-  check(sync.groupBackups().some(b => b.store === '3p') && fs.existsSync(path.join(fx.BATON_ACCOUNTS, 'group-snapshots-3p')), 'its own backup and its own snapshots');
+  check(sync.groupBackups().some(b => b.store === '3p') && fs.existsSync(path.join(fx.RELAYMOTE_ACCOUNTS, 'group-snapshots-3p')), 'its own backup and its own snapshots');
   check(JSON.stringify(await groups.discoverOrigins(fx.GW_LEVELDB)) === JSON.stringify([O3]), 'no other origin was written');
   const lsA = (await fx.getGroups(fx.LEVELDB))[keyA];
   check(names(lsA) === 'Work', 'the subscription store was not changed by the Gateway pass');
   out = await run();
   check(!out.lines.some(l => /seeded once/.test(l)) && !(out.applied.lines.some(l => /Gateway/.test(l))), 'a second pass: nothing to do, no re-seed', all(out));
   await fx.putGroups(fx.GW_LEVELDB, [[O3, { [key3]: { groups: [], assignments: {}, order: {} } }]]);
-  fs.rmSync(path.join(fx.BATON_ACCOUNTS, 'group-snapshots-3p'), { recursive: true, force: true });
+  fs.rmSync(path.join(fx.RELAYMOTE_ACCOUNTS, 'group-snapshots-3p'), { recursive: true, force: true });
   fx.writeMirror(fx.GW, { [key3]: { groups: [], assignments: {}, order: {} } });
   out = await run();
   check(names((await fx.getGroups(fx.GW_LEVELDB, O3))[key3]) === '', 'emptied after the seed: seeded only once, never again', all(out));

@@ -8,8 +8,8 @@ const path = require('path');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-directions-'));
 process.env.APPDATA = path.join(TMP, 'appdata');
 process.env.CLAUDE_CONFIG_DIR = path.join(TMP, 'claude');
-process.env.BATON_HOME = path.join(TMP, 'baton');
-delete process.env.BATON_STATE_DIR;
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
+delete process.env.RELAYMOTE_STATE_DIR;
 
 let failed = 0;
 const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); if (!ok) failed++; };
@@ -126,7 +126,7 @@ check(res('handmade').status === 'kept-hand-written' && fs.readFileSync(path.joi
 check(res('gone').status === 'no-folder', 'project whose folder is missing is skipped');
 let bt = fs.readFileSync(betaFile, 'utf8');
 check(bt.includes(X.MARKER) && bt.trimEnd().endsWith(X.SENTINEL) && X.bodyIntact(bt), 'generated file carries marker, body hash and sentinel');
-check(bt.includes('### AS AT') && bt.includes('baton directives "beta"') && bt.includes('Provenance and coverage') && bt.includes('How this file works'), 'header: AS AT, re-run command, provenance, how to use');
+check(bt.includes('### AS AT') && bt.includes('relaymote directives "beta"') && bt.includes('Provenance and coverage') && bt.includes('How this file works'), 'header: AS AT, re-run command, provenance, how to use');
 check(bt.indexOf('BETA-NEW') < bt.indexOf('BETA-RECENT-5') && bt.indexOf('BETA-RECENT-5') < bt.indexOf('BETA-RECENT-0'), 'newest first');
 const earlierAt = bt.indexOf('## Earlier');
 check(bt.indexOf('`2026-03-01 07:30`') > earlierAt && !/### 2026-03-01 07:30/.test(bt), 'old directive is a one-line stub in Earlier (not pinned yet)');
@@ -136,8 +136,8 @@ check(bt.includes('*None recorded yet.'), 'no known-status file -> the empty-sta
 const edit0 = 'CORRECTION: 2026-03-01 07:30 is SUPERSEDED by 2026-09-19 08:00.\n';
 fs.writeFileSync(betaFile, bt + edit0);
 const edit = bt.slice(bt.indexOf(X.SENTINEL) + X.SENTINEL.length) + edit0;   // everything after the sentinel, byte for byte
-fs.mkdirSync(path.join(folderB, '.baton'), { recursive: true });
-fs.writeFileSync(path.join(folderB, '.baton', 'known-status.json'), JSON.stringify([
+fs.mkdirSync(path.join(folderB, '.relaymote'), { recursive: true });
+fs.writeFileSync(path.join(folderB, '.relaymote', 'known-status.json'), JSON.stringify([
   { ask: 'old ask | with a pipe', date: '2026-03-02 07:31', status: 'open', evidence: 'none yet' }]));
 betaTurns.push(['2026-09-20 11:00', 'USER', 'BETA-NEWEST ' + long('arrived after the first run')]);
 digest('s_beta1', 'beta', 'Beta work', betaTurns);
@@ -145,7 +145,7 @@ r = X.run({ index, only: ['beta'] });
 bt = fs.readFileSync(betaFile, 'utf8');
 check(r.ok && res('beta').status === 'written' && res('beta').restored > 0, 'regen reports hand edits restored', r.lines.join(' / '));
 check(bt.endsWith(X.SENTINEL + edit) && bt.includes('BETA-NEWEST'), 'hand edits below the sentinel survive a regen (and new messages arrive)');
-check(!fs.existsSync(path.join(folderB, '.baton', X.SIDE_NAME)), 'sidecar deleted after a confirmed restore');
+check(!fs.existsSync(path.join(folderB, '.relaymote', X.SIDE_NAME)), 'sidecar deleted after a confirmed restore');
 check(/### 2026-03-01 07:30 · .*PINNED/.test(bt) && /### 2026-03-02 07:31 · .*PINNED/.test(bt), 'timestamps cited in a hand edit / known status render in full, PINNED');
 check(bt.includes('| old ask \\| with a pipe | 2026-03-02 07:31 | **open** | none yet |'), 'known-status file rendered as a table (pipes escaped)');
 check(r.results.length === 1 && fs.readFileSync(path.join(folderH, 'DIRECTIVES.md'), 'utf8') === handText, 'project filter limits the run');
@@ -159,7 +159,7 @@ fs.writeFileSync(betaFile, bt);
 
 // failed restore: the write fails -> sidecar kept, failure reported; next run restores from it
 r = X.run({ index, only: ['beta'], writeFile: () => { throw new Error('disk full (test)'); } });
-const side = path.join(folderB, '.baton', X.SIDE_NAME);
+const side = path.join(folderB, '.relaymote', X.SIDE_NAME);
 check(!r.ok && r.failed === 1 && res('beta').status === 'restore-failed', 'failed restore reports failure', r.lines.join(' / '));
 check(fs.existsSync(side) && fs.readFileSync(side, 'utf8') === edit, 'failed restore KEEPS the sidecar with the hand edits');
 r = X.run({ index, only: ['beta'] });
@@ -168,11 +168,11 @@ check(r.ok && fs.readFileSync(betaFile, 'utf8').endsWith(X.SENTINEL + edit) && !
 // a sidecar with nothing to go back into stays and fails the run
 fs.writeFileSync(path.join(folderH, '.keep'), '');
 const onlyAcks = { sessions: { s_q: { project: 'quiet' } }, projects: { quiet: { path: path.join(TMP, 'projects', 'quiet') } } };
-fs.mkdirSync(path.join(TMP, 'projects', 'quiet', '.baton'), { recursive: true });
-fs.writeFileSync(path.join(TMP, 'projects', 'quiet', '.baton', X.SIDE_NAME), '\nkeep me\n');
+fs.mkdirSync(path.join(TMP, 'projects', 'quiet', '.relaymote'), { recursive: true });
+fs.writeFileSync(path.join(TMP, 'projects', 'quiet', '.relaymote', X.SIDE_NAME), '\nkeep me\n');
 digest('s_q', 'quiet', 'Quiet', [['2026-09-20 10:00', 'USER', 'ok']]);
 r = X.run({ index: onlyAcks, only: ['quiet'] });
-check(!r.ok && res('quiet').status === 'restore-failed' && fs.existsSync(path.join(TMP, 'projects', 'quiet', '.baton', X.SIDE_NAME)), 'no messages + leftover sidecar -> restore-failed, sidecar kept');
+check(!r.ok && res('quiet').status === 'restore-failed' && fs.existsSync(path.join(TMP, 'projects', 'quiet', '.relaymote', X.SIDE_NAME)), 'no messages + leftover sidecar -> restore-failed, sidecar kept');
 
 // conflict between a leftover sidecar and different edits in the file
 fs.writeFileSync(side, '\nsomething else\n');

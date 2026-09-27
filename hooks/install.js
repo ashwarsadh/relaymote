@@ -1,4 +1,4 @@
-// hooks/install.js — `baton hooks install | remove | status [--dry-run]`.
+// hooks/install.js — `relaymote hooks install | remove | status [--dry-run]`.
 //
 // Adds or removes Relaymote's optional finish-the-task Stop hook in <CLAUDE_CONFIG_DIR>/settings.json
 // (default ~/.claude/settings.json). It is never installed by default.
@@ -73,10 +73,10 @@ function run(action, opts = {}) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     if (cur.exists) {
       const stamp = new Date(opts.now || Date.now()).toISOString().replace(/[:.]/g, '-');
-      out.backup = file + '.baton-backup-' + stamp;
+      out.backup = file + '.relaymote-backup-' + stamp;
       fs.copyFileSync(file, out.backup);
     }
-    const tmp = file + '.baton-tmp';
+    const tmp = file + '.relaymote-tmp';
     fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + '\n');
     fs.renameSync(tmp, file);
   }
@@ -85,10 +85,10 @@ function run(action, opts = {}) {
   return out;
 }
 
-/** CLI: baton hooks [install|remove|status] [--dry-run] */
+/** CLI: relaymote hooks [install|remove|status] [--dry-run] */
 function cli(argv) {
   const action = (argv.find(a => !a.startsWith('-')) || 'status').toLowerCase();
-  if (!['install', 'remove', 'status'].includes(action)) { console.log('usage: baton hooks install | remove | status [--dry-run]'); return 2; }
+  if (!['install', 'remove', 'status'].includes(action)) { console.log('usage: relaymote hooks install | remove | status [--dry-run]'); return 2; }
   const r = run(action, { dryRun: argv.includes('--dry-run') });
   if (!r.ok) { console.log(r.message); process.exitCode = 1; return 1; }
   if (action === 'status') { console.log(`finish-the-task Stop hook: ${r.installed ? 'installed' : 'not installed'} in ${r.file}; module ${r.moduleOn ? 'on' : 'off'}.`); return 0; }

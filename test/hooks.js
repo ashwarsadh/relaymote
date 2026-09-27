@@ -1,4 +1,4 @@
-// hooks.js — the optional finish-the-task Stop hook and its installer. Temp BATON_HOME and
+// hooks.js — the optional finish-the-task Stop hook and its installer. Temp RELAYMOTE_HOME and
 // CLAUDE_CONFIG_DIR only; the real ~/.claude/settings.json is never read or written.
 'use strict';
 const fs = require('fs');
@@ -7,9 +7,9 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-hooks-'));
-process.env.BATON_HOME = path.join(TMP, 'baton');
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
 process.env.CLAUDE_CONFIG_DIR = path.join(TMP, 'claude');
-delete process.env.BATON_STATE_DIR;
+delete process.env.RELAYMOTE_STATE_DIR;
 fs.mkdirSync(process.env.CLAUDE_CONFIG_DIR, { recursive: true });
 
 let failed = 0;
@@ -129,10 +129,10 @@ check(!r.ok && r.error === 'BAD_SETTINGS' && fs.readFileSync(SETTINGS, 'utf8') =
 
 // The CLI path.
 fs.writeFileSync(SETTINGS, '{}');
-const cli = spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'baton.js'), 'hooks', 'install', '--dry-run'], { env: process.env, encoding: 'utf8' });
-check(cli.status === 0 && /Dry run/.test(cli.stdout) && fs.readFileSync(SETTINGS, 'utf8') === '{}', 'baton hooks install --dry-run: prints the plan, writes nothing');
-const st = spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'baton.js'), 'hooks', 'status'], { env: process.env, encoding: 'utf8' });
-check(st.status === 0 && /not installed/.test(st.stdout), 'baton hooks status');
+const cli = spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'relaymote.js'), 'hooks', 'install', '--dry-run'], { env: process.env, encoding: 'utf8' });
+check(cli.status === 0 && /Dry run/.test(cli.stdout) && fs.readFileSync(SETTINGS, 'utf8') === '{}', 'relaymote hooks install --dry-run: prints the plan, writes nothing');
+const st = spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'relaymote.js'), 'hooks', 'status'], { env: process.env, encoding: 'utf8' });
+check(st.status === 0 && /not installed/.test(st.stdout), 'relaymote hooks status');
 
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
 console.log(failed ? `\n${failed} FAILED` : '\nall hook tests passed');

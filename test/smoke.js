@@ -14,7 +14,7 @@ fs.writeFileSync(path.join(HOME, 'settings.json'), JSON.stringify({
   cdpPort: 9, onboarded: true, autoEnableDebugger: false,
   modules: { autoResume: false, orchestrator: false, chipAutostart: false, masterNotify: false, organizer: false },
 }));
-const env = { ...process.env, BATON_HOME: HOME, BATON_PORT: String(PORT), BATON_APP_PORT: String(APP) };
+const env = { ...process.env, RELAYMOTE_HOME: HOME, RELAYMOTE_PORT: String(PORT), RELAYMOTE_APP_PORT: String(APP) };
 
 let failed = 0;
 const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); if (!ok) failed++; };

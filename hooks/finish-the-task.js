@@ -9,7 +9,7 @@
 // always gets to stop after reconsidering: a genuinely critical question (money, deletion, sending to an
 // outside party, credentials, anything irreversible) is let through untouched.
 //
-// Never installed by default. `baton hooks install` adds it to <CLAUDE_CONFIG_DIR>/settings.json and
+// Never installed by default. `relaymote hooks install` adds it to <CLAUDE_CONFIG_DIR>/settings.json and
 // turns on modules.finishHook; switching the module off in Settings makes it a no-op without editing
 // settings.json. Tuning lives in Relaymote settings under `finishHook` (see lib/config.js).
 //

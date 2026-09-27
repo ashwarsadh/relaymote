@@ -1,6 +1,6 @@
 // summaries.js — the model engine (lib/engine.js), session overviews (lib/summarize.js) and the roles DB
 // (lib/roles.js), against a stub OpenAI-compatible server, a fake `claude` CLI and a stub Relaymote daemon.
-// Never calls a real model, never touches real data: APPDATA / CLAUDE_CONFIG_DIR / BATON_HOME point into a
+// Never calls a real model, never touches real data: APPDATA / CLAUDE_CONFIG_DIR / RELAYMOTE_HOME point into a
 // temp folder and the "daemon" is a stub on a random port.
 'use strict';
 const fs = require('fs');
@@ -11,10 +11,10 @@ const http = require('http');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-summaries-'));
 process.env.APPDATA = path.join(TMP, 'appdata');
 process.env.CLAUDE_CONFIG_DIR = path.join(TMP, 'claude');
-process.env.BATON_HOME = path.join(TMP, 'baton');
-delete process.env.BATON_STATE_DIR;
-delete process.env.BATON_ROLES_JSON;
-delete process.env.BATON_CLAUDE_BIN;
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
+delete process.env.RELAYMOTE_STATE_DIR;
+delete process.env.RELAYMOTE_ROLES_JSON;
+delete process.env.RELAYMOTE_CLAUDE_BIN;
 
 let failed = 0;
 const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); if (!ok) failed++; };
@@ -50,7 +50,7 @@ const daemon = { healthDelay: 0, posts: [] };
 const daemonServer = http.createServer(async (req, res) => {
   const body = await readBody(req);
   const send = (o) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
-  if (req.url.startsWith('/api/health')) { if (daemon.healthDelay) await sleep(daemon.healthDelay); return send({ ok: true, app: 'baton' }); }
+  if (req.url.startsWith('/api/health')) { if (daemon.healthDelay) await sleep(daemon.healthDelay); return send({ ok: true, app: 'relaymote' }); }
   if (req.method === 'POST' && req.url === '/api/task') {
     const b = JSON.parse(body); daemon.posts.push(b);
     const reg = require('../lib/registry');
@@ -83,7 +83,7 @@ process.stdin.on('end', () => {
 (async () => {
   const aiPort = await listen(aiServer);
   const dPort = await listen(daemonServer);
-  process.env.BATON_PORT = String(dPort);
+  process.env.RELAYMOTE_PORT = String(dPort);
   const config = require('../lib/config');
   const E = require('../lib/engine');
   const S = require('../lib/summarize');
@@ -103,11 +103,11 @@ process.stdin.on('end', () => {
   setEngine({ kind: 'openai', model: 'm-small', openai: { baseUrl: BASE, apiKey: 'sk-in-clear' } });
   r = await E.run({ prompt: 'x', input: 'y' });
   check(!r.ok && r.code === 'KEY_IN_SETTINGS' && ai.requests === 0, 'a key stored in settings.json is refused, not used', r.code);
-  setEngine({ openai: { apiKey: '', apiKeyEnv: 'BATON_TEST_LLM_KEY' } });
-  delete process.env.BATON_TEST_LLM_KEY;
+  setEngine({ openai: { apiKey: '', apiKeyEnv: 'RELAYMOTE_TEST_LLM_KEY' } });
+  delete process.env.RELAYMOTE_TEST_LLM_KEY;
   r = await E.run({ prompt: 'x', input: 'y' });
   check(!r.ok && r.code === 'NO_API_KEY' && ai.requests === 0, 'apiKeyEnv names an unset variable: refused before sending', r.code);
-  process.env.BATON_TEST_LLM_KEY = 'sk-from-env';
+  process.env.RELAYMOTE_TEST_LLM_KEY = 'sk-from-env';
 
   // ---------------------------------------------------------------- engine: openai
   r = await E.run({ prompt: 'Summarise', input: 'hello', schema: SCHEMA });
@@ -176,7 +176,7 @@ process.stdin.on('end', () => {
   check(!pr1.ok && pr1.code === 'ROUTE_DOWN', 'baton-worker: 8 recent workers that never reached the model = route down', pr1.reason);
 
   // ---------------------------------------------------------------- route history for the other engines
-  setEngine({ kind: 'openai', model: 'm-small', openai: { baseUrl: BASE, apiKeyEnv: 'BATON_TEST_LLM_KEY' } });
+  setEngine({ kind: 'openai', model: 'm-small', openai: { baseUrl: BASE, apiKeyEnv: 'RELAYMOTE_TEST_LLM_KEY' } });
   const H = path.join(config.STATE, 'engine-history.json');
   const hist = at => ({ calls: Array.from({ length: 8 }, () => ({ at, kind: 'openai', ok: false, code: 'UNREACHABLE', route: true })) });
   fs.writeFileSync(H, JSON.stringify(hist(new Date().toISOString())));

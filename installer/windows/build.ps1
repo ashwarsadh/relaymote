@@ -5,7 +5,7 @@
 #
 # Output in dist\:
 #   Relaymote-Setup-<version>-x64.exe          per-user installer, no admin needed
-#   Relaymote-<version>-win-x64-portable.zip   unzip anywhere, run start-baton.cmd or baton.cmd
+#   Relaymote-<version>-win-x64-portable.zip   unzip anywhere, run start-relaymote.cmd or relaymote.cmd
 #
 # A portable Node.js (latest 22.x LTS unless -NodeVersion is given) is downloaded from nodejs.org
 # and checked against the release's SHASUMS256.txt before it is bundled. Without Inno Setup the
@@ -79,15 +79,15 @@ if (-not (Test-Path (Join-Path $rt 'node.exe'))) { throw 'node.exe missing from 
 
 # Launchers. CRLF line endings: cmd.exe misreads LF-only batch files.
 function Write-Cmd($name, [string[]]$lines) { [IO.File]::WriteAllText((Join-Path $Stage $name), (($lines -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII) }
-Write-Cmd 'baton.cmd' @('@echo off', 'rem baton.cmd - the Relaymote command line, run with the Node.js bundled next to it.', '"%~dp0runtime\node.exe" "%~dp0bin\baton.js" %*')
-Write-Cmd 'baton-setup.cmd' @('@echo off', 'title Relaymote setup', 'call "%~dp0baton.cmd" setup %*', 'echo.', 'pause')
-Write-Cmd 'baton-pair.cmd' @('@echo off', 'title Relaymote - Pair a phone', 'call "%~dp0baton.cmd" pair', 'echo.', 'pause')
-Write-Cmd 'baton-status.cmd' @('@echo off', 'title Relaymote - Status', 'call "%~dp0baton.cmd" status', 'echo.', 'pause')
-Write-Cmd 'start-baton.cmd' @('@echo off', 'rem Portable start: runs Relaymote in the background and opens it in your browser.', 'call "%~dp0baton.cmd" open')
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'stop-baton.ps1') -Destination $Stage
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'baton.ico') -Destination $Stage
+Write-Cmd 'relaymote.cmd' @('@echo off', 'rem relaymote.cmd - the Relaymote command line, run with the Node.js bundled next to it.', '"%~dp0runtime\node.exe" "%~dp0bin\relaymote.js" %*')
+Write-Cmd 'relaymote-setup.cmd' @('@echo off', 'title Relaymote setup', 'call "%~dp0relaymote.cmd" setup %*', 'echo.', 'pause')
+Write-Cmd 'relaymote-pair.cmd' @('@echo off', 'title Relaymote - Pair a phone', 'call "%~dp0relaymote.cmd" pair', 'echo.', 'pause')
+Write-Cmd 'relaymote-status.cmd' @('@echo off', 'title Relaymote - Status', 'call "%~dp0relaymote.cmd" status', 'echo.', 'pause')
+Write-Cmd 'start-relaymote.cmd' @('@echo off', 'rem Portable start: runs Relaymote in the background and opens it in your browser.', 'call "%~dp0relaymote.cmd" open')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'stop-relaymote.ps1') -Destination $Stage
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'relaymote.ico') -Destination $Stage
 
-& (Join-Path $rt 'node.exe') (Join-Path $Stage 'bin\baton.js') --version
+& (Join-Path $rt 'node.exe') (Join-Path $Stage 'bin\relaymote.js') --version
 if ($LASTEXITCODE -ne 0) { throw 'the staged CLI does not run' }
 
 # --- 3. Portable zip --------------------------------------------------------------------------
@@ -106,6 +106,6 @@ if (-not $iscc) {
   Say 'Inno Setup 6 not found - built the portable zip only. Install it from https://jrsoftware.org/isdl.php to build the installer.'
   exit 0
 }
-& $iscc /Qp "/DAppVersion=$Version" "/DSourceDir=$Stage" "/DOutputDir=$Dist" (Join-Path $PSScriptRoot 'baton.iss')
+& $iscc /Qp "/DAppVersion=$Version" "/DSourceDir=$Stage" "/DOutputDir=$Dist" (Join-Path $PSScriptRoot 'relaymote.iss')
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
 Say "installer: $(Join-Path $Dist "Relaymote-Setup-$Version-x64.exe")"

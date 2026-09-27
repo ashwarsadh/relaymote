@@ -1,6 +1,6 @@
 // accounts-fixture.js — throwaway fake Claude profiles for the accounts-* tests.
-// Require it FIRST: it points APPDATA, LOCALAPPDATA, CLAUDE_CONFIG_DIR and BATON_HOME into a temp
-// dir before any Relaymote module is loaded, so no test can reach the real Claude folders or ~/.baton.
+// Require it FIRST: it points APPDATA, LOCALAPPDATA, CLAUDE_CONFIG_DIR and RELAYMOTE_HOME into a temp
+// dir before any Relaymote module is loaded, so no test can reach the real Claude folders or ~/.relaymote.
 // The Desktop presence probe is replaced by a stub (desk()): no test ever asks the real machine.
 'use strict';
 const fs = require('fs');
@@ -12,10 +12,10 @@ const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-acct-'));
 const APPDATA = path.join(ROOT, 'appdata');
 const LOCAL = path.join(ROOT, 'Local');
 Object.assign(process.env, {
-  APPDATA, LOCALAPPDATA: LOCAL, BATON_LOCALAPPDATA: LOCAL,
-  CLAUDE_CONFIG_DIR: path.join(ROOT, 'claude'), BATON_HOME: path.join(ROOT, 'baton'),
+  APPDATA, LOCALAPPDATA: LOCAL, RELAYMOTE_LOCALAPPDATA: LOCAL,
+  CLAUDE_CONFIG_DIR: path.join(ROOT, 'claude'), RELAYMOTE_HOME: path.join(ROOT, 'relaymote'),
 });
-delete process.env.BATON_STATE_DIR;
+delete process.env.RELAYMOTE_STATE_DIR;
 
 const PROFILE = path.join(APPDATA, 'Claude');
 const SESS = path.join(PROFILE, 'claude-code-sessions');
@@ -23,7 +23,7 @@ const LEVELDB = path.join(PROFILE, 'Local Storage', 'leveldb');
 const GW = process.platform === 'win32' ? path.join(LOCAL, 'Claude-3p') : path.join(APPDATA, 'Claude-3p');
 const GW_SESS = path.join(GW, 'claude-code-sessions');
 const GW_LEVELDB = path.join(GW, 'Local Storage', 'leveldb');
-const BATON_ACCOUNTS = path.join(ROOT, 'baton', 'accounts');
+const RELAYMOTE_ACCOUNTS = path.join(ROOT, 'relaymote', 'accounts');
 
 const sid = n => 'local_' + String(n).padStart(8, '0') + '-0000-4000-8000-000000000000';
 const skey = n => 'code:' + sid(n);
@@ -106,7 +106,7 @@ const probes = () => probeCalls;
 function reset(dirs) { for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); try { require('../lib/account-sync/core').resetCache(); } catch {} }
 
 module.exports = {
-  ROOT, APPDATA, LOCAL, PROFILE, SESS, LEVELDB, GW, GW_SESS, GW_LEVELDB, BATON_ACCOUNTS,
+  ROOT, APPDATA, LOCAL, PROFILE, SESS, LEVELDB, GW, GW_SESS, GW_LEVELDB, RELAYMOTE_ACCOUNTS,
   sid, skey, check, done, fail, scopeDir, writeRec, readRec, recIds, writeTasks, tasksOf, mkTask,
   Level, putGroups, getGroups, writeMirror, readMirror, hashTree, lsNoise, installProbe, desk, probes, reset,
 };

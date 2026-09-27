@@ -4,8 +4,8 @@ const crypto = require('crypto');
 const config = require('../lib/config');
 
 const cfgAccess = (config.get().remote || {}).access || {};
-const TEAM = process.env.BATON_ACCESS_TEAM || cfgAccess.team || '';
-const AUD = process.env.BATON_ACCESS_AUD || cfgAccess.aud || '';
+const TEAM = process.env.RELAYMOTE_ACCESS_TEAM || cfgAccess.team || '';
+const AUD = process.env.RELAYMOTE_ACCESS_AUD || cfgAccess.aud || '';
 const ENABLED = !!(TEAM && AUD);
 const ISS = TEAM ? `https://${TEAM}` : '';
 const CERTS = ISS ? `${ISS}/cdn-cgi/access/certs` : '';

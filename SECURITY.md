@@ -19,7 +19,7 @@ computer. Treat access to Relaymote like access to your computer.
 
 ## Keys and data
 
-Everything is under `~/.baton` (or `BATON_HOME`): the access key in `mobile/secret.json`, push keys
+Everything is under `~/.relaymote` (or `RELAYMOTE_HOME`): the access key in `mobile/secret.json`, push keys
 in `mobile/push.json`, logs in `state/`. Nothing is sent anywhere except through the tunnel you
 choose. Revoke every device with **Settings › Pair a phone › Issue a new key** (takes effect after a
 restart), or by deleting `mobile/secret.json`.

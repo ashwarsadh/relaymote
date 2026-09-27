@@ -251,7 +251,7 @@ function _setConductorState(fn) { const p = STATE_FN; STATE_FN = fn || ((b, o) =
 
 /** On Relaymote's own board a delivered Done closes the inbox item and a Reinstate re-opens (and pins) it. */
 function closeBatonNote(board, l, kind) {
-  if ((kind !== 'done' && kind !== 'reopen') || l.target !== 'inbox' || board.generator !== 'baton') return;
+  if ((kind !== 'done' && kind !== 'reopen') || l.target !== 'inbox' || board.generator !== 'relaymote') return;
   const n = String(l.line).split(' ')[1];
   try {
     const inbox = require('../lib/inbox');

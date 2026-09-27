@@ -9,7 +9,7 @@ questions, stuck sessions) and you want to clear them from your phone with a tap
 
 ## Where the files live
 
-All of these sit in the board folder: `~/.baton/board/` by default, or `board.dir` in settings.
+All of these sit in the board folder: `~/.relaymote/board/` by default, or `board.dir` in settings.
 
 | File | Written by | What it holds |
 |---|---|---|
@@ -21,7 +21,7 @@ All of these sit in the board folder: `~/.baton/board/` by default, or `board.di
 When the Board and Goal chaser modules are on, Relaymote writes `board.json` itself every 10 minutes and
 whenever you open the Board. It also writes a desktop page, `board.html` (`board.html` in the data
 folder, or `board.html` in settings). If a `board.json` or `board.html` in that place was written by
-something else (no `"generator": "baton"`), Relaymote leaves it alone unless you set `board.generate` to
+something else (no `"generator": "relaymote"`), Relaymote leaves it alone unless you set `board.generate` to
 true. Before it writes `board.html`, Relaymote checks the page script for a quoted string left open at
 the end of a line. A real newline inside a string literal is a syntax error that kills the whole
 script, so the page would render but no button or filter would work. If the check finds one, the page
@@ -31,7 +31,7 @@ is not written and the build reports the line.
 
 ```json
 {
-  "generator": "baton",
+  "generator": "relaymote",
   "built_at": "2026-01-01T09:00:00Z",
   "conductor": "local_…",
   "owner_name": "you",
@@ -83,17 +83,17 @@ is not written and the build reports the line.
 ## The inbox
 
 `lib/inbox.js` keeps `inbox.jsonl`. Every change appends a row `{ n, at, op, …changed fields }`. The
-ledger is never rewritten, so an item's history is its lines (`baton inbox show <n>`).
+ledger is never rewritten, so an item's history is its lines (`relaymote inbox show <n>`).
 
 ```
-baton inbox                       open items, newest first (--all: everything)
-baton inbox add "<text>" [--session <id>] [--log]
-baton inbox ask <n> decide|do|fyi "<one-line ask, ≤200 chars>"
-baton inbox link|reopen|text|note|kind|done|drop|wait|sweep|show …   (baton inbox help)
+relaymote inbox                       open items, newest first (--all: everything)
+relaymote inbox add "<text>" [--session <id>] [--log]
+relaymote inbox ask <n> decide|do|fyi "<one-line ask, ≤200 chars>"
+relaymote inbox link|reopen|text|note|kind|done|drop|wait|sweep|show …   (relaymote inbox help)
 ```
 
-The MCP tools are `baton_inbox_add` (any session; it records the caller's own session), `baton_inbox`
-(read) and `baton_inbox_update` (master or Conductor only).
+The MCP tools are `relaymote_inbox_add` (any session; it records the caller's own session), `relaymote_inbox`
+(read) and `relaymote_inbox_update` (master or Conductor only).
 
 **Auto-resolver** (module `inboxAutoResolve`, off by default). It never moves an item straight to
 `done`:

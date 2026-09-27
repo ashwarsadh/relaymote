@@ -1,6 +1,6 @@
 # tray.ps1 - Relaymote's Windows tray icon. Keeps the daemon running and gives one-click access to the
-# app, phone pairing and settings. Started by `baton tray` or the `baton autostart` logon task.
-# -Watchdog: started by the 10-minute "Baton Watchdog" task. It exits at once when a tray is already
+# app, phone pairing and settings. Started by `relaymote tray` or the `relaymote autostart` logon task.
+# -Watchdog: started by the 10-minute "Relaymote Watchdog" task. It exits at once when a tray is already
 # running (single-instance lock) or when you stopped Relaymote yourself (state\stopped-by-user.json).
 param([switch]$Watchdog)
 $ErrorActionPreference = 'SilentlyContinue'
@@ -8,20 +8,20 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 $Root = Split-Path -Parent $PSScriptRoot
-$Data = if ($env:BATON_HOME) { $env:BATON_HOME } else { Join-Path $env:USERPROFILE '.baton' }
+$Data = if ($env:RELAYMOTE_HOME) { $env:RELAYMOTE_HOME } else { Join-Path $env:USERPROFILE '.relaymote' }
 
 # One tray per user.
-$mutex = New-Object System.Threading.Mutex($false, 'Local\BatonTray')
+$mutex = New-Object System.Threading.Mutex($false, 'Local\RelaymoteTray')
 if (-not $mutex.WaitOne(0)) { exit 0 }
 
-# "You stopped Relaymote" marker, shared with `baton stop` / `baton start` (lib/launch.js).
-$State = if ($env:BATON_STATE_DIR) { $env:BATON_STATE_DIR } else { Join-Path $Data 'state' }
+# "You stopped Relaymote" marker, shared with `relaymote stop` / `relaymote start` (lib/launch.js).
+$State = if ($env:RELAYMOTE_STATE_DIR) { $env:RELAYMOTE_STATE_DIR } else { Join-Path $Data 'state' }
 $StopMarker = Join-Path $State 'stopped-by-user.json'
 function StoppedByUser { return (Test-Path $StopMarker) }
 function MarkStopped { try { New-Item -ItemType Directory -Force $State | Out-Null; ('{"by":"tray","at":"' + (Get-Date).ToString('o') + '"}') | Set-Content -Path $StopMarker -Encoding ascii } catch {} }
 function ClearStopped { Remove-Item -Path $StopMarker -Force -ErrorAction SilentlyContinue }
 if ($Watchdog -and (StoppedByUser)) { exit 0 }
-if (-not $Watchdog) { ClearStopped }   # an explicit start (sign-in, `baton tray`) means you want it running
+if (-not $Watchdog) { ClearStopped }   # an explicit start (sign-in, `relaymote tray`) means you want it running
 
 function Settings {
   $s = @{ port = 8788; appPort = 8790 }
@@ -36,7 +36,7 @@ function Token {
   try { return (Get-Content (Join-Path $Data 'mobile\secret.json') -Raw | ConvertFrom-Json).token } catch { return '' }
 }
 function Node {
-  if ($env:BATON_NODE -and (Test-Path $env:BATON_NODE)) { return $env:BATON_NODE }
+  if ($env:RELAYMOTE_NODE -and (Test-Path $env:RELAYMOTE_NODE)) { return $env:RELAYMOTE_NODE }
   foreach ($c in @((Join-Path $Root 'node.exe'), (Join-Path $Root 'node\node.exe'), (Join-Path $Root 'runtime\node.exe'))) { if (Test-Path $c) { return $c } }
   $n = (Get-Command node -ErrorAction SilentlyContinue).Source
   if (-not $n) { $n = Join-Path $env:ProgramFiles 'nodejs\node.exe' }
@@ -46,7 +46,7 @@ function Health {
   $s = Settings
   try {
     $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 "http://127.0.0.1:$($s.port)/api/health"
-    if ($r.StatusCode -eq 200) { $j = $r.Content | ConvertFrom-Json; if ($j.app -eq 'baton') { return $j } }
+    if ($r.StatusCode -eq 200) { $j = $r.Content | ConvertFrom-Json; if ($j.app -eq 'relaymote') { return $j } }
   } catch {}
   return $null
 }
@@ -65,7 +65,7 @@ function StartDaemon {
   $p = New-Object System.Diagnostics.ProcessStartInfo
   $p.FileName = Join-Path $env:SystemRoot 'System32\cmd.exe'
   $p.Arguments = '/d /c "' + (Join-Path $PSScriptRoot 'run-daemon.cmd') + '"'
-  $p.EnvironmentVariables['BATON_NODE'] = (Node)
+  $p.EnvironmentVariables['RELAYMOTE_NODE'] = (Node)
   $p.WorkingDirectory = $env:USERPROFILE
   $p.UseShellExecute = $false
   $p.CreateNoWindow = $true

@@ -31,7 +31,7 @@ const rows = [
   { type: 'assistant', timestamp: T(6), message: { role: 'assistant', model: 'claude-opus-5', stop_reason: 'tool_use', usage: { output_tokens: 60 },
     content: [{ type: 'tool_use', id: 'tu2', name: 'Read', input: { file_path: 'C:\\Users\\x\\projects\\app\\mobile\\outbox.js' } },
               { type: 'tool_use', id: 'tu3', name: 'mcp__ccd_session_mgmt__send_message', input: { session_id: 'local_conductor', message: 'Done with X.' } },
-              { type: 'tool_use', id: 'tu4', name: 'mcp__baton__baton_status', input: {} }] } },
+              { type: 'tool_use', id: 'tu4', name: 'mcp__relaymote__relaymote_status', input: {} }] } },
   { type: 'user', timestamp: T(7), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu2', content: 'file text' }] } },
   // tu3 and tu4 have NO result yet: the turn is still running those
 ];
@@ -57,7 +57,7 @@ const L = id => by[id] && by[id].label;
 check(L('tu1') && L('tu1').done === 'Ran' && L('tu1').running === 'Running' && L('tu1').meta === 'Ping localhost five times', 'Bash -> "Ran"/"Running" + the description', L('tu1'));
 check(L('tu2') && L('tu2').done === 'Read' && L('tu2').running === 'Reading' && L('tu2').meta === 'outbox.js', 'Read -> "Read"/"Reading" + the file name', L('tu2'));
 check(L('tu3') && L('tu3').done === 'Messaged teammate' && L('tu3').running === 'Messaging teammate' && L('tu3').meta === 'Done with X.', 'session send_message -> "Messaged teammate" + the message', L('tu3'));
-check(L('tu4') && L('tu4').done === 'Used baton status' && L('tu4').running === 'Using baton status', 'an unknown MCP tool -> "Used <label>"/"Using <label>"', L('tu4'));
+check(L('tu4') && L('tu4').done === 'Used relaymote status' && L('tu4').running === 'Using relaymote status', 'an unknown MCP tool -> "Used <label>"/"Using <label>"', L('tu4'));
 
 console.log('\n--- done / running, from the recorded tool_use_id join ---');
 check(by.tu1 && by.tu1.done === true && by.tu2 && by.tu2.done === true, 'a tool with its result back is done');

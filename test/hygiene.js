@@ -1,5 +1,5 @@
 // hygiene.js — context hygiene verdicts, the auto-/compact guards, archive candidates and wake measurement,
-// all against a temp BATON_HOME / CLAUDE_CONFIG_DIR with stubbed bridges. Never talks to Claude Desktop.
+// all against a temp RELAYMOTE_HOME / CLAUDE_CONFIG_DIR with stubbed bridges. Never talks to Claude Desktop.
 // Every guard is shown FIRING (a case where it refuses), not only passing.
 'use strict';
 const fs = require('fs');
@@ -7,10 +7,10 @@ const os = require('os');
 const path = require('path');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-hygiene-'));
-process.env.BATON_HOME = path.join(TMP, 'baton');
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
 process.env.CLAUDE_CONFIG_DIR = path.join(TMP, 'claude');
 process.env.APPDATA = path.join(TMP, 'appdata');
-delete process.env.BATON_STATE_DIR;
+delete process.env.RELAYMOTE_STATE_DIR;
 
 let failed = 0;
 const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra !== undefined && !ok ? '  ' + JSON.stringify(extra).slice(0, 400) : ''}`); if (!ok) failed++; };
@@ -371,7 +371,7 @@ function archiveTests() {
     && typeof out.protectedFromArchiving === 'number' && typeof out.note === 'string', 'the JSON keeps the old tool shape (count, candidates[sessionId,title,group,idleDays,reason], protectedFromArchiving, note)', out);
   const md = fs.readFileSync(file, 'utf8');
   check(/show the user the list first; archive only what they approve/i.test(md), 'the report carries the instruction: show the list first, archive only what is approved');
-  check(/## SUPERSEDED/.test(md) && /## Ready calls/.test(md) && /baton_archive\(session_ids=/.test(md) && /## Held back/.test(md), 'per-reason sections, ready calls and a held-back list');
+  check(/## SUPERSEDED/.test(md) && /## Ready calls/.test(md) && /relaymote_archive\(session_ids=/.test(md) && /## Held back/.test(md), 'per-reason sections, ready calls and a held-back list');
   const custom = archive.collect({ index, snapshot: null, now: NOW, digestText, settings: { disposablePatterns: ['^long'] } });
   check(!custom.rows.some(r => r.s.id === disp.id && r.reasons.some(x => x.code === 'disposable')) && custom.rows.some(r => r.s.id === full.id && r.reasons.some(x => x.code === 'disposable')),
     'disposable title patterns come from config (an array replaces the built-in list)');
@@ -394,9 +394,9 @@ function wakesTests() {
   check(sc.wakes.length === 3, 'wakes found: cross-session text, origin peer, and Relaymote\'s own message (a human turn is not a wake)', sc.wakes);
   check(sc.wakes[0].from === 'local_aaaa' && sc.wakes[0].warm && sc.wakes[0].cacheRead === 9000, 'a warm wake with its woken turn\'s REAL cache tokens', sc.wakes[0]);
   check(sc.wakes[1].from === 'local_bbbb' && !sc.wakes[1].warm && sc.wakes[1].cacheWrite === 190000, 'an origin-peer wake after 89 min is COLD and shows the cache re-write', sc.wakes[1]);
-  check(sc.wakes[2].from === 'baton:chase', 'Relaymote\'s own chase is labelled as its sender');
+  check(sc.wakes[2].from === 'relaymote:chase', 'Relaymote\'s own chase is labelled as its sender');
   const d = wakes.daily({ now: NOW, hours: 24 });
-  check(d.wakes >= 3 && d.cold >= 1 && d.cacheTokens.coldWrite >= 190000 && d.baton.warm >= 1, 'daily(): warm/cold, cold by sender, cache tokens, Relaymote\'s share', d);
+  check(d.wakes >= 3 && d.cold >= 1 && d.cacheTokens.coldWrite >= 190000 && d.relaymote.warm >= 1, 'daily(): warm/cold, cold by sender, cache tokens, Relaymote\'s share', d);
 
   const log = path.join(TMP, 'wl.jsonl'), chase = path.join(TMP, 'chase.jsonl');
   wakes.logWake({ file: log, to: 'local_x', kind: 'compact', warmth: { known: true, warm: true, ageMin: 40 }, now: NOW - HOUR });

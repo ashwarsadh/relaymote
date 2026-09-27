@@ -1,6 +1,6 @@
 // make-demo.js <dir> — write a fake Claude Desktop data set (sessions + transcripts) for demos,
 // screenshots and UI work without touching real data. Run Relaymote against it with:
-//   APPDATA=<dir>/appdata CLAUDE_CONFIG_DIR=<dir>/claude BATON_HOME=<dir>/baton node server.js
+//   APPDATA=<dir>/appdata CLAUDE_CONFIG_DIR=<dir>/claude RELAYMOTE_HOME=<dir>/relaymote node server.js
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -58,15 +58,15 @@ S.forEach(([title, proj, model, effort, minsAgo, rich], i) => {
 
 // Goals, a note for the user, and the Board built from them (Board, Goal chaser and Cache keeper on;
 // goals.dryRun so a demo daemon never sends anything to a real session).
-const baton = path.join(dir, 'baton');
-const goalsDir = path.join(baton, 'goals');
+const relaymote = path.join(dir, 'relaymote');
+const goalsDir = path.join(relaymote, 'goals');
 fs.mkdirSync(goalsDir, { recursive: true });
 const ago = (h) => new Date(now - h * 3600000).toISOString();
 let settings = {};
-try { settings = JSON.parse(fs.readFileSync(path.join(baton, 'settings.json'), 'utf8')); } catch {}
+try { settings = JSON.parse(fs.readFileSync(path.join(relaymote, 'settings.json'), 'utf8')); } catch {}
 settings.modules = { ...(settings.modules || {}), board: true, goalChaser: true, cacheKeeper: true };
 settings.goals = { ...(settings.goals || {}), dryRun: true };
-fs.writeFileSync(path.join(baton, 'settings.json'), JSON.stringify(settings, null, 2));
+fs.writeFileSync(path.join(relaymote, 'settings.json'), JSON.stringify(settings, null, 2));
 const goal = (n, o) => ({ id: 'g' + n, text: '', checks: [], project: null, ownerSessionId: null, status: 'open', due: null,
   verifyBy: null, verifyWhat: null, lastProgressAt: null, progress: null, blockedOn: null, deliveredAt: null, lastChaseAt: null,
   chases: 0, unanswered: 0, told: true, source: 'demo', routing: { state: 'routed', why: 'demo' }, ...o });
@@ -92,8 +92,8 @@ fs.writeFileSync(path.join(goalsDir, 'chase.jsonl'), [
 
 process.env.APPDATA = path.join(dir, 'appdata');
 process.env.CLAUDE_CONFIG_DIR = path.join(dir, 'claude');
-process.env.BATON_HOME = baton;
-delete process.env.BATON_STATE_DIR;
+process.env.RELAYMOTE_HOME = relaymote;
+delete process.env.RELAYMOTE_STATE_DIR;
 require('../lib/board-build').build({ now })
   .then(r => console.log('demo data written to ' + dir + (r.written ? ' (board.json built)' : '')))
   .catch(e => { console.log('demo data written to ' + dir + ' (board build failed: ' + e.message + ')'); });

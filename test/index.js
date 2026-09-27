@@ -1,7 +1,7 @@
 // index.js — transcript intelligence + routing (lib/transcripts, projects, digests, aliases, ostasks,
 // index-views, owner) against a temp fixture: fake Desktop registry rows + fake transcripts with a
 // compaction, an AskUserQuestion, a buried notice, a transcript-only (cli_) session and a resumed chain.
-// Never touches real data: APPDATA / CLAUDE_CONFIG_DIR / BATON_HOME all point into a temp folder.
+// Never touches real data: APPDATA / CLAUDE_CONFIG_DIR / RELAYMOTE_HOME all point into a temp folder.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -11,8 +11,8 @@ const crypto = require('crypto');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-index-'));
 process.env.APPDATA = path.join(TMP, 'appdata');
 process.env.CLAUDE_CONFIG_DIR = path.join(TMP, 'claude');
-process.env.BATON_HOME = path.join(TMP, 'baton');
-delete process.env.BATON_STATE_DIR;
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
+delete process.env.RELAYMOTE_STATE_DIR;
 
 let failed = 0;
 const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); if (!ok) failed++; };
@@ -323,10 +323,10 @@ const SCHTASKS = '"HostName","TaskName","Next Run Time","Status","Logon Mode","L
   r = projects.newProject('Shiny Thing', 'other');
   check(r.ok && r.existed && fs.readFileSync(path.join(r.folder, 'CLAUDE.md'), 'utf8') === 'mine', 'an existing project folder is never overwritten');
 
-  // ---------------------------------------------------------------- `baton index …` CLI
+  // ---------------------------------------------------------------- `relaymote index …` CLI
   const CLI = require('../lib/index-cli');
   const cli = async (...a) => { const out = [], orig = console.log; console.log = (...x) => out.push(x.join(' ')); try { await CLI.run(a); } finally { console.log = orig; } return out.join('\n'); };
-  check(/baton index <verb>/.test(await cli('help')), 'cli: help lists the verbs');
+  check(/relaymote index <verb>/.test(await cli('help')), 'cli: help lists the verbs');
   check(/Conductor|Masters|master/i.test(await cli('masters')), 'cli: masters');
   check((await cli('session', ids.master.id.slice(6, 14))).includes(ids.master.id.slice(6, 14)), 'cli: session card by 8-hex id');
   const cr = JSON.parse(await cli('route', 'deploy pipeline cleanup'));

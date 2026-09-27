@@ -2,8 +2,8 @@
 // against a fake `claude` CLI, await, heal (stubbed probes), chipwatch gating (stubbed desktop),
 // idle detection, trust roots, the account-switch detector, registry salvage, the AGO import, the
 // stderr-keeping launcher, the control-port guard, and — against a throwaway daemon on spare ports —
-// the dashboard, `baton stop <id>` vs `baton stop`, and the account-switch question over the app API.
-// Never talks to Claude Desktop, never spends tokens, never touches ~/.baton or real scheduled tasks.
+// the dashboard, `relaymote stop <id>` vs `relaymote stop`, and the account-switch question over the app API.
+// Never talks to Claude Desktop, never spends tokens, never touches ~/.relaymote or real scheduled tasks.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -15,13 +15,13 @@ const { spawn, spawnSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-core-'));
 const PORT = 19000 + Math.floor(Math.random() * 800), APP = PORT + 900;
-process.env.BATON_HOME = path.join(TMP, 'baton');
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
 process.env.APPDATA = path.join(TMP, 'appdata');
 process.env.CLAUDE_CONFIG_DIR = path.join(TMP, 'claude');
-process.env.BATON_PORT = String(PORT);
-process.env.BATON_APP_PORT = String(APP);
-process.env.BATON_CDP_PORT = '9';
-delete process.env.BATON_STATE_DIR;
+process.env.RELAYMOTE_PORT = String(PORT);
+process.env.RELAYMOTE_APP_PORT = String(APP);
+process.env.RELAYMOTE_CDP_PORT = '9';
+delete process.env.RELAYMOTE_STATE_DIR;
 delete process.env.ANTHROPIC_API_KEY;
 const WIN = process.platform === 'win32';
 
@@ -44,7 +44,7 @@ function req(port, p, { method = 'GET', body, headers = {} } = {}) {
   });
 }
 function runCli(argv, env) {
-  return spawnSync(process.execPath, [path.join(ROOT, 'bin', 'baton.js'), ...argv], { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 60000 });
+  return spawnSync(process.execPath, [path.join(ROOT, 'bin', 'relaymote.js'), ...argv], { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 60000 });
 }
 
 let daemonChild = null;   // killed on a crash too, so a failed run never leaves a daemon behind
@@ -226,7 +226,7 @@ else {
   section('heal: checks with stubbed probes');
   const heal = require('../lib/heal');
   const httpStub = map => async url => { for (const [k, v] of Object.entries(map)) if (url.includes(':' + k + '/')) return v; return { ok: false, error: 'ECONNREFUSED' }; };
-  const UP = { ok: true, body: { ok: true, app: 'baton', pid: 1, uptimeSec: 5 } };
+  const UP = { ok: true, body: { ok: true, app: 'relaymote', pid: 1, uptimeSec: 5 } };
   const prev = heal._setProbes({ platform: () => 'win32', queryTask: () => null, runKeyValue: () => 'wscript.exe run-hidden.vbs …tray.ps1', autostartRecord: () => ({ ok: true, action: 'install', logon: 'runkey' }), sleepScale: () => 0 });
   let a1 = heal.checkScheduledTask();
   check(a1.healthy && a1.method === 'runkey' && /Run key/.test(a1.detail), 'the Run-key fallback counts as autostart (was reported MISSING)', a1);
@@ -279,13 +279,13 @@ else {
   if (!WIN) {
     // on a machine without xprintidle the Linux probe must report unknown, not idle
   }
-  process.env.BATON_IDLE_PLATFORM = 'linux';
+  process.env.RELAYMOTE_IDLE_PLATFORM = 'linux';
   idle._setSampler(null);
   idle.idleMs(); await wait(1500);
   const lin = idle.status();
   const hasXprint = spawnSync(WIN ? 'where' : 'which', ['xprintidle']).status === 0;
   if (!hasXprint) check(lin.known === false && idle.isIdle(1000) === false && /xprintidle/.test(String(lin.error)), 'Linux without xprintidle: unknown, reported, and NOT idle (was: always idle)', lin);
-  delete process.env.BATON_IDLE_PLATFORM;
+  delete process.env.RELAYMOTE_IDLE_PLATFORM;
   idle._setSampler(null); idle.stop();
 
   // ------------------------------------------------------------------------------------------------
@@ -374,10 +374,10 @@ else {
   section('notify: state folder re-read per call');
   const notify = require('../lib/notify');
   const alt = path.join(TMP, 'alt-state');
-  process.env.BATON_STATE_DIR = alt;
+  process.env.RELAYMOTE_STATE_DIR = alt;
   try { notify.setConfig({ notifyTasks: false }); } catch {}
-  delete process.env.BATON_STATE_DIR;
-  check(fs.existsSync(path.join(alt, 'notify-config.json')), 'BATON_STATE_DIR set after load still redirects notify (read per call)');
+  delete process.env.RELAYMOTE_STATE_DIR;
+  check(fs.existsSync(path.join(alt, 'notify-config.json')), 'RELAYMOTE_STATE_DIR set after load still redirects notify (read per call)');
 
   // ------------------------------------------------------------------------------------------------
   section('registry salvage');
@@ -399,7 +399,7 @@ else {
   const afterQ = registry.allTasks();
   process.stderr.write = errW;
   const qfile = salvage.newestCorrupt(registry.STATE_DIR);
-  check(afterQ.length === 0 && !!qfile && /baton salvage/.test(said), 'a corrupt registry is quarantined (not deleted) and the way back is printed', said.trim());
+  check(afterQ.length === 0 && !!qfile && /relaymote salvage/.test(said), 'a corrupt registry is quarantined (not deleted) and the way back is printed', said.trim());
   const nt = registry.createTask({ title: 'new after crash', prompt: 'new after crash' });
   check(nt.id === 't0004', 'new ids continue ABOVE the damaged file\'s ids, so salvage cannot collide', nt.id);
   const qHash = md5(qfile);
@@ -432,7 +432,7 @@ else {
   const srcHashes = Object.fromEntries(fs.readdirSync(AS).map(f => [f, md5(path.join(AS, f))]));
   const DEST = path.join(TMP, 'import-dest');
   fs.mkdirSync(DEST, { recursive: true });
-  fs.writeFileSync(path.join(DEST, 'registry.json'), JSON.stringify({ version: 1, seq: 1, tasks: { t0001: { id: 't0001', title: 'baton own', prompt: 'baton own', createdAt: '2026-05-05T00:00:00.000Z', status: 'running' } } }, null, 2));
+  fs.writeFileSync(path.join(DEST, 'registry.json'), JSON.stringify({ version: 1, seq: 1, tasks: { t0001: { id: 't0001', title: 'relaymote own', prompt: 'relaymote own', createdAt: '2026-05-05T00:00:00.000Z', status: 'running' } } }, null, 2));
   const destHash = md5(path.join(DEST, 'registry.json'));
   check(imp.run({ dir: AGO, destDir: AS }).error === 'SAME_FOLDER', 'importing a folder into itself is refused (guard fires)');
   check(imp.run({ dir: path.join(TMP, 'nope') }).error === 'NO_AGO_STATE', 'a folder with no AGO state is reported, not treated as empty');
@@ -442,7 +442,7 @@ else {
   const ap = imp.run({ dir: AGO, destDir: DEST, apply: true });
   const R = JSON.parse(fs.readFileSync(path.join(DEST, 'registry.json'), 'utf8'));
   const newId = ap.renumbered.t0001;
-  check(ap.applied && R.tasks.t0001.title === 'baton own' && newId && R.tasks[newId].title === 'ago one', 'a colliding task id is renumbered; Relaymote\'s own task keeps its id', ap.renumbered);
+  check(ap.applied && R.tasks.t0001.title === 'relaymote own' && newId && R.tasks[newId].title === 'ago one', 'a colliding task id is renumbered; Relaymote\'s own task keeps its id', ap.renumbered);
   check(R.tasks.t0002.dependsOn[0] === newId && R.tasks.t0002.importedFrom === 'ago', '…and dependsOn follows the renumbering', R.tasks.t0002);
   const W = JSON.parse(fs.readFileSync(path.join(DEST, 'awaits.json'), 'utf8')).watches;
   check(W.length === 1 && W[0].waitingOn.join() === newId + ',t0002', 'open watches imported (resolved ones skipped), with renumbered task ids', W);
@@ -458,12 +458,12 @@ else {
   section('launcher: stderr kept, rotated, launch/exit lines');
   const launch = require('../lib/launch');
   const LS = path.join(TMP, 'launch-state');
-  process.env.BATON_STATE_DIR = LS;
+  process.env.RELAYMOTE_STATE_DIR = LS;
   fs.mkdirSync(LS, { recursive: true });
   fs.writeFileSync(path.join(LS, 'daemon-stdio.log'), 'x'.repeat(300));
   const entry = path.join(TMP, 'entry.js');
   fs.writeFileSync(entry, "process.stderr.write('dying words on stderr\\n'); console.log('stdout is not captured'); process.exit(3);\n");
-  process.env.BATON_STDIO_MAX_BYTES = '100';
+  process.env.RELAYMOTE_STDIO_MAX_BYTES = '100';
   const code = await launch.runWrapped({ entry });
   const log = fs.readFileSync(launch.logFile(), 'utf8');
   check(code === 3, 'the wrapper returns the daemon\'s exit code', code);
@@ -473,11 +473,11 @@ else {
   launch.markStopped('test');
   const before = fs.readFileSync(launch.logFile(), 'utf8');
   const w = launch.wrapper();
-  spawnSync(w.cmd, [...w.args, '--watchdog'], { env: { ...process.env, BATON_DAEMON_ENTRY: entry, BATON_NODE: process.execPath }, windowsHide: true });
+  spawnSync(w.cmd, [...w.args, '--watchdog'], { env: { ...process.env, RELAYMOTE_DAEMON_ENTRY: entry, RELAYMOTE_NODE: process.execPath }, windowsHide: true });
   check(fs.readFileSync(launch.logFile(), 'utf8') === before, 'a watchdog run does nothing after the user stopped Relaymote');
   check(launch.clearStopped() && !launch.stoppedByUser(), 'the stop marker clears');
-  delete process.env.BATON_STDIO_MAX_BYTES;
-  delete process.env.BATON_STATE_DIR;
+  delete process.env.RELAYMOTE_STDIO_MAX_BYTES;
+  delete process.env.RELAYMOTE_STATE_DIR;
 
   // ------------------------------------------------------------------------------------------------
   section('control-port guard');
@@ -515,13 +515,13 @@ else {
     t0001: { id: 't0001', title: 'a queued task', prompt: 'x', status: 'queued', mode: 'inline', createdAt: new Date().toISOString(), dependsOn: [] } } }, null, 2));
   fs.writeFileSync(path.join(DH, 'state', 'account-scope.json'), JSON.stringify({ scope: A1 + '/' + ORG, accountId: A1, orgId: ORG, since: Date.now() }));
   fs.writeFileSync(scope.DESKTOP_CONFIG, JSON.stringify({ lastKnownAccountUuid: A1 }));
-  const denv = { ...process.env, BATON_HOME: DH, BATON_PORT: String(PORT), BATON_APP_PORT: String(APP) };
+  const denv = { ...process.env, RELAYMOTE_HOME: DH, RELAYMOTE_PORT: String(PORT), RELAYMOTE_APP_PORT: String(APP) };
   delete denv.CLAUDE_CODE_EXECPATH;
   const child = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env: denv, stdio: ['ignore', 'pipe', 'pipe'] });
   daemonChild = child;
   let dout = ''; child.stdout.on('data', d => dout += d); child.stderr.on('data', d => dout += d);
   let upd = false;
-  for (let i = 0; i < 80 && !upd; i++) { await wait(250); const r = await req(PORT, '/api/health'); upd = r.status === 200 && r.json && r.json.app === 'baton'; }
+  for (let i = 0; i < 80 && !upd; i++) { await wait(250); const r = await req(PORT, '/api/health'); upd = r.status === 200 && r.json && r.json.app === 'relaymote'; }
   check(upd, 'daemon answers on the spare port');
   const dash = await req(PORT, '/');
   check(dash.status === 200 && /Relaymote · control/.test(dash.text) && dash.text.includes(`127.0.0.1:${APP}/`) && /route-preview/.test(dash.text) && /escalate/.test(dash.text), 'GET / serves the control dashboard (submit + preview, stop/escalate, sessions by group), with the configured app port');
@@ -532,13 +532,13 @@ else {
   check(evil.status === 403 && evil.json.error === 'CROSS_ORIGIN', 'a cross-site POST /api/task is refused by the live daemon', evil.status);
   const reb = await req(PORT, '/api/state', { headers: { Host: 'rebind.example:' + PORT } });
   check(reb.status === 403, 'a DNS-rebinding Host is refused by the live daemon', reb.status);
-  const benv = { BATON_HOME: DH, BATON_PORT: String(PORT), BATON_APP_PORT: String(APP) };
+  const benv = { RELAYMOTE_HOME: DH, RELAYMOTE_PORT: String(PORT), RELAYMOTE_APP_PORT: String(APP) };
   const s1c = runCli(['stop', 't0001'], benv);
   const afterStop = await req(PORT, '/api/health');
   const t1 = JSON.parse(fs.readFileSync(path.join(DH, 'state', 'registry.json'), 'utf8')).tasks.t0001;
-  check(afterStop.status === 200 && t1.status === 'cancelled', '`baton stop <id>` stops that task and leaves the daemon running (regression)', { out: s1c.stdout.slice(0, 200), status: t1.status, health: afterStop.status });
+  check(afterStop.status === 200 && t1.status === 'cancelled', '`relaymote stop <id>` stops that task and leaves the daemon running (regression)', { out: s1c.stdout.slice(0, 200), status: t1.status, health: afterStop.status });
   const noSuch = runCli(['stop', 't9999'], benv);
-  check(/no such task/.test(noSuch.stderr) && (await req(PORT, '/api/health')).status === 200, '`baton stop <unknown id>` says so and still leaves the daemon running', noSuch.stderr);
+  check(/no such task/.test(noSuch.stderr) && (await req(PORT, '/api/health')).status === 200, '`relaymote stop <unknown id>` says so and still leaves the daemon running', noSuch.stderr);
 
   // account-switch question through the app's own API (the daemon polls fast while a stream is open)
   let token = null; try { token = JSON.parse(fs.readFileSync(path.join(DH, 'mobile', 'secret.json'), 'utf8')).token; } catch {}
@@ -565,7 +565,7 @@ else {
 
   const s2c = runCli(['stop'], benv);
   for (let i = 0; i < 60 && child.exitCode === null; i++) await wait(250);
-  check(/Stopping/.test(s2c.stdout) && child.exitCode === 0, 'bare `baton stop` shuts the daemon down cleanly', { out: s2c.stdout, exit: child.exitCode });
+  check(/Stopping/.test(s2c.stdout) && child.exitCode === 0, 'bare `relaymote stop` shuts the daemon down cleanly', { out: s2c.stdout, exit: child.exitCode });
   check(fs.existsSync(path.join(DH, 'state', 'stopped-by-user.json')), '…and records that the user stopped it (tray/watchdog leave it stopped)');
   if (child.exitCode === null) child.kill();
   if (failed) console.log('\n--- daemon output (tail) ---\n' + dout.slice(-3000));

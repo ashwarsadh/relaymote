@@ -54,9 +54,9 @@ public class N {
   // The input desktop cannot be opened while the lock screen (or any secure desktop) is showing.
   public static bool InputDesktop() { IntPtr d = OpenInputDesktop(0, false, 0x0100); if (d == IntPtr.Zero) return false; CloseDesktop(d); return true; }
 }
-public class BatonBar : Form {
+public class RelaymoteBar : Form {
   Label l;
-  public BatonBar() {
+  public RelaymoteBar() {
     FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true; StartPosition = FormStartPosition.Manual;
     BackColor = Color.FromArgb(28, 28, 32); Opacity = 0.94; Width = 520; Height = 58;
     l = new Label(); l.Dock = DockStyle.Fill; l.ForeColor = Color.White; l.Font = new Font("Segoe UI", 12.5f);
@@ -133,7 +133,7 @@ try { $age = ((Get-Date) - $cl.StartTime).TotalSeconds; if ($age -lt 20) { Start
 # The on-screen countdown, top centre of the screen Claude Desktop is on (not over its text box). It never takes focus
 # and clicks pass through it.
 try {
-  $script:bar = New-Object BatonBar
+  $script:bar = New-Object RelaymoteBar
   $wa = [System.Windows.Forms.Screen]::FromHandle($h).WorkingArea
   $script:bar.Left = [int]($wa.Left + ($wa.Width - $script:bar.Width) / 2); $script:bar.Top = [int]($wa.Top + 8)   # top: at the bottom it covered the Claude text box
   $script:bar.Show()

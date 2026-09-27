@@ -72,11 +72,11 @@ function rig(o = {}) {
       const entry = path.join(dir, 'fake.js'), count = path.join(dir, 'count');
       fs.writeFileSync(entry, `const fs=require('fs');const c=${JSON.stringify(count)};const n=(+(fs.existsSync(c)?fs.readFileSync(c,'utf8'):0))+1;fs.writeFileSync(c,String(n));` +
         `if(n===1)fs.writeFileSync(${JSON.stringify(path.join(dir, 'follow-sleep.json'))},'{}');`);
-      const env = { ...process.env, BATON_STATE_DIR: dir, BATON_DAEMON_ENTRY: entry, BATON_NODE: process.execPath };
+      const env = { ...process.env, RELAYMOTE_STATE_DIR: dir, RELAYMOTE_DAEMON_ENTRY: entry, RELAYMOTE_NODE: process.execPath };
       const run = () => execFileSync('cmd.exe', ['/d', '/c', path.join(root, 'scripts', 'run-daemon.cmd')], { env, timeout: 60000, windowsHide: true });
       fs.writeFileSync(path.join(dir, 'stopped-by-user.json'), '{}');
       run();
-      ok(fs.readFileSync(count, 'utf8') === '1' && !fs.existsSync(path.join(dir, 'follow-sleep.json')), 'asleep, `baton stop` / Quit ends the wait instead of relaunching');
+      ok(fs.readFileSync(count, 'utf8') === '1' && !fs.existsSync(path.join(dir, 'follow-sleep.json')), 'asleep, `relaymote stop` / Quit ends the wait instead of relaunching');
       fs.unlinkSync(path.join(dir, 'stopped-by-user.json')); fs.writeFileSync(count, '0');
       let desktopUp = false;
       try { desktopUp = /claude\.exe/i.test(execFileSync('tasklist', ['/FI', 'IMAGENAME eq claude.exe', '/NH'], { windowsHide: true }).toString()); } catch {}

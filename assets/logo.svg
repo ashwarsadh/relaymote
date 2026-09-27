@@ -6,7 +6,7 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="116" fill="url(#bg)"/>
-  <!-- the sweep of the baton -->
+  <!-- the sweep of the relaymote -->
   <path d="M104 300 C 110 200, 180 130, 270 112" fill="none" stroke="#FFFFFF" stroke-opacity=".26" stroke-width="20" stroke-linecap="round"/>
   <path d="M170 404 C 260 404, 360 350, 400 250" fill="none" stroke="#FFFFFF" stroke-opacity=".26" stroke-width="20" stroke-linecap="round"/>
   <g transform="translate(250 262) rotate(-45)">

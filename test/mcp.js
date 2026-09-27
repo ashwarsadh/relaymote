@@ -1,6 +1,6 @@
 // mcp.js — the Relaymote MCP server over real stdio JSON-RPC: handshake, tool list, the slave/master gate
 // (every control tool refused for a slave, the slave-safe ones open), claiming, a second session
-// refused, takeover, release, and the audit log. Offline: temp BATON_HOME, spare ports with no daemon
+// refused, takeover, release, and the audit log. Offline: temp RELAYMOTE_HOME, spare ports with no daemon
 // on them, fake session ids. Nothing here reaches Claude Desktop or a real session.
 'use strict';
 const fs = require('fs');
@@ -11,7 +11,7 @@ const { spawn } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-mcp-'));
 const PORT = 20000 + Math.floor(Math.random() * 800);
-const HOME = path.join(TMP, 'baton');
+const HOME = path.join(TMP, 'relaymote');
 const PROJECT = path.join(TMP, 'project');
 fs.mkdirSync(PROJECT, { recursive: true });
 
@@ -22,11 +22,11 @@ const check = (ok, name, extra) => {
 };
 
 function server(sessionId) {
-  const env = { ...process.env, BATON_HOME: HOME, BATON_PORT: String(PORT), BATON_APP_PORT: String(PORT + 900), BATON_CDP_PORT: '9',
+  const env = { ...process.env, RELAYMOTE_HOME: HOME, RELAYMOTE_PORT: String(PORT), RELAYMOTE_APP_PORT: String(PORT + 900), RELAYMOTE_CDP_PORT: '9',
     APPDATA: path.join(TMP, 'appdata'), CLAUDE_CONFIG_DIR: path.join(TMP, 'claude') };
-  delete env.BATON_STATE_DIR; delete env.CLAUDE_CODE_SESSION_ID;
+  delete env.RELAYMOTE_STATE_DIR; delete env.CLAUDE_CODE_SESSION_ID;
   if (sessionId) env.CLAUDE_CODE_HOST_SESSION_ID = sessionId; else delete env.CLAUDE_CODE_HOST_SESSION_ID;
-  const child = spawn(process.execPath, [path.join(ROOT, 'mcp', 'baton-mcp.js')], { cwd: PROJECT, env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [path.join(ROOT, 'mcp', 'relaymote-mcp.js')], { cwd: PROJECT, env, stdio: ['pipe', 'pipe', 'pipe'] });
   let buf = '', seq = 0; const waiting = new Map();
   child.stdout.on('data', d => {
     buf += d; let i;
@@ -54,21 +54,21 @@ function server(sessionId) {
 (async () => {
   const A = server('local_mcp_test_a');
   const init = await A.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'core-test', version: '0' } });
-  check(init.result && init.result.serverInfo.name === 'baton', 'initialize: serverInfo names baton', init.result && init.result.serverInfo);
+  check(init.result && init.result.serverInfo.name === 'relaymote', 'initialize: serverInfo names relaymote', init.result && init.result.serverInfo);
   check(/SLAVE by default/.test(init.result.instructions), 'the handshake tells every session it is a SLAVE by default');
   const list = await A.rpc('tools/list', {});
   const names = list.result.tools.map(t => t.name);
-  for (const n of ['baton_status', 'baton_become_master', 'baton_release_master', 'baton_route_preview', 'baton_spawn', 'baton_tasks', 'baton_escalate', 'baton_stop', 'baton_list_sessions']) {
+  for (const n of ['relaymote_status', 'relaymote_become_master', 'relaymote_release_master', 'relaymote_route_preview', 'relaymote_spawn', 'relaymote_tasks', 'relaymote_escalate', 'relaymote_stop', 'relaymote_list_sessions']) {
     check(names.includes(n), `tools/list includes ${n}`);
   }
   check(list.result.tools.every(t => t.inputSchema && t.inputSchema.type === 'object' && t.description), 'every tool has a description and an object schema');
 
-  const st = await A.call('baton_status');
+  const st = await A.call('relaymote_status');
   check(st.body && st.body.role === 'SLAVE', 'status: a fresh session is a SLAVE', st.body && st.body.role);
 
-  const CONTROL = [['baton_spawn', { prompt: 'do something' }], ['baton_list_sessions', {}], ['baton_tasks', {}], ['baton_escalate', { taskId: 't0001' }],
-    ['baton_stop', { taskId: 't0001' }], ['baton_fleet', {}], ['baton_archive_candidates', {}], ['baton_set_model', { sessionIds: ['local_x'], model: 'claude-opus-5-5' }], ['baton_prepare_wake', { session_ids: ['local_x'] }]];
-  if (names.includes('baton_goal_add')) CONTROL.push(['baton_goal_add', { title: 'x' }]);
+  const CONTROL = [['relaymote_spawn', { prompt: 'do something' }], ['relaymote_list_sessions', {}], ['relaymote_tasks', {}], ['relaymote_escalate', { taskId: 't0001' }],
+    ['relaymote_stop', { taskId: 't0001' }], ['relaymote_fleet', {}], ['relaymote_archive_candidates', {}], ['relaymote_set_model', { sessionIds: ['local_x'], model: 'claude-opus-5-5' }], ['relaymote_prepare_wake', { session_ids: ['local_x'] }]];
+  if (names.includes('relaymote_goal_add')) CONTROL.push(['relaymote_goal_add', { title: 'x' }]);
   for (const [n, args] of CONTROL) {
     if (!names.includes(n)) { check(false, `${n} exists to be gated`); continue; }
     const r = await A.call(n, args);
@@ -76,37 +76,37 @@ function server(sessionId) {
   }
   const unknown = await A.call('baton_does_not_exist');
   check(unknown.body.error === 'UNKNOWN_TOOL', 'an unknown tool is reported, not run');
-  const pv = await A.call('baton_route_preview', { prompt: 'audit every file in the codebase for security issues' });
-  check(!pv.isError && pv.body && JSON.stringify(pv.body).includes('high'), 'baton_route_preview is open to a slave and routes offline', pv.body);
+  const pv = await A.call('relaymote_route_preview', { prompt: 'audit every file in the codebase for security issues' });
+  check(!pv.isError && pv.body && JSON.stringify(pv.body).includes('high'), 'relaymote_route_preview is open to a slave and routes offline', pv.body);
 
-  const noQuote = await A.call('baton_become_master', { user_instruction: 'ok' });
+  const noQuote = await A.call('relaymote_become_master', { user_instruction: 'ok' });
   check(noQuote.body.error === 'INSTRUCTION_REQUIRED', 'claiming without quoting the user is refused (guard fires)');
-  const claim = await A.call('baton_become_master', { user_instruction: 'please act as the master for this project', project: 'demo' });
+  const claim = await A.call('relaymote_become_master', { user_instruction: 'please act as the master for this project', project: 'demo' });
   check(claim.body.ok && claim.body.role === 'MASTER' && claim.body.project === 'demo' && !!claim.body.operatingProtocol, 'claiming with a quote makes it MASTER and returns the operating protocol', claim.body.error);
-  const tasks = await A.call('baton_tasks', {});
-  check(!(tasks.body && tasks.body.error === 'NOT_MASTER'), 'a master passes the gate for baton_tasks', tasks.body);
+  const tasks = await A.call('relaymote_tasks', {});
+  check(!(tasks.body && tasks.body.error === 'NOT_MASTER'), 'a master passes the gate for relaymote_tasks', tasks.body);
   const masters = JSON.parse(fs.readFileSync(path.join(HOME, 'state', 'masters.json'), 'utf8'));
   check(masters.demo && masters.demo.sessionId === 'local_mcp_test_a', 'the claim is written to masters.json');
 
   const B = server('local_mcp_test_b');
   await B.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'core-test', version: '0' } });
-  const clash = await B.call('baton_become_master', { user_instruction: 'be the master please', project: 'demo' });
+  const clash = await B.call('relaymote_become_master', { user_instruction: 'be the master please', project: 'demo' });
   check(clash.body.error === 'ALREADY_CLAIMED' && clash.body.currentMaster.sessionId === 'local_mcp_test_a', 'a second session cannot silently take a claimed project', clash.body.error);
-  const other = await B.call('baton_become_master', { user_instruction: 'be the master of the other project', project: 'other' });
+  const other = await B.call('relaymote_become_master', { user_instruction: 'be the master of the other project', project: 'other' });
   check(other.body.ok, 'another project can have its own master at the same time');
-  await B.call('baton_release_master');
-  const take = await B.call('baton_become_master', { user_instruction: 'take over the demo project', project: 'demo', takeover: true });
+  await B.call('relaymote_release_master');
+  const take = await B.call('relaymote_become_master', { user_instruction: 'take over the demo project', project: 'demo', takeover: true });
   check(take.body.ok && take.body.claim.takeoverFrom === 'local_mcp_test_a', 'takeover:true moves the claim and records who lost it');
-  const demoted = await A.call('baton_tasks', {});
+  const demoted = await A.call('relaymote_tasks', {});
   check(demoted.body && demoted.body.error === 'NOT_MASTER', 'the previous master is demoted to SLAVE at once (guard fires)', demoted.body);
-  check((await A.call('baton_status')).body.role === 'SLAVE', '…and its status says so');
-  const rel = await B.call('baton_release_master');
+  check((await A.call('relaymote_status')).body.role === 'SLAVE', '…and its status says so');
+  const rel = await B.call('relaymote_release_master');
   check(rel.body.ok && rel.body.role === 'SLAVE' && !JSON.parse(fs.readFileSync(path.join(HOME, 'state', 'masters.json'), 'utf8')).demo, 'release returns it to SLAVE and frees the project');
-  check((await B.call('baton_spawn', { prompt: 'x' })).body.error === 'NOT_MASTER', 'after release the control tools are refused again');
+  check((await B.call('relaymote_spawn', { prompt: 'x' })).body.error === 'NOT_MASTER', 'after release the control tools are refused again');
 
   const N = server(null);
   await N.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'core-test', version: '0' } });
-  const anon = await N.call('baton_become_master', { user_instruction: 'please act as the master' });
+  const anon = await N.call('relaymote_become_master', { user_instruction: 'please act as the master' });
   check(anon.body.error === 'NO_SESSION_ID', 'a server with no session id cannot grant mastery (guard fires)');
   const ping = await N.rpc('ping', {});
   check(ping.result && !ping.error, 'ping answers');

@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-tier-'));
-process.env.BATON_STATE_DIR = dir;
+process.env.RELAYMOTE_STATE_DIR = dir;
 const root = path.join(__dirname, '..');
 const tp = require(path.join(root, 'lib', 'tier-policy.js'));
 const config = require(path.join(root, 'lib', 'config.js'));
@@ -34,7 +34,7 @@ const S = (o = {}) => ({ newSession: { model: 'sonnet', effort: 'medium' }, tier
     ok(tp.decide({ current: cur, record: { by: 'user', at: now - 1 * H }, want, now, hours: 4 }).skip === 'MANUAL_OVERRIDE', 'a hand change 1 h ago is respected');
     const old = tp.decide({ current: cur, record: { by: 'user', at: now - 5 * H }, want, now, hours: 4 });
     ok(!old.skip && old.apply.model === 'sonnet' && old.apply.effort === 'medium', 'a hand change 5 h ago may be replaced by the default');
-    ok(!tp.decide({ current: cur, record: { by: 'baton', at: now }, want, now, hours: 4 }).skip, "Relaymote's own change is never treated as the user's");
+    ok(!tp.decide({ current: cur, record: { by: 'relaymote', at: now }, want, now, hours: 4 }).skip, "Relaymote's own change is never treated as the user's");
     ok(tp.decide({ current: want, record: null, want, now, hours: 4 }).skip === 'ALREADY', 'nothing is changed when it already matches');
     ok(tp.decide({ current: cur, record: null, want: { model: '', effort: '' }, now, hours: 4 }).skip === 'NO_DEFAULT', 'no default set: nothing is touched');
 
@@ -51,7 +51,7 @@ const S = (o = {}) => ({ newSession: { model: 'sonnet', effort: 'medium' }, tier
     ok(r.ok && d.sessions.s1.model === 'sonnet' && d.sessions.s1.effort === 'medium', 'after the window the default goes back on');
     tp.recordUser('s1', { effort: 'low' }); d.sessions.s1.effort = 'low';
     r = await tp.beforeWake('s1', { settings: S() });
-    ok(r.skipped === 'MANUAL_OVERRIDE' && d.sessions.s1.effort === 'low', 'a change made from the phone or baton_set_effort counts as the user\'s');
+    ok(r.skipped === 'MANUAL_OVERRIDE' && d.sessions.s1.effort === 'low', 'a change made from the phone or relaymote_set_effort counts as the user\'s');
 
     // (b) the setting
     const d2 = fakeDesk({ s2: { model: 'opus', effort: 'max' } }); tp._setDesktop(d2);
@@ -75,7 +75,7 @@ const S = (o = {}) => ({ newSession: { model: 'sonnet', effort: 'medium' }, tier
     const dsk = fs.readFileSync(path.join(root, 'lib', 'desktop.js'), 'utf8');
     ok(/startTask: \(opts = \{\}\) => require\('\.\/tier-policy'\)\.withStarterTier/.test(dsk), 'every chip start (Conductor, masters, chipwatch, phone) goes through the tier wrapper');
     const srv = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
-    ok(/forceModel: body\.model \|\| ns\.model \|\| undefined, forceEffort: body\.effort \|\| ns\.effort \|\| undefined/.test(srv), 'baton_spawn workers start on the default when none is given');
+    ok(/forceModel: body\.model \|\| ns\.model \|\| undefined, forceEffort: body\.effort \|\| ns\.effort \|\| undefined/.test(srv), 'relaymote_spawn workers start on the default when none is given');
     const nsSrc = fs.readFileSync(path.join(root, 'mobile', 'newsession.js'), 'utf8');
     ok(nsSrc.indexOf("'pick-model'") < nsSrc.indexOf("'send-prompt'") && nsSrc.indexOf("'pick-effort'") < nsSrc.indexOf("'send-prompt'"), 'a GUI-started session picks model and effort before the first prompt');
     const cw = fs.readFileSync(path.join(root, 'lib', 'chipwatch.js'), 'utf8');

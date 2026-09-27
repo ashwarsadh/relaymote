@@ -1,6 +1,6 @@
 // mobile-harness.js — shared by the test/mobile-*.js suites (not a suite itself).
 //
-// Everything runs offline against a throwaway world: a temp BATON_HOME, a fake Claude Desktop data
+// Everything runs offline against a throwaway world: a temp RELAYMOTE_HOME, a fake Claude Desktop data
 // set (test/make-demo.js) as APPDATA / CLAUDE_CONFIG_DIR, spare ports, and a debugger port that
 // points at nothing, so every desktop call fails fast instead of touching a real app.
 'use strict';
@@ -28,7 +28,7 @@ function world(tag, { demo = true, env = false, settings = {} } = {}) {
     dir,
     appdata: path.join(dir, 'appdata'),
     claude: path.join(dir, 'claude'),
-    home: path.join(dir, 'baton'),
+    home: path.join(dir, 'relaymote'),
     store: path.join(dir, 'appdata', 'Claude', 'claude-code-sessions', DEMO_ACCOUNT, DEMO_ORG),
   };
   fs.mkdirSync(w.home, { recursive: true });
@@ -38,8 +38,8 @@ function world(tag, { demo = true, env = false, settings = {} } = {}) {
     cdpPort: 9, onboarded: true, autoEnableDebugger: false, idleGateSeconds: 0,
     modules: { autoResume: false, orchestrator: false, chipAutostart: false, masterNotify: false, organizer: false, routines: false },
   }, settings), null, 2));
-  w.env = { APPDATA: w.appdata, CLAUDE_CONFIG_DIR: w.claude, BATON_HOME: w.home, USERPROFILE: dir, HOME: dir };
-  if (env) { Object.assign(process.env, w.env); delete process.env.BATON_STATE_DIR; delete process.env.BATON_MOBILE_SECRET; }
+  w.env = { APPDATA: w.appdata, CLAUDE_CONFIG_DIR: w.claude, RELAYMOTE_HOME: w.home, USERPROFILE: dir, HOME: dir };
+  if (env) { Object.assign(process.env, w.env); delete process.env.RELAYMOTE_STATE_DIR; delete process.env.RELAYMOTE_MOBILE_SECRET; }
   w.sessions = () => fs.existsSync(w.store) ? fs.readdirSync(w.store).filter(f => f.endsWith('.json')).map(f => JSON.parse(fs.readFileSync(path.join(w.store, f), 'utf8'))) : [];
   w.cleanup = () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} };
   return w;
@@ -66,8 +66,8 @@ function request(port, p, { method = 'GET', body, headers = {}, token, cookie } 
 /** Boot the daemon (server.js) in world `w`. Returns helpers bound to its app port and token. */
 async function boot(w, extraEnv = {}) {
   const PORT = 20000 + Math.floor(Math.random() * 20000), APP = PORT + 1;
-  const env = { ...process.env, ...w.env, BATON_PORT: String(PORT), BATON_APP_PORT: String(APP), ...extraEnv };
-  delete env.BATON_STATE_DIR; delete env.BATON_MOBILE_SECRET;
+  const env = { ...process.env, ...w.env, RELAYMOTE_PORT: String(PORT), RELAYMOTE_APP_PORT: String(APP), ...extraEnv };
+  delete env.RELAYMOTE_STATE_DIR; delete env.RELAYMOTE_MOBILE_SECRET;
   const child = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; child.stdout.on('data', d => out += d); child.stderr.on('data', d => out += d);
   let up = false;

@@ -5,7 +5,7 @@
   var MODULES = [
     ['app', 'Phone & desktop app', 'Sessions, chat, send, model and effort, notifications. Turning this off also turns off this screen after a restart.'],
     ['autoResume', 'Auto-resume', 'Continue sessions that stopped on a usage limit (when it resets) or because Claude Desktop crashed.'],
-    ['orchestrator', 'Orchestrator', 'Master/worker tools for Claude (baton_* MCP tools): spawn workers, track a fleet, goals, waiting for results.'],
+    ['orchestrator', 'Orchestrator', 'Master/worker tools for Claude (relaymote_* MCP tools): spawn workers, track a fleet, goals, waiting for results.'],
     ['masterNotify', 'Wake the master', 'When a worker finishes or asks something, tell the session that is coordinating it.'],
     ['chipAutostart', 'Auto-start task chips', 'Off by default. Presses Start on background-task suggestions in sessions a master owns, only while you are away from the keyboard, so a master’s suggested work begins without you.'],
     ['routines', 'Routines', 'Show Claude Code scheduled tasks in the app.'],
@@ -22,11 +22,11 @@
     ['digests', 'Digests', 'Off by default. A lean per-session digest (your turns and the answers, no tool traffic) for masters and overviews.'],
     ['osTasks', 'Scheduled-task inventory', 'Off by default. Lists Windows Task Scheduler, launchd or cron entries with the project each belongs to.'],
     ['hygiene', 'Context hygiene', 'Every 30 min, says what each session’s context needs (compact, write state first, rotate, archive, hold). Writes a report only.'],
-    ['autoUpdate', 'Automatic updates', 'On by default. Every 6 hours Relaymote checks GitHub for a new release and, on a Windows install, installs it and restarts by itself (about 15 seconds; never while a task runs). A release is installed only when its checksum file carries a valid signature by the Relaymote release key. Other copies only tell you (`baton update`).'],
+    ['autoUpdate', 'Automatic updates', 'On by default. Every 6 hours Relaymote checks GitHub for a new release and, on a Windows install, installs it and restarts by itself (about 15 seconds; never while a task runs). A release is installed only when its checksum file carries a valid signature by the Relaymote release key. Other copies only tell you (`relaymote update`).'],
     ['reaper', 'Idle-CLI reaper', 'Off by default. Frees the memory (~400 MB each) of sessions idle 3 h or more, using Claude’s own teardown; the next message resumes them. Only logs for its first 24 h. Never touches a session that is running, unread, waiting on you, on Remote Control, or owns a goal.'],
     ['autoCompact', 'Auto-compact', 'Off by default. Types /compact only in a session’s last warm cache cycle, when it is idle and has written its state down. Never cold, running or waiting on you.'],
     ['directives', 'Directives', 'Off by default. Daily, collects your own instructions per project into DIRECTIVES.md in that folder. Never overwrites a file you wrote.'],
-    ['finishHook', 'Finish-the-task hook', 'Off by default. After “baton hooks install”, a session may not end its turn on a question it can answer itself.'],
+    ['finishHook', 'Finish-the-task hook', 'Off by default. After “relaymote hooks install”, a session may not end its turn on a question it can answer itself.'],
   ];
   var REMOTE = [
     ['off', 'This computer only', 'The app answers on 127.0.0.1. Nothing is exposed.'],
@@ -235,7 +235,7 @@
         h += t.loggedIn ? '<p>✔ This computer is authorised.</p>'
           : '<p>You need a free Cloudflare account with a domain on it.</p><button class="ghost primary" id="set-cf-login">Log in to Cloudflare</button>';
         h += '<b>Step 2 — choose your address</b>' +
-          '<div class="set-inline"><input id="set-cf-host" placeholder="baton.example.com" value="' + esc(r.hostname || '') + '"><button class="ghost primary" id="set-cf-setup"' + (t.loggedIn ? '' : ' disabled') + '>Create</button></div>';
+          '<div class="set-inline"><input id="set-cf-host" placeholder="relaymote.example.com" value="' + esc(r.hostname || '') + '"><button class="ghost primary" id="set-cf-setup"' + (t.loggedIn ? '' : ' disabled') + '>Create</button></div>';
         if (r.hostname) h += '<p>Status: <b>' + esc(t.status || 'stopped') + '</b>' + (t.error ? ' — <span class="set-err">' + esc(t.error) + '</span>' : '') + '</p>';
         h += '<details><summary>Optional: Cloudflare Access (email login)</summary><p>Protect the address with Cloudflare Zero Trust Access. Enter your team name and the application AUD tag; Relaymote then accepts verified Access logins without the key.</p>' +
           field('remote.access.team', 'Team domain', (r.access || {}).team || '', 'e.g. myteam.cloudflareaccess.com') +
@@ -286,7 +286,7 @@
       sel('notifications.backup.kind', 'Send alerts through', kind, [['off', 'Nothing (off)'], ['ntfy', 'ntfy topic'], ['webhook', 'Webhook (POST JSON)'], ['command', 'A command on this computer']]);
     if (kind === 'ntfy') h += field('notifications.backup.url', 'ntfy topic URL', b.url || '', 'e.g. https://ntfy.sh/<a long random topic>. Anyone who knows a public topic can read it — use a long random name or your own server.');
     if (kind === 'webhook') h += field('notifications.backup.url', 'Webhook URL', b.url || '', 'Receives {title, body, text, kind, url} as JSON.');
-    if (kind === 'command') h += field('notifications.backup.command', 'Command', b.command || '', 'Runs on this computer. The alert is in BATON_ALERT_TITLE / _BODY / _KIND / _URL and as JSON on stdin.');
+    if (kind === 'command') h += field('notifications.backup.command', 'Command', b.command || '', 'Runs on this computer. The alert is in RELAYMOTE_ALERT_TITLE / _BODY / _KIND / _URL and as JSON on stdin.');
     if (kind !== 'off') {
       h += toggle('notifications.backup.always', 'Also when push works', 'Send every alert through this channel too, not only when push reaches no phone.', b.always === true) +
         field('notifications.maxPer10Min', 'At most this many per 10 minutes', n.maxPer10Min || 6, 'Alerts over the cap are dropped, never queued or retried.', 'number') +
@@ -309,7 +309,7 @@
       field('workers.concurrency', 'Headless workers at once', w.concurrency, '', 'number') +
       field('workers.guiConcurrency', 'Desktop workers at once', w.guiConcurrency, '', 'number') +
       '<h3>Conductor</h3>' +
-      field('conductorSession', 'Conductor session id', S.conductorSession || '', 'Set when a session calls baton_become_conductor: the one session above all projects. Masters report to it and the Board sends your taps to it.') +
+      field('conductorSession', 'Conductor session id', S.conductorSession || '', 'Set when a session calls relaymote_become_conductor: the one session above all projects. Masters report to it and the Board sends your taps to it.') +
       field('board.dir', 'Board folder', (S.board || {}).dir || '', 'Folder containing board.json. Blank = the default in Relaymote’s data folder.') +
       field('ownerIndex', 'Owner index folder', S.ownerIndex || '', 'Optional folder describing which session owns which topic.') +
       '<h3>Goals and cache</h3>' +

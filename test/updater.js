@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-updater-'));
-process.env.BATON_HOME = path.join(TMP, 'home');
+process.env.RELAYMOTE_HOME = path.join(TMP, 'home');
 const U = require('../lib/updater');
 
 let failed = 0;
@@ -46,15 +46,15 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
   const sumsFile = path.join(TMP, 'SHA256SUMS.txt');
   fs.writeFileSync(sumsFile, sums);
   const run = (env) => spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'sign-release.js'), sumsFile], { encoding: 'utf8', env: { ...process.env, ...env } });
-  const r1 = run({ BATON_SIGNING_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }), BATON_REQUIRE_SIGNATURE: '1' });
+  const r1 = run({ RELAYMOTE_SIGNING_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }), RELAYMOTE_REQUIRE_SIGNATURE: '1' });
   check(r1.status === 1 && /does not match/.test(r1.stderr) && !fs.existsSync(sumsFile + '.sig'), 'sign-release refuses a key that the embedded public key would reject', r1.stderr);
-  const r2 = run({ BATON_SIGNING_KEY: '', BATON_REQUIRE_SIGNATURE: '1' });
+  const r2 = run({ RELAYMOTE_SIGNING_KEY: '', RELAYMOTE_REQUIRE_SIGNATURE: '1' });
   check(r2.status === 1 && /not set/.test(r2.stderr), 'sign-release fails the release when the key is missing and required');
-  const r3 = run({ BATON_SIGNING_KEY: '', BATON_REQUIRE_SIGNATURE: '' });
+  const r3 = run({ RELAYMOTE_SIGNING_KEY: '', RELAYMOTE_REQUIRE_SIGNATURE: '' });
   check(r3.status === 0 && !fs.existsSync(sumsFile + '.sig'), 'a fork without a key gets an unsigned release (no copy will auto-install it)');
-  const local = path.join(os.homedir(), '.baton-signing', 'update-signing-key.pem');
+  const local = path.join(os.homedir(), '.relaymote-signing', 'update-signing-key.pem');
   if (fs.existsSync(local)) {
-    const r4 = run({ BATON_SIGNING_KEY: fs.readFileSync(local, 'utf8'), BATON_REQUIRE_SIGNATURE: '1' });
+    const r4 = run({ RELAYMOTE_SIGNING_KEY: fs.readFileSync(local, 'utf8'), RELAYMOTE_REQUIRE_SIGNATURE: '1' });
     check(r4.status === 0 && U.verifySums(sums, fs.readFileSync(sumsFile + '.sig', 'utf8')), 'the release key on this machine signs, and the embedded key accepts it');
     fs.unlinkSync(sumsFile + '.sig');
   } else console.log('skip  (no release key on this machine: the embedded-key round trip is checked by the release workflow)');
@@ -84,9 +84,9 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
     serve({ 'Relaymote-Setup-9.9.9-x64.exe': exe, 'SHA256SUMS.txt': goodSums, 'SHA256SUMS.txt.sig': goodSig });
     let f = await U.fetchVerified(c);
     check(!f.ok && /signature does not verify/.test(f.error), 'a release signed by a different key is refused before any download', f);
-    check(!fs.existsSync(path.join(process.env.BATON_HOME, 'updates', 'Relaymote-Setup-9.9.9-x64.exe')), 'and nothing was saved');
+    check(!fs.existsSync(path.join(process.env.RELAYMOTE_HOME, 'updates', 'Relaymote-Setup-9.9.9-x64.exe')), 'and nothing was saved');
     f = await U.fetchVerified(c, { key: pub });
-    const saved = path.join(process.env.BATON_HOME, 'updates', 'Relaymote-Setup-9.9.9-x64.exe');
+    const saved = path.join(process.env.RELAYMOTE_HOME, 'updates', 'Relaymote-Setup-9.9.9-x64.exe');
     check(f.ok && f.sha256 === exeHash && fs.readFileSync(saved).equals(exe), 'signed by the trusted key and matching its line: downloaded and kept', f);
     fs.unlinkSync(saved);
     serve({ 'Relaymote-Setup-9.9.9-x64.exe': Buffer.from('MZ tampered'), 'SHA256SUMS.txt': goodSums, 'SHA256SUMS.txt.sig': goodSig });
@@ -94,14 +94,6 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
     check(!f.ok && /does not match the signed/.test(f.error) && !fs.existsSync(saved) && !fs.existsSync(saved + '.part'), 'an installer that differs from its signed hash is refused and deleted', f);
     f = await U.fetchVerified({ ...c, assets: assets(['Relaymote-Setup-9.9.9-x64.exe', 'SHA256SUMS.txt']) });
     check(!f.ok && /not signed/.test(f.error), 'a release without SHA256SUMS.txt.sig is refused', f);
-    // g589: a release published before the rename carries only Baton-Setup-*.exe; it must still install.
-    const oldSums = exeHash + '  Baton-Setup-9.9.9-x64.exe\n';
-    const oldSig = crypto.sign(null, Buffer.from(oldSums), privateKey).toString('base64');
-    serve({ 'Baton-Setup-9.9.9-x64.exe': exe, 'SHA256SUMS.txt': oldSums, 'SHA256SUMS.txt.sig': oldSig });
-    f = await U.fetchVerified({ ...c, assets: assets(['Baton-Setup-9.9.9-x64.exe', 'SHA256SUMS.txt', 'SHA256SUMS.txt.sig']) }, { key: pub });
-    check(f.ok && f.sha256 === exeHash, 'a release with only the pre-rename installer name still updates', f);
-    try { fs.unlinkSync(path.join(process.env.BATON_HOME, 'updates', 'Baton-Setup-9.9.9-x64.exe')); } catch {}
-    check(U.legacyAssetName('windows-installer', '9.9.9') === 'Baton-Setup-9.9.9-x64.exe', 'the pre-rename installer name is still known');
     f = await U.fetchVerified({ ...c, kind: 'source' });
     check(!f.ok && /does not update itself/.test(f.error), 'a source copy never fetches an installer');
   } finally { https.get = realGet; }
@@ -118,7 +110,7 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
   // The apply script (written, not run): silent install over THIS folder, then start.
   const a = U.apply(path.join(TMP, 'Relaymote-Setup-9.9.9-x64.exe'), '9.9.9', { dry: true });
   const script = fs.readFileSync(a.script, 'utf8');
-  check(a.dry && /\/VERYSILENT \/SUPPRESSMSGBOXES \/NORESTART \/DIR="/.test(script) && /bin\\baton\.js" start|bin\/baton\.js" start/.test(script), 'the apply script installs silently over this folder, then starts Relaymote', script);
+  check(a.dry && /\/VERYSILENT \/SUPPRESSMSGBOXES \/NORESTART \/DIR="/.test(script) && /bin\\relaymote\.js" start|bin\/relaymote\.js" start/.test(script), 'the apply script installs silently over this folder, then starts Relaymote', script);
 
   // Who starts the apply script. WMI first; refused (ReturnValue 2, as measured for a standard user on
   // Windows Server) it goes to a one-shot scheduled task; both refused, a detached child.
@@ -138,7 +130,7 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
   check(L.via === 'detached' && L.pid === 99 && !runs.includes('schtasks.exe /Run') && /task: Access is denied/.test(L.tried.join()), 'task not created: never run, the detached child is the last resort', { L, runs });
 
   // After the restart into the new version: recorded once, task removed, tray back only if it was on.
-  const stFile = path.join(process.env.BATON_HOME, 'state', 'update.json');
+  const stFile = path.join(process.env.RELAYMOTE_HOME, 'state', 'update.json');
   const cur = require('../package.json').version;
   const land = (st, trayUp) => {
     fs.mkdirSync(path.dirname(stFile), { recursive: true });

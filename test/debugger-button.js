@@ -75,13 +75,13 @@ const ok = (c, name) => { assert.ok(c, name); n++; console.log('ok ' + name); };
     try {
       const stub = path.join(dir, 'stub.ps1');
       fs.writeFileSync(stub, "param($Port, $Countdown)\nWrite-Host '[00:00:00] the Windows session is disconnected'\nexit 8\n");
-      process.env.BATON_DEBUGGER_MACRO = stub;
+      process.env.RELAYMOTE_DEBUGGER_MACRO = stub;
       const r = await heal.enableDebugger();
       ok(r.ok === false && r.code === 8 && r.message === heal.DEBUGGER_REASONS[8] && /disconnected/.test(r.detail), 'a real run hands back the exit code, the sentence and the macro\'s last line');
       fs.writeFileSync(stub, "param($Port, $Countdown)\nthrow 'boom'\n");
       const r2 = await heal.enableDebugger();
       ok(r2.ok === false && typeof r2.message === 'string' && r2.message.length > 10, 'a script that crashes still yields a message');
-    } finally { delete process.env.BATON_DEBUGGER_MACRO; fs.rmSync(dir, { recursive: true, force: true }); }
+    } finally { delete process.env.RELAYMOTE_DEBUGGER_MACRO; fs.rmSync(dir, { recursive: true, force: true }); }
   } else {
     const r = await heal.enableDebugger();
     ok(r.ok === false && /Windows-only/.test(r.message), 'off Windows the reply says it is Windows-only');

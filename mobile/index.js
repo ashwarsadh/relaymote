@@ -554,7 +554,7 @@ function refreshModelsSoon(ttl) {
 
 function modelsCached(ttl = 10 * 60 * 1000) {
   refreshModelsSoon(ttl);
-  return modelsVal || ['Opus 5.5', 'Opus 5', 'Sonnet 5', 'Haiku 4.5'];
+  return modelsVal || [];   // read live from the picker; never a hardcoded list of names
 }
 
 async function cdpCached(ttl = 4000) {

@@ -140,7 +140,25 @@ console.log('--- a model label is text only (29-Sep: a box beside "Sonnet 5.5") 
   check(d.cleanLabel('Opus\u200b 5.5') === 'Opus 5.5', 'zero-width marks go too');
   check(/models\.map\(m => \(\{ \.\.\.m, name: cleanLabel\(m\.name\) \}\)\)/.test(H.src('lib/desktop.js')), 'the picker list is cleaned where it is read');
   check(/j\.models\.map\(desktop\.cleanLabel\)/.test(H.src('mobile/index.js')), 'a list cached before the fix is cleaned on load');
-  check(/\\ue000-\\uf8ff/.test(app.slice(app.indexOf('const shortModel'), app.indexOf('const shortModel') + 300)), 'the phone strips them from any label it shows');
+  check(/p\{Co\}/.test(app.slice(app.indexOf('const shortModel'), app.indexOf('const shortModel') + 300)), 'the phone strips them from any label it shows');
+  // 29-Sep: labels must stay clean for models that ship later, with no code change.
+  const cp = (x) => String.fromCodePoint(x);
+  check(d.cleanLabel('Opus 6 ' + cp(0xF8A1)) === 'Opus 6', 'a fake future label "Opus 6 <private-use glyph>" reads as "Opus 6"', d.cleanLabel('Opus 6 ' + cp(0xF8A1)));
+  check(d.cleanLabel('Fable ' + cp(0xF0001) + '6.1 ' + cp(0x1F195)) === 'Fable 6.1', 'supplementary private use and emoji badges go too');
+  check(d.cleanLabel('Sonnet^5`') === 'Sonnet^5`', 'control: ASCII ^ and ` survive');
+  const live = [{ id: 'claude-opus-5-5', label: 'Opus 5.5' }, { id: 'claude-sonnet-5', label: 'Sonnet 5' },
+                { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' + cp(0xE08F) }, { id: 'claude-opus-6', label: 'Opus 6 ' + cp(0xF8A1) }];
+  check(d.chooseModel(live, 'sonnet').id === 'claude-sonnet-5-5', '"sonnet" is the newest Sonnet in the LIVE list');
+  check(d.chooseModel(live, 'opus').id === 'claude-opus-6' && d.chooseModel(live, 'Opus 6').id === 'claude-opus-6', 'a model that ships later is found with no code change');
+  check(d.chooseModel(live, 'claude-sonnet-5').id === 'claude-sonnet-5', 'control: an exact older version is still exactly that');
+  check(/chooseModel\(live\.models\.map/.test(H.src('lib/desktop.js')), 'setModel resolves a bare family against the live list');
+  check(/return modelsVal \|\| \[\];/.test(H.src('mobile/index.js')), 'no hardcoded model names: the list is only what the picker offers');
+  {
+    const vm = require('vm');
+    const line = app.slice(app.indexOf('const shortModel'), app.indexOf('\n', app.indexOf("replace(/-latest$/")) + 1);
+    const c = {}; vm.createContext(c); vm.runInContext(line + ';globalThis.S = shortModel;', c);
+    check(c.S('Opus 6 ' + cp(0xF8A1)) === 'Opus 6' && c.S('claude-sonnet-5-5') === 'sonnet-5-5', 'the phone shows the same clean name', c.S('Opus 6 ' + cp(0xF8A1)));
+  }
 }
 
 H.finish(W);

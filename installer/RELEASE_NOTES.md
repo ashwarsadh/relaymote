@@ -1,5 +1,11 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.42
+
+**Model names stay clean for models that do not exist yet.** Instead of removing one known badge character, every label is now cleaned by rule: icon glyphs, invisible formatting characters and emoji badges are dropped, whatever model they sit beside. The model list is only what the desktop picker offers, never a built-in list of names.
+
+**"sonnet" means the newest Sonnet.** Asking for a model by family name picks the newest of that family in the desktop's own list, so a switch to Sonnet lands on Sonnet 5.5 even though the desktop's picker shows it greyed out.
+
 ## 0.2.41
 
 **Search sits in the header.** The 🔍 button (it replaces the eye) searches inside the open session. Showing or hiding working steps moved to the ⋯ sheet.

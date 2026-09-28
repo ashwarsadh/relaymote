@@ -156,7 +156,9 @@ function ago(ts) {
 }
 // The desktop picker's badge glyphs are Private Use characters ("Sonnet 5.5\uE08F" showed a box): drop
 // them, and zero-width marks, from every model label.
-const shortModel = (m) => String(m || '').replace(/[\u200b-\u200f\u2060-\u206f\ufeff\ue000-\uf8ff]|[\udb80-\udbff][\udc00-\udfff]/g, '').trim()
+// Same generic rule as desktop.cleanLabel: controls, format and private-use characters and non-ASCII
+// symbol badges go, so a glyph on a model that ships later needs no code change.
+const shortModel = (m) => String(m || '').normalize('NFKC').replace(/[\p{Cc}\p{Cf}\p{Co}]|(?![\x00-\x7F])[\p{So}\p{Sk}]/gu, '').trim()
   .replace(/^claude-/, '').replace(/-\d{8}$/, '').replace(/-latest$/, '');
 const modelKey = (m) => shortModel(m).replace(/-.*$/, '');
 const modelFamily = (m) => shortModel(String(m || '').trim()).split(/[\s\-_[]/)[0].toLowerCase();

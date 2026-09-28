@@ -151,6 +151,15 @@ console.log('--- a model label is text only (29-Sep: a box beside "Sonnet 5.5") 
   check(d.chooseModel(live, 'sonnet').id === 'claude-sonnet-5-5', '"sonnet" is the newest Sonnet in the LIVE list');
   check(d.chooseModel(live, 'opus').id === 'claude-opus-6' && d.chooseModel(live, 'Opus 6').id === 'claude-opus-6', 'a model that ships later is found with no code change');
   check(d.chooseModel(live, 'claude-sonnet-5').id === 'claude-sonnet-5', 'control: an exact older version is still exactly that');
+  {
+    const sui = H.src('mobile/public/settings-ui.js');
+    const def = sui.slice(sui.indexOf('var asLabel = function'), sui.indexOf('};', sui.indexOf('var asLabel = function')) + 2);
+    const c = { modelList: ['Opus 5.5', 'Sonnet 5.5', 'Haiku 4.5'] }; require('vm').createContext(c); require('vm').runInContext(def + ';globalThis.A = asLabel;', c);
+    check(c.A('claude-sonnet-5-5') === 'Sonnet 5.5' && c.A('claude-haiku-4-5-20251001') === 'Haiku 4.5' && c.A('Opus 5.5') === 'Opus 5.5',
+          'Settings shows a stored model id as the picker label (no duplicate raw option)', [c.A('claude-sonnet-5-5'), c.A('claude-haiku-4-5-20251001')]);
+    check(c.A('claude-opus-9') === 'claude-opus-9', 'control: an id the picker does not offer stays visible as itself');
+    check((sui.match(/asLabel\((cur|n)\.model\)/g) || []).length === 2, 'both the new-session default and every difficulty level use it');
+  }
   check(/chooseModel\(live\.models\.map/.test(H.src('lib/desktop.js')), 'setModel resolves a bare family against the live list');
   check(/return modelsVal \|\| \[\];/.test(H.src('mobile/index.js')), 'no hardcoded model names: the list is only what the picker offers');
   {

@@ -187,11 +187,19 @@
       return '<div class="empty">Loading models…</div>';
     }
     var mo = modelList.map(function (m) { return [m, m]; });
+    // A stored id ("claude-sonnet-5-5", or a dated "claude-haiku-4-5-2025…") is shown as the picker's
+    // own label, not as a second raw option beside it; saving writes the label, which the router maps.
+    var asLabel = function (v) {
+      if (!v || modelList.indexOf(v) >= 0) return v;
+      var id = String(v).toLowerCase().replace(/-\d{8}$/, '');
+      var hit = modelList.filter(function (m) { return 'claude-' + String(m).toLowerCase().replace(/[\s.]+/g, '-') === id; })[0];
+      return hit || v;
+    };
     var eo = EFFORTS.map(function (e) { return [e, e]; });
     var n = S.newSession || {}, lv = S.levels || {};
     var h = '<p class="set-lead">Which model and effort Relaymote uses. The list comes from your Claude Desktop model picker.</p>' +
       '<h3>New sessions you start from Relaymote</h3>' +
-      sel('newSession.model', 'Default model', n.model || '', [['', 'Same as Claude Desktop']].concat(mo)) +
+      sel('newSession.model', 'Default model', asLabel(n.model) || '', [['', 'Same as Claude Desktop']].concat(mo)) +
       sel('newSession.effort', 'Default effort', n.effort || '', [['', 'Same as Claude Desktop']].concat(eo)) +
       '<label class="set-field"><span><b>Default instructions</b><small>Added to the first message of every session you start from Relaymote, e.g. “Keep replies short. Run the tests before you say done.”</small></span>' +
       '<textarea data-field="newSession.instructions" rows="3">' + esc(n.instructions || '') + '</textarea></label>' +
@@ -201,7 +209,7 @@
     LEVELS.forEach(function (L) {
       var cur = lv[L[0]] || {};
       h += '<div class="set-level"><b>' + esc(L[1]) + '</b><small>' + esc(L[2]) + '</small><div class="set-inline">' +
-        sel('levels.' + L[0] + '.model', 'Model', cur.model || '', mo) + sel('levels.' + L[0] + '.effort', 'Effort', cur.effort || '', eo) + '</div></div>';
+        sel('levels.' + L[0] + '.model', 'Model', asLabel(cur.model) || '', mo) + sel('levels.' + L[0] + '.effort', 'Effort', cur.effort || '', eo) + '</div></div>';
     });
     return h;
   }

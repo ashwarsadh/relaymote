@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.43
+
+**Settings › Models shows model names, not ids.** A difficulty level set to a model id (for example by a script or an older version) now shows as the picker's own name, such as "Sonnet 5.5", instead of a second raw entry beside it. This release also brings back the Intel Mac downloads that 0.2.42's build missed.
+
 ## 0.2.42
 
 **Model names stay clean for models that do not exist yet.** Instead of removing one known badge character, every label is now cleaned by rule: icon glyphs, invisible formatting characters and emoji badges are dropped, whatever model they sit beside. The model list is only what the desktop picker offers, never a built-in list of names.

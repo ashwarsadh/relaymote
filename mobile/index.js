@@ -310,6 +310,35 @@ function attentionState(s) {
   return null;
 }
 
+/* "Finished" means a turn that just ENDED (g770 follow-up, 29-Sep: an alert for a session whose last
+   message was 21 hours old). The two triggers above are state, not events: the Desktop re-raises
+   unread dots in bulk (8 at once at 20:12 UTC on 28-Sep, none with a new turn), and a reconnect can
+   re-observe running -> idle. So a done alert also needs the transcript to have been WRITTEN in the
+   last 10 minutes, later than the turn already announced for that session. The transcript's mtime is
+   the evidence: opening, reading or re-marking a session never writes it. Persisted, so a restart
+   cannot announce the same turn again. */
+const DONE_FRESH_MS = 10 * 60 * 1000;
+const DONE_SEEN_FILE = path.join(config.STATE, 'done-notified.json');
+let doneSeen = {};
+try { doneSeen = JSON.parse(fs.readFileSync(DONE_SEEN_FILE, 'utf8')) || {}; } catch {}
+function turnEndedAt(s) {
+  const st = sessions.transcriptStamp(s);
+  const m = st ? Number(String(st).split(':')[1]) : 0;
+  return m || Number(s.lastActivityAt) || 0;
+}
+function freshDone(s, now = Date.now()) {
+  const at = turnEndedAt(s);
+  if (!at || now - at > DONE_FRESH_MS) return { ok: false, at, why: at ? Math.round((now - at) / 60000) + ' min old' : 'no transcript' };
+  if (at <= (doneSeen[s.id] || 0)) return { ok: false, at, why: 'that turn was already announced' };
+  return { ok: true, at };
+}
+function markDoneSeen(id, at) {
+  doneSeen[id] = at;
+  const cut = Date.now() - 7 * 86400e3;
+  for (const k of Object.keys(doneSeen)) if (doneSeen[k] < cut) delete doneSeen[k];
+  try { fs.writeFileSync(DONE_SEEN_FILE, JSON.stringify(doneSeen)); } catch {}
+}
+
 // Every alert's outcome is logged AFTER the send, from what the send reported. An alert that reached
 // nobody is logged DROPPED and counted, so the push-health alarm can say how many were lost.
 function logAlert(label, r) {
@@ -338,6 +367,11 @@ async function notifyAttention(all) {
     if (ncfg.enabled === false) continue;
     if (st === 'awaiting' && ncfg.awaiting === false) continue;
     if (st === 'done' && ncfg.done === false) continue;
+    if (st === 'done') {
+      const f = freshDone(s);
+      if (!f.ok) { log(`notify: skipped done "${String(s.title || s.id).slice(0, 48)}": ${f.why}`); continue; }
+      markDoneSeen(s.id, f.at);
+    }
     const folder = s.cwd ? path.basename(s.cwd) : '';
     const evt = {
       id: s.id,

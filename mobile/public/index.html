@@ -75,7 +75,6 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
       <button class="bar-sub" id="chat-sub" aria-label="Session settings"></button>
     </div>
     <button id="btn-find" class="icon-btn" title="Find in this session" aria-label="Find in this session">&#128269;</button>
-    <button id="btn-work" class="icon-btn" title="Show working" aria-label="Toggle working steps">👁</button>
     <button id="btn-chips" class="icon-btn" title="Background tasks" aria-label="Background tasks">&#9635;</button>
     <button id="btn-cfg" class="icon-btn" aria-label="Session settings">⋯</button>
   </header>
@@ -219,6 +218,9 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
     
     <label class="lbl">Fast mode · all sessions</label>
     <div class="seg" id="seg-fast"></div>
+
+    <label class="lbl">Working steps</label>
+    <div class="seg" id="seg-work"><button id="btn-work" type="button" aria-pressed="false">Hidden</button></div>
 
     <label class="lbl">Folder</label>
     <div class="path" id="sheet-cwd"></div>

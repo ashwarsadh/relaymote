@@ -66,6 +66,42 @@ const sessions = require('../mobile/sessions');
   const appSrc = H.src('mobile/public/app.js');
   check(/async function landAtHit/.test(appSrc) && /await findLoadUntil\(hit\.byte\)/.test(appSrc), 'landing pages older history in until the message is loaded');
 
+  // 29-Sep: the drawer's search across sessions matched raw JSON (tool calls, ids) and showed ids.
+  const g = await sessions.searchTranscripts('quokkafish', { list: [sess] });
+  check(g.ok && g.hits.length === 1 && g.hits[0].matches === 4, 'search across sessions counts only what was said (the tool step is not a match)', g.hits[0] && g.hits[0].matches);
+  check(/late mention of quokkafish/.test(g.hits[0].snippet) && !/"uuid"|toolu_|\{"type"/.test(g.hits[0].snippet), 'its hint is the text around the match, not JSON or ids', g.hits[0].snippet);
+  check(g.hits[0].ts === ts(400) && g.hits[0].role === 'user' && Number.isFinite(g.hits[0].byte), 'and it says which message, so a tap can land there');
+  const grepOnly = await sessions.searchTranscripts('notes.txt', { list: [sess] });
+  check(grepOnly.hits.length === 0, 'a word that appears only inside a tool call finds nothing');
+  const tail = await sessions.searchSession(sess, 'quokkafish', { tailBytes: 4096, roles: ['user', 'assistant'] });
+  check(tail.hits.length === 1 && tail.truncated, 'a tail window reads only the newest part (and says it is partial)', tail.hits.length);
+  const ui = H.src('mobile/public/app.js');
+  check(/function markSnip\(text, q\)/.test(ui) && /markSnip\(s\.snippet, state\.deepQ\)/.test(ui), 'the hint marks the match');
+  check(/landAtHit\(\{ byte: s\.byte, ts: s\.ts, snippet: s\.snippet \}, state\.deepQ\)/.test(ui), 'tapping a hit opens the session on that message');
+
+  // g784 follow-up: the header's 👁 gave its place to 🔍; working steps moved to the ⋯ sheet.
+  const html = H.src('mobile/public/index.html');
+  const header = html.slice(html.indexOf('<header class="bar">'), html.indexOf('</header>'));
+  check(/id="btn-find"/.test(header) && !/id="btn-work"/.test(header), 'the header has find, not the working-steps eye');
+  check(/<label class="lbl">Working steps<\/label>\s*<div class="seg" id="seg-work"><button id="btn-work"/.test(html), 'working steps are a toggle in the session sheet');
+
+  // g770 follow-up: "Finished" for a turn that ended 21 hours earlier.
+  const ix = H.src('mobile/index.js');
+  check(/const DONE_FRESH_MS = 10 \* 60 \* 1000;/.test(ix) && /if \(st === 'done'\) \{\s*const f = freshDone\(s\);\s*if \(!f\.ok\)/.test(ix), 'a done alert needs a turn written in the last 10 minutes');
+  {
+    const vm = require('vm');
+    const grabI = (name) => { const i = ix.indexOf('function ' + name + '('); const rest = ix.slice(i); return rest.slice(0, rest.search(/\n\}\n/) + 2); };
+    const now = Date.parse('2026-09-28T20:15:46Z');
+    const stamps = { old: '1:' + Date.parse('2026-09-27T23:16:10Z'), fresh: '1:' + (now - 60e3) };
+    const c = { DONE_FRESH_MS: 600000, doneSeen: {}, sessions: { transcriptStamp: (s) => stamps[s.id] } };
+    vm.createContext(c);
+    vm.runInContext(grabI('turnEndedAt') + grabI('freshDone') + ';globalThis.F = freshDone;', c);
+    check(!c.F({ id: 'old' }, now).ok, 'the 28-Sep case: a session re-marked unread 21 h after its turn is not announced', c.F({ id: 'old' }, now).why);
+    check(c.F({ id: 'fresh' }, now).ok, 'control: a turn that ended a minute ago is');
+    c.doneSeen.fresh = now - 60e3;
+    check(!c.F({ id: 'fresh' }, now).ok, 'and the same turn is never announced twice (persisted)');
+  }
+
   const idx = H.src('mobile/index.js');
   check(/p === '\/api\/session-search'/.test(idx) && /sessions\.searchSession\(sess, url\.searchParams\.get\('q'\)/.test(idx), 'the app reaches it at /api/session-search');
   const readOk = idx.slice(idx.indexOf('const READ_OK'), idx.indexOf('const WRITE_OK'));

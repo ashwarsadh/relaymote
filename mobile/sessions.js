@@ -660,38 +660,33 @@ function transcriptStamp(sess) {
   try { const st = fs.statSync(file); return st.size + ':' + st.mtimeMs; } catch { return null; }
 }
 
-async function searchTranscripts(query, { limit = 30, maxSessions = 250, tailBytes: tb = 400 * 1024,
+/* Search across sessions (the drawer's "search inside sessions"). 29-Sep: it matched the raw
+   transcript, so a hit could be a tool call or an id and the hint showed message ids. Now it matches
+   only what was SAID -- his messages and the replies -- through the same parser as the in-session
+   search, and each hit carries the text around the match and where it is, so a tap opens the session
+   on that message. Newest sessions first; each is read from its newest 3 MB, inside a time budget. */
+async function searchTranscripts(query, { limit = 30, maxSessions = 250, tailBytes: tb = 3 * 1024 * 1024,
                                           deadlineMs = 7000, list = null } = {}) {
   const q = String(query || '').trim().toLowerCase();
   if (q.length < 3) return { ok: false, error: 'query must be at least 3 characters', hits: [] };
 
   const started = Date.now();
-  const pool = (list || index().list).filter(s => s.cliSessionId).slice(0, maxSessions);
+  const pool = (list || index().list).filter(s => s.cliSessionId)
+    .sort((a, b) => (b.lastActivityAt || 0) - (a.lastActivityAt || 0)).slice(0, maxSessions);
   const hits = [];
   let scanned = 0, truncated = false;
 
   await mapLimit(pool, 12, async (sess) => {
     if (hits.length >= limit || Date.now() - started > deadlineMs) { truncated = true; return; }
-    const file = transcriptPath(sess);
-    if (!file) return;
-    let text;
-    try {
-      const st = await fs.promises.stat(file);
-      const start = Math.max(0, st.size - tb);
-      const fh = await fs.promises.open(file, 'r');
-      try {
-        const buf = Buffer.allocUnsafe(st.size - start);
-        await fh.read(buf, 0, buf.length, start);
-        text = buf.toString('utf8');
-      } finally { await fh.close(); }
-    } catch { return; }
+    const left = deadlineMs - (Date.now() - started);
+    const r = await searchSession(sess, q, { limit: 200, tailBytes: tb, deadlineMs: Math.max(200, left),
+                                             roles: ['user', 'assistant'] });
+    if (!r.ok) return;
     scanned++;
-    const at = text.toLowerCase().indexOf(q);
-    if (at < 0) return;
-    const from = Math.max(0, at - 90);
-    let snippet = text.slice(from, at + q.length + 130)
-      .replace(/\[nrt]/g, ' ').replace(/\\"/g, '"').replace(/\s+/g, ' ').trim();
-    hits.push({ id: sess.id, title: sess.title, cwd: sess.cwd, at: sess.lastActivityAt, snippet });
+    if (!r.hits.length) return;
+    const h = r.hits[r.hits.length - 1];              // the newest match in that session
+    hits.push({ id: sess.id, title: sess.title, cwd: sess.cwd, at: sess.lastActivityAt, snippet: h.snippet,
+                role: h.role, ts: h.ts, byte: h.byte, uuid: h.uuid, matches: r.occurrences, partial: r.truncated });
   });
 
   hits.sort((a, b) => b.at - a.at);
@@ -701,7 +696,8 @@ async function searchTranscripts(query, { limit = 30, maxSessions = 250, tailByt
 /* Find text inside ONE session, across its whole transcript (g784): what he said, what peers said,
    and the replies -- never tool input or output. Each hit carries the byte where its line starts, so
    the app can page older history in until that hit is loaded. Oldest first. */
-async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid = null } = {}) {
+async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid = null, tailBytes = 0,
+                                           roles = ['user', 'peer', 'assistant'] } = {}) {
   // `uuid`: find ONE row by its transcript uuid instead (a board card's anchor, g785).
   const want = uuid && /^[0-9a-f-]{8,40}$/i.test(uuid) ? String(uuid).toLowerCase() : null;
   const q = want ? '"uuid":"' + want + '"' : String(query || '').trim().toLowerCase();
@@ -728,7 +724,7 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
                     snippet: String((f && f.text) || '').replace(/\s+/g, ' ').trim().slice(0, 160) });
         found = true; return buf.length;
       }
-      if (!f || !(f.role === 'user' || f.role === 'peer' || (f.role === 'assistant' && f.text))) continue;
+      if (!f || !roles.includes(f.role) || (f.role === 'assistant' && !f.text)) continue;
       const text = String(f.text || '');
       const low = text.toLowerCase();
       let at = low.indexOf(q), n = 0;
@@ -738,7 +734,7 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
       occurrences += n;
       if (hits.length < limit) {
         const a = Math.max(0, first - 60);
-        hits.push({ ts: f.ts || null, role: f.role, byte: lineStart, n,
+        hits.push({ ts: f.ts || null, role: f.role, byte: lineStart, n, uuid: row.uuid || null,
                     snippet: (a ? '…' : '') + text.slice(a, first + q.length + 90).replace(/\s+/g, ' ').trim() });
       } else truncated = true;
     }
@@ -747,6 +743,17 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
   try {
     fh = await fs.promises.open(file, 'r');
     const chunk = Buffer.allocUnsafe(1 << 20);
+    // A tail window starts mid-line: skip to the first whole line.
+    if (tailBytes) {
+      const size = (await fh.stat()).size;
+      if (size > tailBytes) {
+        pos = size - tailBytes;
+        const { bytesRead } = await fh.read(chunk, 0, Math.min(chunk.length, size - pos), pos);
+        const nl = chunk.subarray(0, bytesRead).indexOf(10);
+        pos = nl < 0 ? size : pos + nl + 1;
+        truncated = true;
+      }
+    }
     for (;;) {
       if (found) break;
       if (Date.now() - started > deadlineMs) { truncated = true; break; }

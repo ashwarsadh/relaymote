@@ -1151,14 +1151,17 @@ function renderSessions(list, opts = {}) {
       `<div class="row-main">` +
         `<div class="row-title">${esc(s.title)}</div>` +
         `<div class="row-meta">${meta.join('')}</div>` +
-        (s.snippet ? `<div class="snip">${esc(s.snippet)}</div>` : '') +
+        (s.snippet ? `<div class="snip">${s.role ? `<b>${s.role === 'user' ? 'You' : 'Reply'}:</b> ` : ''}${markSnip(s.snippet, state.deepQ)}` +
+          `${s.matches > 1 ? ` <span class="muted">· ${s.matches} matches</span>` : ''}</div>` : '') +
       `</div>` +
       `<button class="star${state.favs.has(s.id) ? ' on' : ''}" data-fav="${esc(s.id)}" ` +
       `aria-label="${state.favs.has(s.id) ? 'Unstar' : 'Star'}">${state.favs.has(s.id) ? '★' : '☆'}</button>`;
     li.onclick = (e) => {
       const st = e.target.closest('.star');
       if (st) { e.stopPropagation(); toggleFav(st.dataset.fav); return; }
-      openChat(s.id); drawer(false);
+      // A search hit opens ON its message (29-Sep), not at the bottom of the session.
+      const p = openChat(s.id); drawer(false);
+      if (s.byte != null && s.ts) Promise.resolve(p).then(() => landAtHit({ byte: s.byte, ts: s.ts, snippet: s.snippet }, state.deepQ));
     };
     ul.appendChild(li);
   }
@@ -2958,9 +2961,12 @@ if ($('btn-accounts')) $('btn-accounts').onclick = () => {
 if ($('btn-close-accounts')) $('btn-close-accounts').onclick = () => hideSheet($('view-accounts'));
 if ($('view-accounts')) $('view-accounts').onclick = (e) => { if (e.target === $('view-accounts')) hideSheet($('view-accounts')); };
 
+// Working steps live in the ⋯ sheet (29-Sep: the header slot went to 🔍 find-in-session).
 $('btn-work').onclick = () => {
   state.showWork = !state.showWork;
   $('btn-work').classList.toggle('on', state.showWork);
+  $('btn-work').setAttribute('aria-pressed', String(state.showWork));
+  $('btn-work').textContent = state.showWork ? 'Shown' : 'Hidden';
   state.openGroups.clear();
   renderLog(state.messages, true);
   toast(state.showWork ? 'Showing working steps' : 'Working steps collapsed');
@@ -3068,8 +3074,17 @@ $('search').addEventListener('input', (e) => {
   searchTimer = setTimeout(loadSessions, 220);
 });
 
+// The text around a hit, with the match marked (29-Sep: the hints showed message ids).
+function markSnip(text, q) {
+  const t = String(text || ''), n = String(q || '').trim().toLowerCase();
+  if (!n) return esc(t);
+  let out = '', from = 0, at = t.toLowerCase().indexOf(n);
+  while (at >= 0) { out += esc(t.slice(from, at)) + '<mark class="hit">' + esc(t.slice(at, at + n.length)) + '</mark>'; from = at + n.length; at = t.toLowerCase().indexOf(n, from); }
+  return out + esc(t.slice(from));
+}
 $('deep').onclick = async () => {
   if (state.q.length < 3) return;
+  state.deepQ = state.q;
   $('sessions').innerHTML = '<div class="empty">Searching conversations…</div>';
   try {
     const d = await api('/api/search?q=' + encodeURIComponent(state.q) + '&limit=40');

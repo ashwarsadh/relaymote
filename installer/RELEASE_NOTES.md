@@ -1,5 +1,13 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.41
+
+**Search sits in the header.** The 🔍 button (it replaces the eye) searches inside the open session. Showing or hiding working steps moved to the ⋯ sheet.
+
+**Searching across sessions shows what was said.** It now matches only your messages and the final replies, never tool steps or ids. Each result shows the text around the match with the word highlighted, and tapping it opens the session at that message.
+
+**No more "finished" alerts for old turns.** When the desktop re-marked sessions unread, the app could announce a turn that had ended hours earlier (one was 21 hours old). A finished alert now needs a turn written in the last 10 minutes, and the same turn is never announced twice.
+
 ## 0.2.40
 
 **Model names read cleanly.** The desktop's model picker marks some models with an icon ("new"), and that icon came through as a box next to the name, as in "Sonnet 5.5 □". It is dropped now, and switching to such a model finds it by name again (the stray character had stopped it matching).

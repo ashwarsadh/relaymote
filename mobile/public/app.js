@@ -306,9 +306,13 @@ function speakBtn(cls) {
   return TTS_OK && /^msg (assistant|user)/.test(cls) ? '<button class="speak" title="Read aloud" aria-label="Read aloud">🔊</button>' : '';
 }
 
-function clampable(html, text, cls) {
+// The expand/collapse state is keyed by WHO said it and WHEN it began (`id` = the first row's time),
+// never by the text: a reply still being written grows, and a text-keyed bubble that grew in the same
+// update that started a newer one came back CLAMPED, throwing him from mid-reply to its start (g780).
+function clampable(html, text, cls, id) {
   if (text.length <= CLAMP_AT) return `<div class="${cls}">${speakBtn(cls)}${html}</div>`;
-  return `<div class="${cls}">${speakBtn(cls)}<div class="body clamp" data-ck="${hash(text)}">${html}</div>` +
+  const ck = hash(id ? cls.split(' ').slice(0, 2).join(' ') + '@' + id : text);
+  return `<div class="${cls}">${speakBtn(cls)}<div class="body clamp" data-ck="${ck}">${html}</div>` +
          '<button class="more">Show more</button></div>';
 }
 
@@ -413,7 +417,7 @@ setInterval(() => {
 function messageHtml(m) {
   let out = '';
   if (m.role === 'assistant' && (m.text || m.ask || (m.asks && m.asks.length))) {
-    if (m.text) out += clampable(md(m.text), m.text, 'msg assistant');
+    if (m.text) out += clampable(md(m.text), m.text, 'msg assistant', m.ts);
     const askList = m.asks && m.asks.length ? m.asks : (m.ask ? [m.ask] : []);
     for (const ask of askList) {
       const answers = ask.answers || null;
@@ -460,7 +464,7 @@ function messageHtml(m) {
     out += stampHtml({ ...m, role: 'user' });
   }
   else if (m.role === 'user') {
-    out += clampable(md(m.text), m.text, 'msg user' + (m.queued ? ' queued' : ''));
+    out += clampable(md(m.text), m.text, 'msg user' + (m.queued ? ' queued' : ''), m.ts);
     if (m.queued) out += '<div class="queuetag">queued · waiting to be picked up' + sendNowBtn() + '</div>';
     out += stampHtml(m);
   }
@@ -510,7 +514,7 @@ function workHtml(m) {
     out += `<details class="tool${st.running ? ' live' : ''}"><summary><b>${esc(st.verb)}</b>${st.meta ? ' <span class="meta">' + esc(st.meta) + '</span>' : ''}</summary>` +
            `<div class="raw">${esc(t.name)} ${esc(t.input)}</div></details>`;
   }
-  if (m.role === 'result') out += clampable(esc(m.text), m.text, 'result' + (m.error ? ' err' : ''));
+  if (m.role === 'result') out += clampable(esc(m.text), m.text, 'result' + (m.error ? ' err' : ''), m.ts);
   return out;
 }
 
@@ -573,6 +577,19 @@ function blocks(messages) {
 /* The card for a sent file. Media goes through /api/sent-file, which the auth cookie (or the
    Cloudflare Access cookie) authenticates, so an <audio>/<video>/<img> src works without a header;
    the server answers Range, so audio and video seek. Every file also gets an open-in-a-tab link. */
+/* Each render rebuilds the log, so a video or image above him came back with no size and grew
+   again when its metadata loaded, a frame AFTER the view was placed: every stream update in a
+   session with a sent video jumped his page by the video's height and back (g780, measured 29-Sep on
+   his phone: 374 px, every 2.5 s). The first load records the real size, and every later render
+   reserves it. */
+const mediaDims = new Map();
+function learnMedia(e) {
+  const m = e.target, src = m.getAttribute && m.getAttribute('src');
+  const w = m.videoWidth || m.naturalWidth, h = m.videoHeight || m.naturalHeight;
+  if (!src || !w || !h || mediaDims.has(src)) return;
+  mediaDims.set(src, { w, h });
+  htmlCache.clear();   // cached bubbles were built without the size
+}
 function sentFileHtml(t) {
   const sid = state.open || '';
   let out = '<div class="msg sentfile">';
@@ -583,8 +600,9 @@ function sentFileHtml(t) {
     const e = ((name.match(/\.([a-z0-9]+)$/i) || [])[1] || '').toLowerCase();
     out += '<div class="sf">';
     if (/^(wav|mp3|ogg|oga|opus|m4a|aac|flac)$/.test(e)) out += `<audio controls preload="metadata" src="${esc(url)}"></audio>`;
-    else if (/^(mp4|webm|mov)$/.test(e)) out += `<video controls playsinline preload="metadata" src="${esc(url)}"></video>`;
-    else if (/^(png|jpe?g|gif|webp|svg)$/.test(e)) out += `<a href="${esc(url)}" target="_blank" rel="noopener"><img loading="lazy" alt="${esc(name)}" src="${esc(url)}"></a>`;
+    const d = mediaDims.get(url);
+    if (/^(mp4|webm|mov)$/.test(e)) out += `<video controls playsinline preload="metadata"${d ? ` style="aspect-ratio:${d.w} / ${d.h}"` : ''} src="${esc(url)}"></video>`;
+    else if (/^(png|jpe?g|gif|webp|svg)$/.test(e)) out += `<a href="${esc(url)}" target="_blank" rel="noopener"><img loading="lazy" alt="${esc(name)}"${d ? ` width="${d.w}" height="${d.h}"` : ''} src="${esc(url)}"></a>`;
     // A text file opens in Relaymote's own file viewer (a .md one formatted); the href stays as a fallback.
     const view = /^(md|markdown|txt|log|json|csv|py|js|ts|sh|ps1|yml|yaml|xml|sql)$/.test(e) ? ` data-sent="${esc(url)}" data-p="${esc(f)}"` : '';
     out += `<a class="sf-name" href="${esc(url)}"${view} target="_blank" rel="noopener">\ud83d\udcce ${esc(name)}</a></div>`;
@@ -983,6 +1001,8 @@ function observeLog() {
   for (const el of log.children) logRO.observe(el);
 }
 $('log').addEventListener('scroll', noteAnchor, { passive: true });
+$('log').addEventListener('loadedmetadata', learnMedia, true);
+$('log').addEventListener('load', learnMedia, true);
 $('log').addEventListener('pointerdown', (e) => {
   if (!e.target.closest('summary, .more, .speak, details, button')) return;
   userTapAt = Date.now();
@@ -2219,7 +2239,9 @@ async function sendTo(id, text, atts) {
       body: JSON.stringify({ id, text, attachments: atts || [] }) });
     if (r && r.jobId) { state.pending = { sid: id, text, atts, status: 'sending', at: Date.now(), jobId: r.jobId }; }
     toast('Sending to ' + ((state.rawSessions || []).find(x => x.id === id) || {}).title || 'that session');
-    if (state.open === id) { $('input').value = ''; autosize(); scrollToBottomNext = true; renderLog(state.messages, true); }
+    // Sending does not move him (g780, 29-Sep: "after sending msg my screen moved"): at the bottom the
+    // render follows to his bubble anyway; higher up, what he was reading stays where it is.
+    if (state.open === id) { $('input').value = ''; autosize(); renderLog(state.messages, true); }
   } catch (e) { toast(sendError(e.message), true); }
 }
 

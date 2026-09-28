@@ -92,4 +92,42 @@ check(/if \(state\.question \|\| state\._suggLive\) \{ el\.classList\.add\('hidd
 check(/isLive\(\) !== state\._suggLive\) renderSuggestion\(state\.meta\)/.test(app) && /renderLog\(state\.messages \|\| \[\], true\); renderSuggestion\(state\.meta\); \}/.test(app),
   'it comes back when the turn ends (and hides when one starts)');
 
+console.log('--- g780: sending, and a growing reply, never move him (29-Sep 00:55 / 01:05) ---');
+{
+  const sendLine = app.split('\n').find(l => /if \(state\.open === id\) \{ \$\('input'\)\.value = ''/.test(l)) || '';
+  check(sendLine && !/scrollToBottomNext = true/.test(sendLine), 'sending does not force the view to the bottom (at the bottom it follows anyway)', sendLine.trim());
+  const vm = require('vm');
+  const grab = (name) => { const i = app.indexOf('function ' + name + '('); const rest = app.slice(i); return rest.slice(0, rest.search(/\n\}\n/) + 2); };
+  const ctx = { CLAMP_AT: 20, speakBtn: () => '' };
+  vm.createContext(ctx);
+  vm.runInContext(grab('hash') + grab('clampable') + ';globalThis.C = clampable;', ctx);
+  const ck = (h) => (/data-ck="([^"]+)"/.exec(h) || [])[1];
+  const t1 = 'a long reply that is still being written', t2 = t1 + '\n\nand then it grew a second paragraph';
+  const a = ck(ctx.C(t1, t1, 'msg assistant', '2026-09-29T00:50:00Z')), b = ck(ctx.C(t2, t2, 'msg assistant', '2026-09-29T00:50:00Z'));
+  check(a && a === b, 'a reply that grows keeps its clamp key, so an expanded reply stays expanded', [a, b]);
+  check(ck(ctx.C(t1, t1, 'msg user', '2026-09-29T00:50:00Z')) !== a, 'his bubble and the reply at the same second do not share a key');
+  check(ck(ctx.C(t1, t1, 'msg assistant', '2026-09-29T00:51:00Z')) !== a, 'two replies are two keys');
+  check(/clampable\(md\(m\.text\), m\.text, 'msg assistant', m\.ts\)/.test(app), 'the assistant bubble passes its identity');
+}
+{
+  // Measured on his phone: a sent video above him re-entered at no size on every render, so the page
+  // jumped by its height and back every 2.5 s. Once loaded, its size is reserved on every re-render.
+  const vm = require('vm');
+  const grab = (name) => { const i = app.indexOf('function ' + name + '('); const rest = app.slice(i); return rest.slice(0, rest.search(/\n\}\n/) + 2); };
+  const ctx = { state: { open: 's1' }, htmlCache: new Map([['x', 1]]), esc: (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;') };
+  vm.createContext(ctx);
+  vm.runInContext('const mediaDims = new Map();' + grab('learnMedia') + grab('sentFileHtml') + ';globalThis.L = learnMedia; globalThis.S = sentFileHtml;', ctx);
+  const t = { files: ['C:/x/clip.mp4', 'C:/x/shot.png'] };
+  const before = ctx.S(t);
+  check(!/aspect-ratio/.test(before) && !/width="/.test(before), 'control: before any load, no size is invented');
+  const url = (n) => '/api/sent-file?session=s1&path=' + encodeURIComponent('C:/x/' + n);
+  ctx.L({ target: { getAttribute: () => url('clip.mp4'), videoWidth: 1280, videoHeight: 720 } });
+  ctx.L({ target: { getAttribute: () => url('shot.png'), naturalWidth: 800, naturalHeight: 1600 } });
+  const after = ctx.S(t);
+  check(/<video[^>]*style="aspect-ratio:1280 \/ 720"/.test(after), 'after its metadata loads, the video is re-rendered with its shape reserved', after.slice(0, 160));
+  check(/<img[^>]*width="800" height="1600"/.test(after), 'and an image with its size');
+  check(ctx.htmlCache.size === 0, 'cached bubbles built without the size are dropped');
+  check(/addEventListener\('loadedmetadata', learnMedia, true\)/.test(app) && /addEventListener\('load', learnMedia, true\)/.test(app), 'the log learns sizes from load events (capture: they do not bubble)');
+}
+
 H.finish(W);

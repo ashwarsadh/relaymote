@@ -1,5 +1,13 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.37
+
+**Sending a message no longer moves you.** Scrolled up reading, you stay where you are after you send; at the bottom, the view still follows to your message.
+
+**The page stops twitching in sessions with a video or picture.** Every update rebuilt a sent video at a placeholder size and it grew back a moment later, so everything below it jumped (about 370 px, every few seconds while the session worked). Its real size is now kept.
+
+**A long reply no longer snaps back to its start.** When a reply you had open grew in the same moment a newer message arrived, it came back collapsed and the view jumped to its first line. An opened reply now stays open while it grows.
+
 ## 0.2.36
 
 **The suggested reply appears only when the session is idle**, as in the desktop app. While a session is working, the "Suggested" strip and its text are hidden; they come back when the turn ends.

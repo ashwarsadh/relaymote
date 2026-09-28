@@ -1,5 +1,11 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.36
+
+**The suggested reply appears only when the session is idle**, as in the desktop app. While a session is working, the "Suggested" strip and its text are hidden; they come back when the turn ends.
+
+**`~/` file links open.** A link such as `~/.claude/notes.md` now opens from your home folder (owner only; shared users get no `~`). Sign-in and key files (`.credentials.json`, `.env`, `*.pem`, `id_rsa`…) are never shown in the file viewer, wherever they are.
+
 ## 0.2.35
 
 **No more "queued" ghost above a message that was delivered.** If the app caught a message in the instant between being queued and being picked up, and you were scrolled up, that "queued · waiting to be picked up" copy could stay on screen above the delivered one, with a live "send now". It is now removed as soon as the message arrives, and never kept from an older page.

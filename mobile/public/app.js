@@ -763,6 +763,7 @@ function jumpToBottom() {
 function renderLog(messages, force) {
   messages = reconcileQueued(messages);
   state.messages = messages;
+  if (state.open && state._suggLive !== undefined && isLive() !== state._suggLive) renderSuggestion(state.meta);
   renderLive();
   const sig = messages.map(keyOf).join('|');
   if (!force && sig === lastSig) return;
@@ -1234,7 +1235,10 @@ function renderStats() {
 
 function renderSuggestion(meta) {
   const el = $('suggestion');
-  if (state.question) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  state._suggLive = isLive();
+  // Like the desktop: a suggestion is offered only when the session is idle and its turn has ended
+  // (29-Sep: the button and its text showed while the session was still working).
+  if (state.question || state._suggLive) { el.classList.add('hidden'); el.innerHTML = ''; return; }
   const s = state.liveSuggestion || (meta && meta.suggestion);
   el.classList.remove('hidden');
   el.innerHTML = s
@@ -1444,7 +1448,7 @@ function connectStream(watch) {
       const nowRunning = !!(row && row.running);
       if (wasRunning && !nowRunning && !$('sheet').classList.contains('hidden')) renderTier(state.meta);
       state._tierWasRunning = nowRunning;
-      if (row && state.meta.running !== !!row.running) { state.meta.running = !!row.running; renderLive(); renderLog(state.messages || [], true); }
+      if (row && state.meta.running !== !!row.running) { state.meta.running = !!row.running; renderLive(); renderLog(state.messages || [], true); renderSuggestion(state.meta); }
     }
     if (!state.folder && !state.q) renderSessions(d.sessions);
     if (state.boot) {

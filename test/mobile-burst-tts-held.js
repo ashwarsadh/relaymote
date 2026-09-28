@@ -86,4 +86,10 @@ console.log('--- a queued placeholder never outlives its delivery (29-Sep screen
   check(/messages = reconcileQueued\(messages\);/.test(app), 'every render reconciles');
 }
 
+console.log('--- the suggestion is offered only when the session is idle (29-Sep) ---');
+check(/if \(state\.question \|\| state\._suggLive\) \{ el\.classList\.add\('hidden'\)/.test(app) && /state\._suggLive = isLive\(\);/.test(app),
+  'while the session works, the suggested-reply strip is hidden');
+check(/isLive\(\) !== state\._suggLive\) renderSuggestion\(state\.meta\)/.test(app) && /renderLog\(state\.messages \|\| \[\], true\); renderSuggestion\(state\.meta\); \}/.test(app),
+  'it comes back when the turn ends (and hides when one starts)');
+
 H.finish(W);

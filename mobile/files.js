@@ -56,12 +56,17 @@ function siblingMatches(bare, roots) {
   return [...hits];
 }
 
-function readFile(ref, { roots = [], cwd = null, siblings = false } = {}) {
+// Never shown on a phone, whatever folder it sits in: a sign-in or key file.
+const SECRET_RX = /(^|[._-])(credentials?|secrets?|tokens?)([._-]|$)|^\.env(\..*)?$|\.(pem|key|p12|pfx)$|^id_(rsa|ed25519|ecdsa)/i;
+
+function readFile(ref, { roots = [], cwd = null, siblings = false, home = null } = {}) {
   const raw = String(ref || '').trim().replace(/^['"`]|['"`]$/g, '');
   if (!raw) return { ok: false, error: 'NO_PATH' };
 
   const m = /^(.*?):(\d+)(?::\d+)?$/.exec(raw);
-  const bare = m && !/^[A-Za-z]:$/.test(m[1]) ? m[1] : raw;
+  let bare = m && !/^[A-Za-z]:$/.test(m[1]) ? m[1] : raw;
+  // `~/.claude/x.md` is how sessions name files in the home folder (owner only: `home` is null otherwise).
+  if (home && /^~(?=$|[\/])/.test(bare)) bare = path.join(home, bare.slice(1));
   const line = m && !/^[A-Za-z]:$/.test(m[1]) ? Number(m[2]) : null;
 
   const candidates = [];
@@ -86,6 +91,9 @@ function readFile(ref, { roots = [], cwd = null, siblings = false } = {}) {
     else if (hits.length > 1) return { ok: false, error: 'AMBIGUOUS', path: bare, candidates: hits.slice(0, 10),
                                        message: 'More than one project has a file at that path; open it by its full path.' };
   }
+
+  if (SECRET_RX.test(path.basename(target))) return { ok: false, error: 'PRIVATE', path: target,
+    message: 'That looks like a sign-in or key file, so it is not shown here.' };
 
   let st;
   try { st = fs.statSync(target); }

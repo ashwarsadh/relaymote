@@ -845,8 +845,9 @@ async function handle(req, res) {
     const sess = sid ? sessions.get(sid) : null;
     const roots = isSubuser(identity)
       ? [sess && sess.cwd].filter(Boolean)
-      : [...new Set(sessions.index().list.map(x => x.cwd).filter(Boolean))].concat([UPLOADS]);
-    const out = readFile(url.searchParams.get('path'), { roots, cwd: sess && sess.cwd, siblings: !isSubuser(identity) });
+      : [...new Set(sessions.index().list.map(x => x.cwd).filter(Boolean))].concat([UPLOADS, path.join(os.homedir(), '.claude')]);
+    const out = readFile(url.searchParams.get('path'), { roots, cwd: sess && sess.cwd, siblings: !isSubuser(identity),
+                                                          home: isSubuser(identity) ? null : os.homedir() });
     return json(res, out.ok ? 200 : 404, out);
   }
 

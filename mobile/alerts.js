@@ -102,6 +102,9 @@ function runCommand(cmd, evt) {
 }
 
 async function viaChannel(s, evt) {
+  // The single send door for every non-push channel. A test arms RELAYMOTE_NO_SEND and a send RAISES
+  // here -- never a fake success -- so a send path added later is covered the day it is written.
+  if (process.env.RELAYMOTE_NO_SEND && s.kind !== 'off') throw new Error('RELAYMOTE_NO_SEND: would have sent via ' + s.kind);
   if (s.kind === 'ntfy') {
     if (!s.url) return { ok: false, error: 'no ntfy topic URL set' };
     const h = { 'Content-Type': 'text/plain; charset=utf-8', Title: headerSafe(String(evt.title || 'Relaymote').slice(0, 120)),
@@ -159,6 +162,46 @@ async function deliver(evt, log = () => {}) {
   return { push: pushed, backup };
 }
 
+/**
+ * One line for the log, written AFTER the send from what actually happened, plus whether anything
+ * reached the owner. Never from push.count() taken before sending: a push that prunes the last phone
+ * would read as delivered.
+ */
+function outcome(r) {
+  const p = r.push || {}, parts = [];
+  if (p.subscribed) {
+    const res = p.results || [], name = x => `${x.status || x.error} ${x.host}`;
+    const gone = res.filter(x => x.status === 404 || x.status === 410).map(name).join(', ');
+    const bad = res.filter(x => !(x.status >= 200 && x.status < 300) && x.status !== 404 && x.status !== 410).map(name).join(', ');
+    parts.push(p.error ? `web push FAILED: ${p.error}`
+      : `web push sent ${p.sent}/${res.length || p.subscribed}` +
+        (p.gone ? `; PRUNED ${p.gone} (${gone})` : '') + (p.failed ? `; failed ${p.failed} (${bad})` : ''));
+  }
+  const b = r.backup;
+  if (b) parts.push(b.skipped ? `backup skipped: ${b.skipped}` : b.ok ? `backup ${b.kind} ok` : `backup ${b.kind} FAILED`);
+  const delivered = (p.sent || 0) > 0 || !!(b && b.ok);
+  return { delivered, text: parts.join('; ') };
+}
+
+/**
+ * The health alarm's channel (mobile/pushhealth.js): notifications.healthAlarm, or the backup channel
+ * when that says 'backup' (the default). Not rate-capped: the caller sends only on a change of state.
+ */
+function alarmChannel() {
+  const n = config.get().notifications || {};
+  const h = n.healthAlarm || {};
+  const kind = h.kind || 'backup';
+  if (kind === 'backup') { const b = settings(); return b.kind === 'off' ? null : b; }
+  if (!KINDS.includes(kind) || kind === 'off') return null;
+  return { kind, url: String(h.url || '').trim(), command: String(h.command || '').trim() };
+}
+async function alarm(msg) {
+  const ch = alarmChannel();
+  if (!ch) return { ok: false, skipped: 'no alarm channel' };
+  const evt = { kind: 'health', title: msg.title, body: msg.body, tag: 'relaymote-push-health', url: '/' };
+  return { ...(await viaChannel(ch, evt)), kind: ch.kind };
+}
+
 /** One line for logs and the app's diagnostics: where alerts will go right now. */
 function route() {
   let n = 0; try { n = push.count(); } catch {}
@@ -204,5 +247,5 @@ function accountSwitchText(cfg = config.get(), who = {}) {
       : 'Recorded. Automatic sync is off — open Accounts and press Sync to copy them now.' };
 }
 
-module.exports = { deliver, sendBackup, settings, route, underCap, accountSwitchText, KINDS, WINDOW_MS, DEFAULT_CAP,
+module.exports = { deliver, sendBackup, settings, route, outcome, alarm, alarmChannel, underCap, accountSwitchText, KINDS, WINDOW_MS, DEFAULT_CAP,
                    _setPush: (p) => { push = p; }, _resetCap: () => { recent.length = 0; } };

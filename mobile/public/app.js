@@ -2679,7 +2679,7 @@ const sameKey = (sub, key) => {
 };
 
 async function subscribePush(quiet) {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return { ok: false, reason: 'unsupported' };
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') return { ok: false, reason: 'unsupported' };
   if (Notification.permission === 'denied') return { ok: false, reason: 'denied' };
   if (quiet && Notification.permission !== 'granted') return { ok: false, reason: 'not-granted' };
   if (!quiet) {
@@ -3164,10 +3164,16 @@ const tmark = (k) => { try { window.__batonT[k] = Math.round(performance.now());
     } catch {}
     connectStream(null);
     renderAccountSwitch();
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
+    // Re-subscribe silently on every open, with no capability guard: subscribePush answers
+    // 'unsupported' itself, and that (a plain-http origin) is exactly the case worth reporting. The
+    // result goes to the SERVER, so "no phone subscribed" on the desktop can say why.
+    {
+      const report = (r) => api('/api/push/state', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ok: !!r.ok, reason: r.reason || '', detail: r.detail || '',
+          permission: (window.Notification && Notification.permission) || '', secure: !!window.isSecureContext }) }).catch(() => {});
       subscribePush(true)
-        .then(r => { if (!r.ok && r.reason !== 'not-granted' && r.reason !== 'denied') console.warn('push re-subscribe:', r); })
-        .catch(e => console.warn('push re-subscribe failed:', e && e.message));
+        .then(r => { report(r); if (!r.ok && r.reason !== 'not-granted' && r.reason !== 'denied') console.warn('push re-subscribe:', r); })
+        .catch(e => { report({ ok: false, reason: 'error', detail: e && e.message }); console.warn('push re-subscribe failed:', e && e.message); });
     }
     // Boot's LAST step is a navigation, and boot ends seconds after the cached list is on screen and
     // tappable (up to ~18 s measured on a phone). So it yields to anything done since: a sheet already

@@ -21,16 +21,33 @@ function subjectStatus() {
   return { subject: subject(), set, valid: validSubject(set), placeholder: !validSubject(set) };
 }
 
+// load() used to return null for ANY failure, and keys() read null as "no store yet" and minted a new
+// VAPID key with no subscriptions -- so one unreadable read (a torn write, a sharing violation from a
+// backup or antivirus scan) silently unsubscribed every phone AND invalidated the key they hold. Only
+// a MISSING file may start over; a present-but-unreadable one is retried, then refused.
 function load() {
-  try { return JSON.parse(fs.readFileSync(STORE, 'utf8')); } catch { return null; }
+  let lastErr;
+  for (let i = 0; i < 3; i++) {
+    try { return JSON.parse(fs.readFileSync(STORE, 'utf8')); }
+    catch (e) {
+      if (e.code === 'ENOENT') return null;
+      lastErr = e;
+      const t = Date.now() + 20; while (Date.now() < t) { /* the writer may be mid-rename */ }
+    }
+  }
+  throw new Error('push.json is present but unreadable (' + lastErr.message + '); refusing to regenerate it');
 }
+// Temp file + rename, so a reader never sees a half-written store.
 function save(d) {
-  fs.writeFileSync(STORE, JSON.stringify(d, null, 2), { mode: 0o600 });
+  const tmp = STORE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(d, null, 2), { mode: 0o600 });
+  fs.renameSync(tmp, STORE);
 }
 
 function keys() {
   let d = load();
   if (d && d.vapid && d.vapid.publicKey) return d;
+  if (d) throw new Error('push.json has no VAPID key; refusing to replace it (it may hold subscriptions)');
   const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
   const spki = publicKey.export({ type: 'spki', format: 'der' });
   const raw = spki.subarray(spki.length - 65);
@@ -151,21 +168,31 @@ function post(endpoint, payload) {
   });
 }
 
+// Returns what ACTUALLY happened to each subscription. Callers log sent / pruned / failed from this,
+// never from count() taken before the send: that is how a push that pruned the last phone was once
+// logged as delivered, and every alert after it went nowhere without a word.
 async function send(data) {
   const d = keys();
   const subs = d.subs || [];
-  if (!subs.length) return { sent: 0, gone: 0 };
+  if (!subs.length) return { sent: 0, gone: 0, failed: 0, results: [] };
   const text = JSON.stringify(data);
-  let sent = 0, gone = 0;
+  let sent = 0, gone = 0, failed = 0;
+  const results = [];
   for (const s of subs) {
+    let host = '?';
+    try { host = new URL(s.endpoint).host; } catch {}
     let payload;
     try { payload = encrypt(text, s.keys.p256dh, s.keys.auth); }
-    catch { continue; }
+    catch (e) { failed++; results.push({ host, status: 0, error: 'encrypt: ' + e.message }); continue; }
     const r = await post(s.endpoint, payload);
+    results.push({ host, status: r.status, error: r.error || null });
     if (r.ok) sent++;
+    // ONLY a 404/410 removes a subscription: the browser threw it away. 5xx, 429, a timeout or a
+    // network error is transient, and the subscription is kept for the next alert.
     else if (r.status === 404 || r.status === 410) { drop(s.endpoint); gone++; }
+    else failed++;
   }
-  return { sent, gone };
+  return { sent, gone, failed, results };
 }
 
 module.exports = { publicKey, subscribe, drop, count, send, keys, subject, subjectStatus, audience, vapidJwt, PLACEHOLDER_SUBJECT };

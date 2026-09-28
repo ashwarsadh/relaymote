@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.28
+
+**Phone alerts can no longer stop silently.** If every phone's push subscription is gone for 30 minutes, Relaymote now says so once over your backup channel (or `notifications.healthAlarm`), and again when a phone is back; while it lasts it repeats once a day, never more. Each alert is logged with what actually happened (`web push sent 1/1`, pruned or failed phones by name), and one that reached no phone is logged as DROPPED instead of looking delivered. A push service that answers 5xx, 429 or times out no longer costs you the subscription (only 404/410 remove one), and an unreadable `push.json` is refused instead of being replaced by an empty one, which used to unsubscribe every phone. The app now tells the desktop what happened when it re-subscribes on open.
+
 ## 0.2.27
 
 **The rename is complete.** Everything now carries the name Relaymote: the `relaymote` command, the `relaymote_*` tools (were `baton_*`), the data folder `~/.relaymote` (was `~/.baton`), the install folder `Programs\Relaymote`, the scheduled tasks "Relaymote" and "Relaymote Watchdog", and the environment variables `RELAYMOTE_*`. An install from before this release does not move by itself: run `scripts\migrate-from-baton.ps1 -Installer <this installer>`, which moves the data, registers the new names, checks the new copy runs, and only then removes the old ones. Releases no longer carry a Baton-Setup copy. GUI dispatch now matches the model and effort exactly ("Opus 5" is never taken for "Opus 5.5", "high" never for "Extra high").

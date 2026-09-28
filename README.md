@@ -279,6 +279,7 @@ Everything is in **Settings** (the ⚙ in the session list, or *Settings* in the
 | Inbox | on | Things only you can do: an append-only, numbered inbox (`relaymote inbox`, `relaymote_inbox_add`). It stays passive until something adds to it ([docs/BOARD.md](docs/BOARD.md#the-inbox)) |
 | Inbox auto-resolve | off | Moves an inbox item to *probably handled* when there is evidence for it (your tap, for example). It never goes straight to done, never touches a pinned item, and never touches money, deletion or outward items on weak evidence |
 | Backup alerts | off | Settings › Notifications: send alerts via ntfy, a webhook or a local command when push reaches no phone (e.g. Same Wi-Fi) |
+| Push-health alarm | backup channel | `notifications.healthAlarm` in settings.json (`backup` | `off` | `ntfy` | `webhook` | `command`): once a phone has subscribed, if none is left for 30 minutes Relaymote says so once over this channel, and again when a phone is back (one reminder a day while it lasts, never a heartbeat) |
 | Finish-the-task hook | off | A Claude Code Stop hook: a session may not end its turn on a question it can answer itself (`relaymote hooks install`) |
 | Transcript index | on | Read transcripts into the project index (incremental, time-budgeted): prompts, pending asks and buried questions, fleet tree, context estimate — **a size estimate, never a liveness signal** (`relaymote index help`; tune under `index` in settings) |
 | Digests | off | Keep a lean per-session digest (your turns + answers, no tool traffic) for masters to read by byte offset |

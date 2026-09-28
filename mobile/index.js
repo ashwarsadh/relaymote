@@ -13,6 +13,7 @@ const registry = require('../lib/registry');
 const orch = require('../lib/orchestrator');
 const push = require('./push');
 const alerts = require('./alerts');
+const pushHealth = require('./pushhealth');   // says so when no phone can receive an alert
 const access = require('./access');
 const { newSession } = require('./newsession');
 const { answerQuestion } = require('./answer');
@@ -307,6 +308,15 @@ function attentionState(s) {
   return null;
 }
 
+// Every alert's outcome is logged AFTER the send, from what the send reported. An alert that reached
+// nobody is logged DROPPED and counted, so the push-health alarm can say how many were lost.
+function logAlert(label, r) {
+  const o = alerts.outcome(r);
+  if (o.delivered) return log(`notify: ${label} -> ${o.text}`);
+  log(`notify: DROPPED ${label}: ${o.text || 'no phone subscribed and no backup channel'}`);
+  try { pushHealth.noteDropped(); } catch (e) { log('push-health: ' + e.message); }
+}
+
 async function notifyAttention(all) {
   const flagged = all.map(s => [s, attentionState(s)]).filter(([, st]) => st);
   const ids = new Set(flagged.map(([s]) => s.id));
@@ -335,15 +345,14 @@ async function notifyAttention(all) {
       tag: 'sess-' + s.id,
       url: '/?s=' + encodeURIComponent(s.id),
     };
-    log(`notify: ${st} "${String(s.title || s.id).slice(0, 48)}"` +
-        ` -> ${alerts.route()}`);
+    const label = `${st} "${String(s.title || s.id).slice(0, 48)}"`;
 
     for (const c of clients) {
       if (isSubuser(c.identity) && !c.identity.sessions.has(s.id)) continue;
       sseSend(c, 'alert', evt);
     }
 
-    await alerts.deliver(evt, log);
+    logAlert(label, await alerts.deliver(evt, log));
   }
   for (const s of all) wasRunning.set(s.id, !!s.running);
 }
@@ -377,7 +386,7 @@ async function noticeAccountSwitch() {
     if (q) for (const c of clients) { if (!isSubuser(c.identity)) sseSend(c, 'accountswitch', q); }
     const ncfg = config.get().notifications || {};
     if (ncfg.enabled === false) { log('account switch: alerts are off; card is in the app only'); return; }
-    await alerts.deliver(evt, log);
+    logAlert('account switch', await alerts.deliver(evt, log));
   } catch (e) {
     log('account-switch check failed: ' + e.message);
   }
@@ -1565,8 +1574,27 @@ async function handle(req, res) {
     if (p === '/api/chip/dismiss') {
       return uiJob(res, 'chipdismiss', () => desktop.dismissTask(body), { id: body.sessionId });
     }
-    if (p === '/api/push/subscribe') { push.subscribe(body); return json(res, 200, { ok: true }); }
-    if (p === '/api/push/test') { await push.send({ title: 'Relaymote', body: 'Test notification' }); return json(res, 200, { ok: true }); }
+    if (p === '/api/push/subscribe') {
+      const n = push.subscribe(body);
+      let host = '?'; try { host = new URL(body.endpoint).host; } catch {}
+      log(`push: subscribed ${host} (${n} now)`);
+      return json(res, 200, { ok: true, subs: n });
+    }
+    if (p === '/api/push/test') {
+      const r = await push.send({ title: 'Relaymote', body: 'Test notification' });
+      log(`notify: test -> ${alerts.outcome({ push: { ...r, subscribed: (r.results || []).length } }).text || 'no phone subscribed'}`);
+      return json(res, 200, { ok: r.sent > 0, sent: r.sent, subs: push.count() });
+    }
+    // What the app's silent re-subscribe on open concluded. It used to reach only the phone's console,
+    // so when no phone was subscribed nothing on this side could say whether the app had been opened
+    // at all, or opened and refused (permission, insecure origin, no service worker).
+    if (p === '/api/push/state') {
+      const b = body || {};
+      log(`push: app open reports ok=${!!b.ok} reason=${String(b.reason || '').slice(0, 40)}` +
+          ` permission=${String(b.permission || '').slice(0, 12)} secure=${!!b.secure}` +
+          (b.detail ? ` detail=${String(b.detail).slice(0, 80)}` : '') + ` (server subs ${push.count()})`);
+      return json(res, 200, { ok: true, subs: push.count() });
+    }
     if (p === '/api/notify/test-backup') {
       const r = await alerts.sendBackup({ kind: 'test', title: 'Relaymote', body: 'Test alert from Relaymote — the backup channel works.', tag: 'baton-test', url: '/' }, { test: true });
       return json(res, 200, { ok: !!r.ok, result: r });
@@ -1723,6 +1751,20 @@ function start() {
   const sdT = setInterval(refreshStartDefaults, 5 * 60000);
   if (sdT.unref) sdT.unref();
   if (ob.unref) ob.unref();
+  // Every 5 min: can any phone receive an alert? None for 30 min -> one alarm over
+  // notifications.healthAlarm; a phone subscribing again -> one "back on". See pushhealth.js.
+  const pushHealthTick = async () => {
+    try {
+      let seed = null;
+      try { seed = fs.statSync(path.join(config.MOBILE, 'push.json')).mtimeMs; } catch {}
+      await pushHealth.tick({ count: push.count(), send: alerts.alarm, log,
+                              enabled: (config.get().notifications || {}).enabled !== false, seedZeroSince: seed });
+    } catch (e) { log('push-health: ' + e.message); }
+  };
+  const phT = setInterval(pushHealthTick, 5 * 60000);
+  if (phT.unref) phT.unref();
+  const ph0 = setTimeout(pushHealthTick, 60000);
+  if (ph0.unref) ph0.unref();
 
   const ts = tailscaleAddrs()[0];
   try { tunnel.apply(); } catch (e) { log('tunnel: ' + e.message); }

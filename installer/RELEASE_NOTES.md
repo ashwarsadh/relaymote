@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.35
+
+**No more "queued" ghost above a message that was delivered.** If the app caught a message in the instant between being queued and being picked up, and you were scrolled up, that "queued · waiting to be picked up" copy could stay on screen above the delivered one, with a live "send now". It is now removed as soon as the message arrives, and never kept from an older page.
+
 ## 0.2.34
 
 **The chat stops moving under you.** At the bottom, a new message no longer leaves you looking at the middle of it (content that finished laying out after the scroll used to push the newest text below the edge). Scrolled up to read, nothing moves what you are reading: not new messages, not rows settling above you, not a bar appearing at the top. Tapping Show more or a Working row keeps the thing you tapped where your finger is.

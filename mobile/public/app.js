@@ -718,6 +718,16 @@ function restoreAnchor(log, list, byScreen) {
    Unless the reader is at the bottom, keep what is loaded above the tail and splice the tail on where
    the two overlap. At the bottom the tail alone is right: nothing above is on screen, and it keeps the
    list bounded. */
+/* A queued placeholder (the server's `queued` extra) whose text has since arrived as a real message
+   is stale: drop it, so it can never sit above its own delivered copy with a live "send now". */
+function reconcileQueued(msgs) {
+  if (!msgs || !msgs.some(m => m.queued !== undefined)) return msgs;
+  const nn = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  const arrived = msgs.filter(m => m.role === 'user' && m.queued === undefined);
+  return msgs.filter(m => m.queued === undefined ||
+    !arrived.some(a => nn(a.text) === nn(m.text) && String(a.ts || '') >= String(m.ts || '')));
+}
+
 function applyTail(tail, startByte, hasMore) {
   const cur = state.messages || [];
   const page = () => { if (startByte !== undefined && startByte !== null) { state.oldestByte = startByte; state.hasMore = !!hasMore; } };
@@ -729,7 +739,9 @@ function applyTail(tail, startByte, hasMore) {
     let same = true;
     for (let k = 1; k < 4 && j + k < cur.length && k < tail.length; k++) if (id(cur[j + k]) !== id(tail[k])) { same = false; break; }
     // Older pages stay, so oldestByte / hasMore still describe the top of what is loaded.
-    if (same) return cur.slice(0, j).concat(tail);
+    // A queued placeholder is only true in the LATEST window: one kept in the older prefix outlived its
+    // delivery (29-Sep: 'queued · waiting' sat above the delivered copy for an hour). Drop them there.
+    if (same) return cur.slice(0, j).filter(m => m.queued === undefined).concat(tail);
   }
   page(); return tail;    // no overlap: more arrived than one window holds; the tail is the truth
 }
@@ -749,6 +761,7 @@ function jumpToBottom() {
 }
 
 function renderLog(messages, force) {
+  messages = reconcileQueued(messages);
   state.messages = messages;
   renderLive();
   const sig = messages.map(keyOf).join('|');

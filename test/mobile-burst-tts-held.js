@@ -65,4 +65,25 @@ check(/restoreAnchor\(log, heldAnchor, true\)/.test(app) && /screen: r\.top/.tes
 check(/if \(typeof observeLog === 'function'\) observeLog\(\);/.test(app), 'each render re-observes the new rows');
 check(/Date\.now\(\) - lastDoneBuzz < 60000/.test(app), 'in the open app, a burst of "Finished" banners buzzes once a minute at most');
 
+console.log('--- a queued placeholder never outlives its delivery (29-Sep screenshot) ---');
+{
+  const vm = require('vm');
+  const grab = (name) => { const i = app.indexOf('function ' + name + '('); const rest = app.slice(i); return rest.slice(0, rest.search(/\n\}\n/) + 2); };
+  const ctx = { state: {}, scrollToBottomNext: false, logAtBottom: false };
+  vm.createContext(ctx);
+  vm.runInContext(grab('reconcileQueued') + grab('applyTail') + ';globalThis.R = reconcileQueued; globalThis.A = applyTail;', ctx);
+  const text = 'I think you are confused. The cache is 60 minutes long';
+  // What the phone held: the placeholder caught in the 15 ms before delivery, then later rows.
+  const held = [{ role: 'assistant', ts: '18:00', text: 'a' }, { role: 'user', ts: '18:05:22.433', text, queued: true },
+                { role: 'user', ts: '18:05:22.448', text }, { role: 'assistant', ts: '18:06', text: 'b' }, { role: 'assistant', ts: '18:07', text: 'c' }];
+  check(ctx.R(held).filter(m => m.text === text).length === 1 && !ctx.R(held).some(m => m.queued), 'a placeholder whose text has arrived is dropped');
+  ctx.state.messages = [{ role: 'assistant', ts: '17:59', text: 'z' }, { role: 'user', ts: '18:05:22.433', text, queued: true },
+                        { role: 'assistant', ts: '18:06', text: 'b' }, { role: 'assistant', ts: '18:07', text: 'c' }];
+  const merged = ctx.A([{ role: 'assistant', ts: '18:06', text: 'b' }, { role: 'assistant', ts: '18:07', text: 'c' }, { role: 'assistant', ts: '18:08', text: 'd' }]);
+  check(!merged.some(m => m.queued) && merged.length === 4, 'scrolled up, a later window no longer carries a stale placeholder in the kept prefix', merged.map(m => m.ts));
+  const stillQueued = ctx.R([{ role: 'assistant', ts: '18:00', text: 'a' }, { role: 'user', ts: '18:01', text: 'not yet delivered', queued: true }]);
+  check(stillQueued.some(m => m.queued), 'a message that is genuinely still queued keeps its placeholder');
+  check(/messages = reconcileQueued\(messages\);/.test(app), 'every render reconciles');
+}
+
 H.finish(W);

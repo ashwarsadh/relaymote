@@ -698,8 +698,65 @@ async function searchTranscripts(query, { limit = 30, maxSessions = 250, tailByt
   return { ok: true, hits: hits.slice(0, limit), scanned, truncated, ms: Date.now() - started };
 }
 
+/* Find text inside ONE session, across its whole transcript (g784): what he said, what peers said,
+   and the replies -- never tool input or output. Each hit carries the byte where its line starts, so
+   the app can page older history in until that hit is loaded. Oldest first. */
+async function searchSession(sess, query, { limit = 500, deadlineMs = 8000 } = {}) {
+  const q = String(query || '').trim().toLowerCase();
+  if (q.length < 2) return { ok: false, error: 'query must be at least 2 characters', hits: [] };
+  const file = transcriptPath(sess);
+  if (!file) return { ok: false, error: 'no transcript on disk', hits: [] };
+  const started = Date.now();
+  const hits = [];
+  let occurrences = 0, truncated = false, pos = 0, rest = Buffer.alloc(0);
+  const scan = (buf, base) => {
+    let from = 0;
+    for (;;) {
+      const nl = buf.indexOf(10, from);
+      if (nl < 0) return from;
+      const lineStart = base + from;
+      const line = buf.toString('utf8', from, nl);
+      from = nl + 1;
+      if (!line.toLowerCase().includes(q)) continue;      // cheap prefilter on the raw line
+      let row; try { row = JSON.parse(line); } catch { continue; }
+      const f = flatten(row);
+      if (!f || !(f.role === 'user' || f.role === 'peer' || (f.role === 'assistant' && f.text))) continue;
+      const text = String(f.text || '');
+      const low = text.toLowerCase();
+      let at = low.indexOf(q), n = 0;
+      if (at < 0) continue;
+      const first = at;
+      while (at >= 0) { n++; at = low.indexOf(q, at + q.length); }
+      occurrences += n;
+      if (hits.length < limit) {
+        const a = Math.max(0, first - 60);
+        hits.push({ ts: f.ts || null, role: f.role, byte: lineStart, n,
+                    snippet: (a ? '…' : '') + text.slice(a, first + q.length + 90).replace(/\s+/g, ' ').trim() });
+      } else truncated = true;
+    }
+  };
+  let fh;
+  try {
+    fh = await fs.promises.open(file, 'r');
+    const chunk = Buffer.allocUnsafe(1 << 20);
+    for (;;) {
+      if (Date.now() - started > deadlineMs) { truncated = true; break; }
+      const { bytesRead } = await fh.read(chunk, 0, chunk.length, pos);
+      if (!bytesRead) break;
+      const buf = Buffer.concat([rest, chunk.subarray(0, bytesRead)]);
+      const base = pos - rest.length;
+      const used = scan(buf, base);
+      rest = Buffer.from(buf.subarray(used));
+      pos += bytesRead;
+    }
+    if (rest.length) scan(Buffer.concat([rest, Buffer.from([10])]), pos - rest.length);
+  } catch (e) { return { ok: false, error: e.message, hits: [] }; }
+  finally { if (fh) await fh.close().catch(() => {}); }
+  return { ok: true, q, hits, occurrences, truncated, ms: Date.now() - started };
+}
+
 module.exports = { unwrapForTest: unwrap,
   refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasks, transcriptStamp, transcriptPath, slugFor,
-  searchTranscripts,
+  searchTranscripts, searchSession,
   STORE, PROJECTS,
 };

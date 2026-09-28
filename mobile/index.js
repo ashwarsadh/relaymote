@@ -1221,6 +1221,15 @@ async function handle(req, res) {
     });
   }
 
+  if (p === '/api/session-search') {
+    await sessions.refresh();
+    const sess = sessions.get(url.searchParams.get('id') || '');
+    // Owner only: a scoped sub-user never reaches here (not in READ_OK above).
+    if (!sess) return json(res, 404, { ok: false, error: 'no such session' });
+    const r = await sessions.searchSession(sess, url.searchParams.get('q') || '');
+    return json(res, r.ok ? 200 : 400, r);
+  }
+
   if (p.startsWith('/api/session/')) {
     const id = decodeURIComponent(p.slice('/api/session/'.length));
     await sessions.refresh();

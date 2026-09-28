@@ -74,10 +74,18 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
       <div class="bar-state"><span class="dot" id="chat-state" aria-hidden="true"></span><div class="bar-title" id="chat-title">Relaymote</div></div>
       <button class="bar-sub" id="chat-sub" aria-label="Session settings"></button>
     </div>
+    <button id="btn-find" class="icon-btn" title="Find in this session" aria-label="Find in this session">&#128269;</button>
     <button id="btn-work" class="icon-btn" title="Show working" aria-label="Toggle working steps">👁</button>
     <button id="btn-chips" class="icon-btn" title="Background tasks" aria-label="Background tasks">&#9635;</button>
     <button id="btn-cfg" class="icon-btn" aria-label="Session settings">⋯</button>
   </header>
+  <div id="findbar" class="findbar" role="search" hidden>
+    <input id="find-q" type="search" placeholder="Find in this session" autocomplete="off" enterkeyhint="search" aria-label="Find in this session">
+    <span id="find-n" class="find-n" aria-live="polite"></span>
+    <button id="find-prev" class="icon-btn" type="button" aria-label="Earlier match">&#9650;</button>
+    <button id="find-next" class="icon-btn" type="button" aria-label="Later match">&#9660;</button>
+    <button id="find-x" class="icon-btn" type="button" aria-label="Close find">&#10005;</button>
+  </div>
 
   <div class="log" id="log">
     <div class="empty" id="pick-hint">Open the menu to pick a session.</div>

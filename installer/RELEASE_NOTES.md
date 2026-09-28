@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.38
+
+**Find inside a session.** Tap 🔍 in the top bar and type: every match in your messages, the replies and messages from other sessions is highlighted (tool steps are not searched). ▲ goes to older matches and ▼ to newer ones; Enter does the same. The search covers the whole session on the desktop, so a match in history the phone has not loaded yet is found too: ▲ loads older messages until it reaches it. The count ("3/17") counts those as well. Opening the bar does not move what you are reading.
+
 ## 0.2.37
 
 **Sending a message no longer moves you.** Scrolled up reading, you stay where you are after you send; at the bottom, the view still follows to your message.

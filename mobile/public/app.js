@@ -955,6 +955,7 @@ function renderLog(messages, force) {
   else if (!restoreAnchor(log, anchor)) setScrollTop(log, keepTop);
   heldAnchor = logAtBottom ? null : (anchor || readingAnchor(log));
   if (typeof observeLog === 'function') observeLog();
+  findRemark();
   renderJump();
 }
 
@@ -3434,4 +3435,185 @@ if (TTS_OK) {
     ttsStart(b.closest('.msg'));
   });
   for (const ev of ['touchmove', 'wheel']) $('log').addEventListener(ev, () => { tts.userScrollAt = Date.now(); }, { passive: true });
+}
+
+/* Find in this session (g784: "ability to search inside a session if I want to find a text").
+   The desktop searches the WHOLE transcript (/api/session-search: his messages, peers', the replies;
+   never tool steps), so a match in history not loaded yet is still found. Here every match in what is
+   loaded is marked; ▲ walks to older ones, paging history in until the next older hit is on screen;
+   ▼ walks back toward now. The marks are re-applied after every render, and the bar is an overlay,
+   so opening it or a new message arriving never moves what he is reading (g780). */
+// `var`: renderLog can run before this line does (a const would be in its dead zone then).
+var finder = { q: '', sid: null, hits: [], occ: 0, truncated: false, cur: null, seq: 0, timer: 0 };
+const FIND_SKIP = 'button, .tick, .speak, .more, mark, script, style, .work, .stamp';
+
+function findMarks() { return [...$('log').querySelectorAll('mark.hit')]; }
+function findRow(m) { let el = m; while (el && el.parentElement !== $('log')) el = el.parentElement; return el; }
+// A match is named by its row and its place in that row, so it survives renders and older pages.
+function findRef(m) {
+  const row = findRow(m); if (!row) return null;
+  return { key: anchorKey(row), k: [...row.querySelectorAll('mark.hit')].indexOf(m) };
+}
+function findByRef(marks, ref) {
+  if (!ref) return -1;
+  return marks.findIndex(m => { const r = findRef(m); return r && r.key === ref.key && r.k === ref.k; });
+}
+
+function findUnmark() {
+  const parents = new Set();
+  for (const m of findMarks()) { parents.add(m.parentNode); m.replaceWith(document.createTextNode(m.textContent)); }
+  for (const p of parents) if (p) p.normalize();
+}
+function findMark() {
+  const q = finder.q.toLowerCase(), log = $('log');
+  if (!q) return;
+  for (const row of log.children) {
+    if (!row.matches('.msg, .peer') || row.matches('.sentfile')) continue;
+    const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => n.parentElement.closest(FIND_SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+    const nodes = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeValue.toLowerCase().includes(q)) nodes.push(n);
+    for (const n of nodes) {
+      const text = n.nodeValue, low = text.toLowerCase(), frag = document.createDocumentFragment();
+      let from = 0, at = low.indexOf(q);
+      while (at >= 0) {
+        if (at > from) frag.appendChild(document.createTextNode(text.slice(from, at)));
+        const mk = document.createElement('mark'); mk.className = 'hit'; mk.textContent = text.slice(at, at + q.length);
+        frag.appendChild(mk);
+        from = at + q.length; at = low.indexOf(q, from);
+      }
+      if (from < text.length) frag.appendChild(document.createTextNode(text.slice(from)));
+      n.replaceWith(frag);
+    }
+  }
+}
+// Called at the end of every renderLog: the rebuilt log lost the marks.
+function findRemark() {
+  if (!finder || !finder.q) return;
+  if (finder.sid !== state.open) { findClose(); return; }
+  findMark();
+  const marks = findMarks(), i = findByRef(marks, finder.cur);
+  if (i >= 0) marks[i].classList.add('cur');
+  findCount();
+}
+function findCount() {
+  const el = $('find-n'); if (!el) return;
+  if (!finder.q) { el.textContent = ''; return; }
+  const marks = findMarks(), i = findByRef(marks, finder.cur);
+  const total = Math.max(finder.occ, marks.length);
+  if (!total) { el.textContent = finder.busy ? '…' : 'none'; return; }
+  // Everything not loaded is older than everything loaded, so a loaded match's number counts them in.
+  el.textContent = (i >= 0 ? (total - marks.length + i + 1) + '/' : '') + total + (finder.truncated ? '+' : '');
+}
+
+function findShow(m) {
+  for (const x of findMarks()) x.classList.remove('cur');
+  m.classList.add('cur');
+  finder.cur = findRef(m);
+  const body = m.closest('[data-ck]');
+  if (body && body.classList.contains('clamp')) {
+    body.classList.remove('clamp');
+    state.expanded.add(body.dataset.ck); state.closedClamps.delete(body.dataset.ck);
+    const more = body.nextElementSibling; if (more && more.classList.contains('more')) more.textContent = 'Show less';
+  }
+  const det = m.closest('details'); if (det && !det.open) det.open = true;
+  const log = $('log');
+  const y = m.getBoundingClientRect().top - log.getBoundingClientRect().top + log.scrollTop - log.clientHeight / 3;
+  logAtBottom = false;
+  setScrollTop(log, Math.max(0, Math.min(y, log.scrollHeight - log.clientHeight)));
+  logAtBottom = nearBottom(log);
+  heldAnchor = logAtBottom ? null : readingAnchor(log);
+  renderJump(); findCount();
+}
+
+// Page older history in until the transcript byte `byte` is loaded (the hit's line).
+async function findLoadUntil(byte) {
+  const sid = state.open;
+  for (let guard = 0; guard < 80 && state.open === sid && state.hasMore && state.oldestByte > byte; guard++) {
+    while (state.loadingMore) await new Promise(r => setTimeout(r, 100));
+    if (!(state.hasMore && state.oldestByte > byte)) break;
+    state.loadingMore = true;
+    try {
+      const d = await api(`/api/session/${encodeURIComponent(sid)}?before=${state.oldestByte}&limit=200`);
+      if (state.open !== sid) return;
+      const older = d.transcript.messages || [];
+      state.oldestByte = d.transcript.startByte;
+      state.hasMore = !!d.transcript.hasMore && older.length > 0;
+      const seen = new Set(state.messages.map(keyOf));
+      const fresh = older.filter(m => !seen.has(keyOf(m)));
+      if (fresh.length) renderLog(fresh.concat(state.messages), true);
+    } finally { state.loadingMore = false; }
+  }
+}
+
+async function findStep(dir) {
+  if (!finder.q) return;
+  let marks = findMarks(), i = findByRef(marks, finder.cur);
+  if (i < 0) i = dir < 0 ? marks.length : -1;     // nothing current yet: ▲ starts at the newest
+  let j = i + dir;
+  if (j < 0) {
+    const older = finder.hits.filter(h => h.byte < state.oldestByte);
+    if (!older.length) { toast('No earlier match'); return; }
+    const before = marks.length;
+    finder.busy = true; findCount();
+    try { await findLoadUntil(older[older.length - 1].byte); } catch (e) { toast('Could not load older messages: ' + e.message, true); }
+    finder.busy = false;
+    marks = findMarks();
+    j = marks.length - before - 1;                  // the newest of the matches just loaded
+    if (j < 0) { findCount(); toast('No earlier match'); return; }
+  }
+  if (j >= marks.length) { toast('No later match'); return; }
+  findShow(marks[j]);
+}
+
+async function findRun(q) {
+  const seq = ++finder.seq, sid = state.open;
+  findUnmark();
+  finder.q = q; finder.sid = sid; finder.cur = null; finder.hits = []; finder.occ = 0; finder.truncated = false;
+  if (!q || q.length < 2 || !sid) { findCount(); return; }
+  finder.busy = true;
+  findMark(); findCount();
+  try {
+    const r = await api(`/api/session-search?id=${encodeURIComponent(sid)}&q=${encodeURIComponent(q)}`);
+    if (seq !== finder.seq) return;
+    finder.hits = r.hits || []; finder.occ = r.occurrences || 0; finder.truncated = !!r.truncated;
+  } catch (e) { if (seq === finder.seq) toast('Search failed: ' + e.message, true); }
+  finder.busy = false;
+  if (seq !== finder.seq) return;
+  findCount();
+  if (findMarks().length || finder.hits.length) findStep(-1);   // start at the newest match
+}
+
+function findOpen() {
+  if (!state.open) { toast('Open a session first'); return; }
+  const bar = $('findbar');
+  bar.style.top = document.querySelector('#main > .bar').offsetHeight + 'px';
+  bar.hidden = false;
+  $('find-q').focus(); $('find-q').select();
+}
+function findClose() {
+  ++finder.seq;
+  $('findbar').hidden = true;
+  findUnmark();
+  finder.q = ''; finder.cur = null; finder.hits = []; finder.occ = 0;
+  findCount();
+}
+if ($('btn-find')) {
+  $('btn-find').addEventListener('click', () => ($('findbar').hidden ? findOpen() : findClose()));
+  $('find-x').addEventListener('click', findClose);
+  $('find-prev').addEventListener('click', () => findStep(-1));
+  $('find-next').addEventListener('click', () => findStep(1));
+  $('find-q').addEventListener('input', () => {
+    clearTimeout(finder.timer);
+    const v = $('find-q').value.trim();
+    finder.timer = setTimeout(() => findRun(v), 350);
+  });
+  $('find-q').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); findClose(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const v = $('find-q').value.trim();
+      if (v !== finder.q) { clearTimeout(finder.timer); findRun(v); } else findStep(e.shiftKey ? 1 : -1);
+    }
+  });
 }

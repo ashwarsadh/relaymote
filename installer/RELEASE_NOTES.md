@@ -1,5 +1,13 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.32
+
+**Hear a message read aloud.** Each message has a 🔊 button. It uses your phone's or browser's own voice (nothing is downloaded or sent anywhere), with − / + to change the speed, a Stop button, and the message scrolling along as it reads; scroll yourself and it stops following for a few seconds. Code blocks are skipped. The speed you pick is remembered.
+
+**Opening a session from the board no longer sends your queued replies.** "Open session ›" is for looking: your replies stay queued, and a card at the bottom says "N messages scheduled" with **Send all** (or **Board** to go back). Closing the board the ordinary way still sends them, as before. A reload while they are held does not send them either.
+
+**A burst of "Finished" alerts is one notification.** When several sessions finish within a minute, the phone shows one notification that updates itself ("3 sessions finished: …") instead of buzzing for each. "Needs your input" alerts are unchanged: each one still alerts.
+
 ## 0.2.31
 
 **File paths with spaces open from chat.** A path in backticks such as `` `memento mcp/docs/PLAN.md` `` used to become a link to only the part after the last space (`mcp/docs/PLAN.md`), which the viewer then could not find. A path in a code span now opens whole, a markdown link may point at a path with spaces (plain or in `<...>`), and a bare Windows path such as `D:\My Projects\app\PLAN.md` links in full. The phone and desktop web app pick this up on their next reload.

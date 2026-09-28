@@ -42,10 +42,10 @@ const perTap = (src) => /api\('\/api\/board\/act',/.test(src) || /\bsend\(kind, 
 check(perTap(oldUi) && !perTap(ui), 'no per-tap send is left: a tap never POSTs /api/board/act on its own (fires on the old shape)');
 check(/enqueue\(kind, id\);\s*\/\/ queued/.test(ui) && /enqueue\('answer', id, text\);/.test(ui), 'a tap and an answer both queue');
 check(/body: JSON\.stringify\(\{ bid: batchId\(batch\), why, items:/.test(ui), 'the batch carries a bid, so a retry is recognised');
-check(/new MutationObserver\(\(\) => \{\s*if \(\$\('view-board'\)\.classList\.contains\('hidden'\) && B\.queue\.length\) flush\('board-closed'\);/.test(ui)
+check(/new MutationObserver\(\(\) => \{\s*if \(\$\('view-board'\)\.classList\.contains\('hidden'\) && B\.queue\.length && !isHeld\(\)\) flush\('board-closed'\);/.test(ui)
   && /\.observe\(\$\('view-board'\), \{ attributes: true, attributeFilter: \['class'\] \}\)/.test(ui), 'closing the board by ANY path sends the queue (watched on the sheet\'s hidden class)');
 check(/\$\('board-sendall'\)\.onclick = \(\) => flush\('send-all'\);/.test(ui), '"Send all as one" sends it');
-check(/if \(B\.queue\.length\) setTimeout\(\(\) => \{ if \(\$\('view-board'\)\.classList\.contains\('hidden'\)\) flush\('reopen'\); \}, 4000\);/.test(ui)
+check(/if \(B\.queue\.length\) setTimeout\(\(\) => \{ if \(\$\('view-board'\)\.classList\.contains\('hidden'\) && !isHeld\(\)\) flush\('reopen'\); \}, 4000\);/.test(ui)
   && /visibilitychange[\s\S]{0,160}flush\('resume'\)/.test(ui), 'a queue left over goes on the next open and on a return to the foreground');
 check(/const went = new Set\(batch\.map\(q => q\.id \+ '@' \+ q\.at\)\);/.test(ui), 'only what went is removed: a tap made while sending stays queued');
 check(!/B\.batch\b/.test(ui), 'the old opt-in Batch switch is gone (queueing is always on)');

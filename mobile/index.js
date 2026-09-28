@@ -345,6 +345,7 @@ async function notifyAttention(all) {
       tag: 'sess-' + s.id,
       url: '/?s=' + encodeURIComponent(s.id),
     };
+    const pushEvt = alerts.coalesceDone(evt);   // a burst of finishes = one phone notification (g770)
     const label = `${st} "${String(s.title || s.id).slice(0, 48)}"`;
 
     for (const c of clients) {
@@ -352,7 +353,7 @@ async function notifyAttention(all) {
       sseSend(c, 'alert', evt);
     }
 
-    logAlert(label, await alerts.deliver(evt, log));
+    logAlert(label, await alerts.deliver(pushEvt, log));
   }
   for (const s of all) wasRunning.set(s.id, !!s.running);
 }

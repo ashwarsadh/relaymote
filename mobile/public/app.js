@@ -298,9 +298,16 @@ function hash(s) {
   for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
   return h.toString(36);
 }
+// Read-aloud button (g757): the device's own speechSynthesis, nothing fetched. Hidden where the
+// browser has none, so it never appears as a dead control.
+const TTS_OK = typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined';
+function speakBtn(cls) {
+  return TTS_OK && /^msg (assistant|user)/.test(cls) ? '<button class="speak" title="Read aloud" aria-label="Read aloud">🔊</button>' : '';
+}
+
 function clampable(html, text, cls) {
-  if (text.length <= CLAMP_AT) return `<div class="${cls}">${html}</div>`;
-  return `<div class="${cls}"><div class="body clamp" data-ck="${hash(text)}">${html}</div>` +
+  if (text.length <= CLAMP_AT) return `<div class="${cls}">${speakBtn(cls)}${html}</div>`;
+  return `<div class="${cls}">${speakBtn(cls)}<div class="body clamp" data-ck="${hash(text)}">${html}</div>` +
          '<button class="more">Show more</button></div>';
 }
 
@@ -3207,3 +3214,102 @@ const tmark = (k) => { try { window.__batonT[k] = Math.round(performance.now());
       '<button onclick="location.reload()">Retry</button></div></div>');
   }
 })();
+
+/* ---- Read aloud (g757) ----------------------------------------------------------------------
+   The device's own speechSynthesis only. Text is spoken in sentence-sized chunks: Chrome on
+   Android cuts one long utterance off after ~15 s, and chunks let a speed change take effect at
+   once (the current chunk restarts at the new rate). While it speaks, the message scrolls with it,
+   unless you scroll yourself, which pauses the follow for a few seconds. */
+const tts = { el: null, chunks: [], i: 0, rate: 1, userScrollAt: 0, token: 0 };
+try { tts.rate = Math.min(3, Math.max(0.5, Number(localStorage.getItem('baton.ttsRate')) || 1)); } catch {}
+
+function ttsText(el) {
+  const c = el.cloneNode(true);
+  c.querySelectorAll('button, .stamp, .tick').forEach(n => n.remove());
+  c.querySelectorAll('pre').forEach(n => n.replaceWith(' (code block) '));   // code read aloud is noise
+  return (c.innerText || c.textContent || '').replace(/[•#*_`>|]+/g, ' ').replace(/[ \t]+/g, ' ').trim();
+}
+function ttsChunks(text) {
+  const parts = text.split(/(?<=[.!?:;])\s+|\n+/).map(s => s.trim()).filter(Boolean);
+  const out = [];
+  for (const p of parts) {                     // keep each utterance well under the ~15 s cut-off
+    if (out.length && (out[out.length - 1] + ' ' + p).length < 160) out[out.length - 1] += ' ' + p;
+    else for (let k = 0; k < p.length; k += 220) out.push(p.slice(k, k + 220));
+  }
+  return out;
+}
+function ttsBar() {
+  let bar = document.getElementById('ttsbar');
+  if (bar) return bar;
+  bar = document.createElement('div');
+  bar.id = 'ttsbar';
+  bar.className = 'ttsbar hidden';
+  bar.innerHTML = '<button data-tts="slower" aria-label="Slower">−</button>' +
+    '<span class="ttsrate"></span>' +
+    '<button data-tts="faster" aria-label="Faster">+</button>' +
+    '<span class="ttspos"></span>' +
+    '<button data-tts="stop" class="ttsstop" aria-label="Stop">Stop</button>';
+  bar.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tts]');
+    if (!b) return;
+    const a = b.dataset.tts;
+    if (a === 'stop') return ttsStop();
+    tts.rate = Math.round(Math.min(3, Math.max(0.5, tts.rate + (a === 'faster' ? 0.25 : -0.25))) * 100) / 100;
+    try { localStorage.setItem('baton.ttsRate', String(tts.rate)); } catch {}
+    ttsSpeak();                                  // restart the current chunk at the new speed
+  });
+  document.body.appendChild(bar);
+  return bar;
+}
+function ttsPaint() {
+  const bar = ttsBar();
+  bar.querySelector('.ttsrate').textContent = (+tts.rate.toFixed(2)) + '×';
+  bar.querySelector('.ttspos').textContent = tts.chunks.length ? `${Math.min(tts.i + 1, tts.chunks.length)}/${tts.chunks.length}` : '';
+  bar.classList.toggle('hidden', !tts.el);
+  document.querySelectorAll('.msg.speaking').forEach(n => { if (n !== tts.el) n.classList.remove('speaking'); });
+  if (tts.el) tts.el.classList.add('speaking');
+}
+function ttsFollow() {
+  const el = tts.el;
+  if (!el || !el.isConnected || Date.now() - tts.userScrollAt < 4000) return;
+  const log = $('log');
+  const frac = tts.chunks.length ? tts.i / tts.chunks.length : 0;
+  // Rect-based: a message's offsetParent is #main, not the scrolling #log.
+  const y = log.scrollTop + (el.getBoundingClientRect().top - log.getBoundingClientRect().top) +
+            frac * el.offsetHeight - log.clientHeight / 3;
+  log.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+}
+function ttsSpeak() {
+  const my = ++tts.token;                      // a stale utterance's onend must not advance the new one
+  speechSynthesis.cancel();
+  if (!tts.el || tts.i >= tts.chunks.length) return ttsStop();
+  const u = new SpeechSynthesisUtterance(tts.chunks[tts.i]);
+  u.rate = tts.rate;
+  u.onend = () => { if (my !== tts.token) return; tts.i++; ttsSpeak(); };
+  u.onerror = (ev) => { if (my !== tts.token || ev.error === 'interrupted' || ev.error === 'canceled') return; toast('Read aloud stopped: ' + ev.error); ttsStop(); };
+  ttsPaint(); ttsFollow();
+  speechSynthesis.speak(u);
+}
+function ttsStart(msgEl) {
+  if (tts.el === msgEl) return ttsStop();      // the same button again = stop
+  const text = ttsText(msgEl);
+  if (!text) return;
+  tts.el = msgEl; tts.chunks = ttsChunks(text); tts.i = 0; tts.userScrollAt = 0;
+  ttsSpeak();
+}
+function ttsStop() {
+  tts.token++;
+  if (TTS_OK) speechSynthesis.cancel();
+  if (tts.el) tts.el.classList.remove('speaking');
+  tts.el = null; tts.chunks = []; tts.i = 0;
+  ttsPaint();
+}
+if (TTS_OK) {
+  $('log').addEventListener('click', (e) => {
+    const b = e.target.closest('.speak');
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    ttsStart(b.closest('.msg'));
+  });
+  for (const ev of ['touchmove', 'wheel']) $('log').addEventListener(ev, () => { tts.userScrollAt = Date.now(); }, { passive: true });
+}

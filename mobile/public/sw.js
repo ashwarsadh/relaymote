@@ -48,7 +48,7 @@ self.addEventListener('push', (event) => {
     icon: '/icon-192.png',
     badge: '/badge-96.png',
     tag: d.tag || 'relaymote',
-    renotify: true,
+    renotify: d.renotify !== false,   // false = replace the burst's notification without buzzing again (g770)
     data: { url: d.url || '/', id: d.id || null },
   }));
 });

@@ -1077,3 +1077,26 @@ html[data-density="compact"] .bcard-acts{margin-top:6px; gap:6px}
 .filebody .mdbody h2.mdh{font-size:19px}
 .filebody .mdbody h3.mdh{font-size:17px}
 .filebody .mdbody h4.mdh,.filebody .mdbody h5.mdh{font-size:15.5px}
+
+/* Read aloud (g757) */
+.msg .speak{float:right; margin:-2px -6px 2px 8px; padding:2px 5px; border:0; background:transparent; font-size:14px; line-height:1; opacity:.55; cursor:pointer}
+.msg .speak:hover,.msg .speak:focus-visible{opacity:1}
+.msg.speaking{box-shadow:0 0 0 2px var(--accent)}
+.msg.speaking .speak{opacity:1}
+.ttsbar{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(84px + env(safe-area-inset-bottom)); z-index:60;
+        display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:var(--panel);
+        border:1px solid var(--line); box-shadow:0 4px 18px rgba(0,0,0,.25); font-size:14px; max-width:calc(100vw / var(--z,1) - 32px)}
+.ttsbar.hidden{display:none}
+.ttsbar button{min-width:36px; height:32px; border-radius:999px; border:1px solid var(--line); background:transparent; color:inherit; font-size:16px; cursor:pointer}
+.ttsbar .ttsstop{padding:0 12px; font-size:13px; white-space:nowrap}
+.ttsbar .ttsrate{min-width:40px; text-align:center; font-variant-numeric:tabular-nums}
+.ttsbar .ttspos{color:var(--dim); font-size:12px; min-width:34px; text-align:center}
+
+/* Board replies held by "Open session" (g775): shown where notifications appear */
+.heldcard{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--safe-b) + 84px); z-index:49;
+          display:flex; align-items:center; gap:8px; padding:8px 10px 8px 14px; border-radius:12px;
+          background:var(--panel-2); border:1px solid var(--accent); box-shadow:0 6px 22px rgba(0,0,0,.3);
+          font-size:13.5px; max-width:calc(100vw / var(--z,1) - 32px); white-space:nowrap}
+.heldcard.hidden{display:none}
+.heldcard button{height:32px; padding:0 12px; border-radius:8px; font-size:13px}
+.heldcard:not(.hidden) ~ .ttsbar{bottom:calc(var(--safe-b) + 136px)}

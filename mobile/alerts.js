@@ -247,5 +247,27 @@ function accountSwitchText(cfg = config.get(), who = {}) {
       : 'Recorded. Automatic sync is off — open Accounts and press Sync to copy them now.' };
 }
 
+/* A burst of "Finished" alerts becomes ONE notification on the phone (g770: it vibrated back to back).
+   Each finish is still sent at once, but every finish within BURST_MS of the previous one reuses the
+   burst's tag with renotify:false, so the phone REPLACES the notification silently ("3 sessions
+   finished: a · b · c") instead of buzzing again. The first of a burst is an ordinary alert: nothing
+   is delayed. Sliding window from the last finish; a new burst gets a new tag, so it never replaces
+   an older unread one. Only 'done' is coalesced: 'awaiting' needs him, every one of them buzzes. */
+const BURST_MS = 60 * 1000;
+let burst = { tag: null, last: 0, titles: [] };
+function coalesceDone(evt, now = Date.now()) {
+  if (!evt || evt.kind !== 'done') return evt;
+  if (!burst.tag || now - burst.last > BURST_MS) burst = { tag: 'done-' + now, last: now, titles: [] };
+  burst.last = now;
+  burst.titles.push(evt.title);
+  const n = burst.titles.length;
+  if (n === 1) return { ...evt, tag: burst.tag, renotify: true };
+  const shown = burst.titles.slice(-4).map(t => String(t).slice(0, 40));
+  return { ...evt, tag: burst.tag, renotify: false, url: '/',
+           title: `${n} sessions finished`,
+           body: (n > 4 ? '… ' : '') + shown.join(' · ') };
+}
+
 module.exports = { deliver, sendBackup, settings, route, outcome, alarm, alarmChannel, underCap, accountSwitchText, KINDS, WINDOW_MS, DEFAULT_CAP,
-                   _setPush: (p) => { push = p; }, _resetCap: () => { recent.length = 0; } };
+                   _setPush: (p) => { push = p; }, _resetCap: () => { recent.length = 0; },
+                   coalesceDone, BURST_MS, _resetBurst: () => { burst = { tag: null, last: 0, titles: [] }; } };

@@ -68,6 +68,26 @@
      nothing. A batch carries an id (`bid`) the server remembers, so a retry after a lost response can
      never deliver it twice. */
   const QUEUE_KEY = 'baton_board_queue';
+  /* HELD (g775): leaving the board by "Open session" is going to LOOK, not to finish. The queue is
+     held instead of sent, and a card at the notification position says how many are waiting, with
+     Send all. Reopening the board releases the hold, so closing it then sends as before. Persisted,
+     so a reload while held does not send behind his back either. */
+  const HELD_KEY = 'baton_board_held';
+  const isHeld = () => { try { return localStorage.getItem(HELD_KEY) === '1'; } catch { return false; } };
+  function setHeld(on) {
+    try { on ? localStorage.setItem(HELD_KEY, '1') : localStorage.removeItem(HELD_KEY); } catch {}
+    heldCard();
+  }
+  function heldCard() {
+    const c = $('board-held');
+    if (!c) return;
+    const n = B.queue.length;
+    const show = isHeld() && n > 0 && $('view-board').classList.contains('hidden');
+    c.classList.toggle('hidden', !show);
+    if (show) $('board-held-n').textContent = n + (n === 1 ? ' message' : ' messages') + ' scheduled';
+    $('board-held-send').disabled = !!B.flushing;
+    $('board-held-send').textContent = B.flushing ? 'Sending…' : 'Send all';
+  }
   function migrateKey(oldKey, newKey) {
     try { const v = localStorage.getItem(oldKey); if (v != null && localStorage.getItem(newKey) == null) localStorage.setItem(newKey, v); localStorage.removeItem(oldKey); } catch {}
   }
@@ -115,6 +135,7 @@
     $('board-pending-n').textContent = n + (n === 1 ? ' reply' : ' replies') + ' pending';
     $('board-sendall').disabled = !!B.flushing;
     $('board-sendall').textContent = B.flushing ? 'Sending…' : 'Send all as one';
+    heldCard();
   }
 
   /** Same batch, same id: a retry of an unchanged queue is recognised by the server and not re-sent. */
@@ -137,6 +158,7 @@
       const rejected = new Set((r.rejected || []).map(x => String(x.id)));
       B.queue = B.queue.filter(q => !went.has(q.id + '@' + q.at));
       saveQueue();
+      if (!B.queue.length) setHeld(false);
       for (const q of batch) if (q.kind === 'answer' && !rejected.has(q.id)) saveDraft(q.id, '');
       const n = r.n != null ? r.n : r.sent;
       toast('Sent ' + n + (n === 1 ? ' reply' : ' replies') + ' as one message'
@@ -187,6 +209,7 @@
 
   async function openBoard() {
     if (typeof drawer === 'function') drawer(false);
+    setHeld(false);
     showSheet($('view-board'));
     if (!B.data) $('board-list').innerHTML = '<div class="empty">Loading…</div>';
     await loadBoard();
@@ -607,6 +630,7 @@
       const ask = (card && (card.querySelector('.bcard-ask:not(.bnote)') || {}).textContent) || '';
       const raised = card && card.dataset.raised;
       navOpenFrom(id).then(() => { if (!scrollToAsk(ask) && raised) scrollToRaiseTime(raised); });
+      if (B.queue.length) setHeld(true);   // BEFORE the hide: the close observer must see the hold
       hideSheet($('view-board'));
       return;
     }
@@ -826,14 +850,17 @@
   // Flush triggers. Closing the board by ANY path sends the queue: observed on the sheet's own `hidden`
   // class rather than wired into each close control.
   $('board-sendall').onclick = () => flush('send-all');
+  $('board-held-send').onclick = () => flush('send-all-held');
+  $('board-held-open').onclick = () => openBoard();
   new MutationObserver(() => {
-    if ($('view-board').classList.contains('hidden') && B.queue.length) flush('board-closed');
+    if ($('view-board').classList.contains('hidden') && B.queue.length && !isHeld()) flush('board-closed');
+    heldCard();
   }).observe($('view-board'), { attributes: true, attributeFilter: ['class'] });
   pendingBar();
   // Left over from a page that was killed before it sent: send on this open, once boot's own requests
   // have had the link first. Also when the app comes back to the foreground with the board closed.
-  if (B.queue.length) setTimeout(() => { if ($('view-board').classList.contains('hidden')) flush('reopen'); }, 4000);
+  if (B.queue.length) setTimeout(() => { if ($('view-board').classList.contains('hidden') && !isHeld()) flush('reopen'); }, 4000);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && B.queue.length && $('view-board').classList.contains('hidden')) flush('resume');
+    if (document.visibilityState === 'visible' && B.queue.length && $('view-board').classList.contains('hidden') && !isHeld()) flush('resume');
   });
 })();

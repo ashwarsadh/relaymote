@@ -701,14 +701,16 @@ async function searchTranscripts(query, { limit = 30, maxSessions = 250, tailByt
 /* Find text inside ONE session, across its whole transcript (g784): what he said, what peers said,
    and the replies -- never tool input or output. Each hit carries the byte where its line starts, so
    the app can page older history in until that hit is loaded. Oldest first. */
-async function searchSession(sess, query, { limit = 500, deadlineMs = 8000 } = {}) {
-  const q = String(query || '').trim().toLowerCase();
-  if (q.length < 2) return { ok: false, error: 'query must be at least 2 characters', hits: [] };
+async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid = null } = {}) {
+  // `uuid`: find ONE row by its transcript uuid instead (a board card's anchor, g785).
+  const want = uuid && /^[0-9a-f-]{8,40}$/i.test(uuid) ? String(uuid).toLowerCase() : null;
+  const q = want ? '"uuid":"' + want + '"' : String(query || '').trim().toLowerCase();
+  if (!want && q.length < 2) return { ok: false, error: 'query must be at least 2 characters', hits: [] };
   const file = transcriptPath(sess);
   if (!file) return { ok: false, error: 'no transcript on disk', hits: [] };
   const started = Date.now();
   const hits = [];
-  let occurrences = 0, truncated = false, pos = 0, rest = Buffer.alloc(0);
+  let occurrences = 0, truncated = false, pos = 0, rest = Buffer.alloc(0), found = false;
   const scan = (buf, base) => {
     let from = 0;
     for (;;) {
@@ -720,6 +722,12 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000 } = {
       if (!line.toLowerCase().includes(q)) continue;      // cheap prefilter on the raw line
       let row; try { row = JSON.parse(line); } catch { continue; }
       const f = flatten(row);
+      if (want) {
+        if (String(row.uuid || '').toLowerCase() !== want) continue;
+        hits.push({ ts: (f && f.ts) || row.timestamp || null, role: f ? f.role : row.type, byte: lineStart, n: 1,
+                    snippet: String((f && f.text) || '').replace(/\s+/g, ' ').trim().slice(0, 160) });
+        found = true; return buf.length;
+      }
       if (!f || !(f.role === 'user' || f.role === 'peer' || (f.role === 'assistant' && f.text))) continue;
       const text = String(f.text || '');
       const low = text.toLowerCase();
@@ -740,6 +748,7 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000 } = {
     fh = await fs.promises.open(file, 'r');
     const chunk = Buffer.allocUnsafe(1 << 20);
     for (;;) {
+      if (found) break;
       if (Date.now() - started > deadlineMs) { truncated = true; break; }
       const { bytesRead } = await fh.read(chunk, 0, chunk.length, pos);
       if (!bytesRead) break;
@@ -749,7 +758,7 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000 } = {
       rest = Buffer.from(buf.subarray(used));
       pos += bytesRead;
     }
-    if (rest.length) scan(Buffer.concat([rest, Buffer.from([10])]), pos - rest.length);
+    if (rest.length && !found) scan(Buffer.concat([rest, Buffer.from([10])]), pos - rest.length);
   } catch (e) { return { ok: false, error: e.message, hits: [] }; }
   finally { if (fh) await fh.close().catch(() => {}); }
   return { ok: true, q, hits, occurrences, truncated, ms: Date.now() - started };

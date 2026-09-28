@@ -38,6 +38,34 @@ const sessions = require('../mobile/sessions');
   check(!(await sessions.searchSession(sess, 'q')).ok, 'a one-letter query is refused');
   check((await sessions.searchSession(sess, 'nothing-like-this-anywhere')).hits.length === 0, 'no match: no hits');
 
+  // g785: a board card's anchor names ONE message by its transcript uuid.
+  const rawRows = rows.map(l => JSON.parse(l));
+  const byUuid = await sessions.searchSession(sess, '', { uuid: rawRows[400].uuid.length > 8 ? rawRows[400].uuid : 'x' });
+  check(byUuid.hits.length === 0, 'control: a non-uuid anchor finds nothing', byUuid.hits.length);
+  const U = 'abcdef01-2345-4789-8abc-def012345678';
+  const withUuid = fs.readFileSync(file, 'utf8').replace('"uuid":"u400"', '"uuid":"' + U + '"');
+  fs.writeFileSync(file, withUuid);
+  const hit = await sessions.searchSession(sess, '', { uuid: U });
+  check(hit.hits.length === 1 && hit.hits[0].ts === ts(400) && /late mention/.test(hit.hits[0].snippet), 'an anchor uuid finds its message, with its time and text', hit.hits[0]);
+  check(JSON.parse(lineAt.call(null, hit.hits[0].byte).length ? fs.readFileSync(file).toString('utf8', hit.hits[0].byte, fs.readFileSync(file).indexOf(10, hit.hits[0].byte)) : '{}').uuid === U,
+        'and its byte is that line');
+  check(/searchSession\(sess, url\.searchParams\.get\('q'\) \|\| '', \{ uuid: url\.searchParams\.get\('uuid'\) \|\| null \}\)/.test(H.src('mobile/index.js')), 'the endpoint takes ?uuid=');
+
+  const inbox = require('../lib/inbox');
+  const made = inbox.add('Card about a blocked emulator', { session: sess.id, anchor: U });
+  check(made.ok && inbox.fold().items.get(made.n).anchor === U, 'inbox add --anchor records the message');
+  check(!inbox.add('no session', { anchor: U }).ok, 'an anchor without a session is refused');
+  check(!inbox.link(made.n, sess.id, { anchor: 'not-a-uuid' }).ok, 'a malformed anchor is refused');
+  inbox.link(made.n, 'local_other');
+  check(!inbox.fold().items.get(made.n).anchor, 'moving a card to another session drops the old anchor');
+  inbox.link(made.n, sess.id, { anchor: U });
+  check(inbox.fold().items.get(made.n).anchor === U, 'inbox link <n> <sid> <uuid> sets it');
+  check(/anchor: \(r\.anchor && sid === r\.session\) \? r\.anchor : undefined/.test(H.src('lib/board-build.js')), 'the board carries the anchor to the phone');
+  const bui = H.src('mobile/public/board-ui.js');
+  check(/data-anchor="/.test(bui) && /window\.landAtAnchor\(id, \{ uuid: anchor, text: land, raised \}\)/.test(bui), 'Open session lands on the anchor, else searches the card words');
+  const appSrc = H.src('mobile/public/app.js');
+  check(/async function landAtHit/.test(appSrc) && /await findLoadUntil\(hit\.byte\)/.test(appSrc), 'landing pages older history in until the message is loaded');
+
   const idx = H.src('mobile/index.js');
   check(/p === '\/api\/session-search'/.test(idx) && /sessions\.searchSession\(sess, url\.searchParams\.get\('q'\)/.test(idx), 'the app reaches it at /api/session-search');
   const readOk = idx.slice(idx.indexOf('const READ_OK'), idx.indexOf('const WRITE_OK'));

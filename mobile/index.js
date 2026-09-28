@@ -1226,7 +1226,7 @@ async function handle(req, res) {
     const sess = sessions.get(url.searchParams.get('id') || '');
     // Owner only: a scoped sub-user never reaches here (not in READ_OK above).
     if (!sess) return json(res, 404, { ok: false, error: 'no such session' });
-    const r = await sessions.searchSession(sess, url.searchParams.get('q') || '');
+    const r = await sessions.searchSession(sess, url.searchParams.get('q') || '', { uuid: url.searchParams.get('uuid') || null });
     return json(res, r.ok ? 200 : 400, r);
   }
 

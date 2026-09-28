@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.39
+
+**"Open session" on a board card lands on the message it is about.** A card can carry an anchor, one message in its session (`relaymote inbox add … --session <id> --anchor <uuid>`, or `inbox link <n> <session id> <uuid>`). Opening it loads history back to that message, scrolls to it and highlights it. A card without an anchor is found by its own words (a phrase in quotes, then a goal id such as g123), taking the match nearest to when the card was raised; if nothing matches, it opens as before.
+
 ## 0.2.38
 
 **Find inside a session.** Tap 🔍 in the top bar and type: every match in your messages, the replies and messages from other sessions is highlighted (tool steps are not searched). ▲ goes to older matches and ▼ to newer ones; Enter does the same. The search covers the whole session on the desktop, so a match in history the phone has not loaded yet is found too: ▲ loads older messages until it reaches it. The count ("3/17") counts those as well. Opening the bar does not move what you are reading.

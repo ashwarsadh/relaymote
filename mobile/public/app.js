@@ -3617,3 +3617,82 @@ if ($('btn-find')) {
     }
   });
 }
+
+/* Land on one message from a board card (g785: "clicking it didn't open the relevant message in that
+   session"). A card's anchor names the message by its transcript uuid; without one, the card's own
+   words are searched (a quoted phrase first, then its goal id such as "g769"), taking the hit nearest
+   to when the card was raised. Either way the desktop finds it across the WHOLE transcript (the g784
+   search), history is paged in until it is loaded, and the view lands with that message highlighted. */
+function rowsWithTimes() {
+  const out = [];
+  for (const el of $('log').children) {
+    if (el.matches('.stamp')) { const last = out[out.length - 1]; if (last && !last.ts) last.ts = el.dataset.ts; continue; }
+    if (!el.matches('.msg, .peer')) continue;
+    const inner = el.matches('.peer') ? el.querySelector('.stamp[data-ts]') : null;
+    out.push({ el, ts: inner ? inner.dataset.ts : null });
+  }
+  return out;
+}
+const landNorm = (t) => String(t || '').replace(/[*_`~#>\[\]()]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+function landTarget(row, needle) {
+  const want = landNorm(needle).slice(0, 40);
+  if (want.length >= 6) {
+    const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const v = landNorm(n.nodeValue);
+      if (v.length >= 6 && (v.includes(want.slice(0, Math.min(want.length, v.length))) || want.startsWith(v.slice(0, 24)))) {
+        const r = document.createRange(); r.selectNodeContents(n); return r;
+      }
+    }
+  }
+  return row;
+}
+async function landAtHit(hit, needle) {
+  if (!hit || !state.open) return false;
+  await findLoadUntil(hit.byte);
+  const rows = rowsWithTimes().filter(r => r.ts && String(r.ts) <= String(hit.ts));
+  const row = rows.length ? rows[rows.length - 1].el : null;
+  if (!row) return false;
+  const body = row.querySelector('[data-ck].clamp');
+  if (body) {
+    body.classList.remove('clamp'); state.expanded.add(body.dataset.ck); state.closedClamps.delete(body.dataset.ck);
+    const more = body.nextElementSibling; if (more && more.classList.contains('more')) more.textContent = 'Show less';
+  }
+  if (row.matches('details') && !row.open) row.open = true;
+  const log = $('log');
+  const at = landTarget(row, needle || hit.snippet);
+  const y = at.getBoundingClientRect().top - log.getBoundingClientRect().top + log.scrollTop - log.clientHeight / 4;
+  logAtBottom = false;
+  setScrollTop(log, Math.max(0, Math.min(y, log.scrollHeight - log.clientHeight)));
+  logAtBottom = nearBottom(log);
+  heldAnchor = logAtBottom ? null : readingAnchor(log);
+  renderJump();
+  row.classList.add('askhit');
+  setTimeout(() => row.classList.remove('askhit'), 2600);
+  return true;
+}
+async function landAtAnchor(sid, { uuid = '', text = '', raised = '' } = {}) {
+  if (!sid || state.open !== sid) return false;
+  const ask = (q, u) => api(`/api/session-search?id=${encodeURIComponent(sid)}&q=${encodeURIComponent(q || '')}` + (u ? '&uuid=' + encodeURIComponent(u) : ''));
+  try {
+    if (uuid) {
+      const r = await ask('', uuid);
+      if (r.hits && r.hits[0] && await landAtHit(r.hits[0], r.hits[0].snippet)) return true;
+    }
+    const t = String(text || '');
+    // A quote opens after a space and closes before one, so "couldn't ... Android's" is not a phrase.
+    const quoted = [...t.matchAll(/(?:^|[\s(])["'‘“]([^"'’”\n]{8,80})["'’”](?=[\s.,;:)!?]|$)/g)].map(m => m[1]).slice(0, 3);
+    const goals = [...new Set(t.match(/\bg\d{2,4}[a-z]?\b/gi) || [])].slice(0, 2);
+    const when = Date.parse(raised) || 0;
+    for (const q of quoted.concat(goals)) {
+      const r = await ask(q);
+      const hits = r.hits || [];
+      if (!hits.length) continue;
+      const best = when ? hits.reduce((a, h) => Math.abs(Date.parse(h.ts) - when) < Math.abs(Date.parse(a.ts) - when) ? h : a)
+                        : hits[hits.length - 1];
+      if (await landAtHit(best, q)) return true;
+    }
+  } catch (e) { toast('Could not find that message: ' + e.message, true); }
+  return false;
+}
+window.landAtAnchor = landAtAnchor;

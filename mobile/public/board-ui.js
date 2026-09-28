@@ -355,11 +355,17 @@
   const KIND_LABEL = { decide: 'DECIDE', do: 'DO', fyi: 'FYI', none: 'NO QUESTION' };
   const KIND_HINT = { decide: 'needs your answer', do: 'needs your hands', fyi: 'read and clear' };
 
+  // What "Open session" lands on (g785): the card's anchor (a message uuid), else its own words.
+  function landAttrs(r) {
+    return (r.anchor ? ' data-anchor="' + esc(r.anchor) + '"' : '')
+      + ' data-land="' + esc(String(r.text || r.ask || '').slice(0, 600)) + '"';
+  }
+
   function inboxCard(r) {
     const k = '#' + r.n, done = r.acted;
     const tap = r.openable && r.session;
     return '<div class="bcard inbox' + (done ? ' acted' : '') + '" data-id="' + esc(k) + '"'
-      + (r.ts ? ' data-raised="' + esc(r.ts) + '"' : '') + '>'
+      + (r.ts ? ' data-raised="' + esc(r.ts) + '"' : '') + landAttrs(r) + '>'
       + '<div class="bcard-head head-x">'
       + '<div class="bcard-t bexp' + (B.expanded[k] ? ' open' : '') + '" role="button" tabindex="0"'
       + ' data-expand="' + esc(k) + '">'
@@ -542,7 +548,7 @@
     if (res.length) {
       out += '<details class="goals" id="board-resolved"' + (B.resolvedOpen ? ' open' : '') + '><summary><b>Probably handled</b> <span class="n">' + res.length + '</span>'
         + '<p>Evidence says these were dealt with. They close on their own only when that evidence is strong. Reinstate any that are not.</p></summary>'
-        + res.map(r => '<div class="bcard inbox' + (r.acted ? ' acted' : '') + '" data-id="#' + r.n + '"><div class="bcard-head"><div class="bcard-t">#' + r.n + ' ' + esc(String(r.ask || r.text || '').slice(0, 300)) + '</div>'
+        + res.map(r => '<div class="bcard inbox' + (r.acted ? ' acted' : '') + '" data-id="#' + r.n + '"' + (r.ts ? ' data-raised="' + esc(r.ts) + '"' : '') + landAttrs(r) + '><div class="bcard-head"><div class="bcard-t">#' + r.n + ' ' + esc(String(r.ask || r.text || '').slice(0, 300)) + '</div>'
           + '<div class="bcard-m"><span class="b-tag">' + esc((r.tier || '?') + ' confidence') + '</span><span>' + esc(r.why || '') + '</span>'
           + (r.openable && r.session ? '<button class="bopen" data-open="' + esc(r.session) + '">Open session ›</button>' : '') + '</div></div>'
           + (r.evidence ? '<div class="bcard-ask"><b>Evidence</b>' + esc(r.evidence) + '</div>' : '')
@@ -629,7 +635,11 @@
       const card = open.closest('.bcard');
       const ask = (card && (card.querySelector('.bcard-ask:not(.bnote)') || {}).textContent) || '';
       const raised = card && card.dataset.raised;
-      navOpenFrom(id).then(() => { if (!scrollToAsk(ask) && raised) scrollToRaiseTime(raised); });
+      const anchor = card && card.dataset.anchor, land = card && card.dataset.land;
+      navOpenFrom(id).then(async () => {
+        if ((anchor || land) && window.landAtAnchor && await window.landAtAnchor(id, { uuid: anchor, text: land, raised })) return;
+        if (!scrollToAsk(ask) && raised) scrollToRaiseTime(raised);
+      });
       if (B.queue.length) setHeld(true);   // BEFORE the hide: the close observer must see the hold
       hideSheet($('view-board'));
       return;

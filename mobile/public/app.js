@@ -84,6 +84,7 @@ let logNew = 0;
 let scrollToBottomNext = false;
 let lastProgTop = -1;
 let seenMsgIds = new Set();
+let seenReplyTs = '';
 
 function syncViewport() {
   const vv = window.visualViewport;
@@ -691,11 +692,13 @@ function readingAnchor(log) {
     if (r.bottom <= top) continue;
     if (r.top >= bottom || out.length >= 8) break;
     const key = anchorKey(el);
-    if (counts.get(key) === 1) out.push({ key, delta: r.top - top });
+    // `delta` is from the log's top edge; `screen` is on the screen, so a bar appearing ABOVE the log
+    // (which moves its top edge) does not slide what he is reading (g780).
+    if (counts.get(key) === 1) out.push({ key, delta: r.top - top, screen: r.top });
   }
   return out.length ? out : null;
 }
-function restoreAnchor(log, list) {
+function restoreAnchor(log, list, byScreen) {
   if (!list) return false;
   const top = log.getBoundingClientRect().top;
   const counts = keyCounts(log), byKey = new Map();
@@ -703,7 +706,9 @@ function restoreAnchor(log, list) {
   for (const a of list) {
     const el = counts.get(a.key) === 1 && byKey.get(a.key);
     if (!el) continue;
-    setScrollTop(log, log.scrollTop + (el.getBoundingClientRect().top - top) - a.delta);
+    const want = byScreen && a.screen != null ? el.getBoundingClientRect().top - a.screen
+                                               : (el.getBoundingClientRect().top - top) - a.delta;
+    setScrollTop(log, log.scrollTop + want);
     return true;
   }
   return false;
@@ -760,12 +765,21 @@ function renderLog(messages, force) {
   scrollToBottomNext = false;
   const anchor = stick ? null : readingAnchor(log);
   const keepTop = log.scrollTop;
-  const ids = new Set(messages.map(m => m.role + ':' + (m.ts || '')));
-  if (!stick) for (const id of ids) if (!seenMsgIds.has(id) && !id.startsWith('user:')) logNew++;
-  seenMsgIds = ids;
-
   let html = '';
   const blks = blocks(messages);
+  // Count only what he can READ: assistant text (or a question), newer than anything already seen.
+  // A tool step, a "Working" row, or older history loaded at the top is never "new" (g780: 100 steps
+  // read as 100). The first render of a chat only sets the mark.
+  {
+    let top = seenReplyTs;
+    for (const m of messages) {
+      if (m.role !== 'assistant' || !(m.text || m.ask) || !m.ts) continue;
+      const t = String(m.ts);
+      if (!stick && seenReplyTs && t > seenReplyTs) logNew++;
+      if (t > top) top = t;
+    }
+    seenReplyTs = top;
+  }
   for (const b of blks) {
     if (b.type === 'msg') { html += b.html; continue; }
     const open = state.showWork || state.openGroups.has(b.key);
@@ -907,6 +921,8 @@ function renderLog(messages, force) {
   if (htmlCache.size > 400) htmlCache.clear();
   if (stick) { logAtBottom = true; logNew = 0; setScrollTop(log, log.scrollHeight); }
   else if (!restoreAnchor(log, anchor)) setScrollTop(log, keepTop);
+  heldAnchor = logAtBottom ? null : (anchor || readingAnchor(log));
+  if (typeof observeLog === 'function') observeLog();
   renderJump();
 }
 
@@ -918,6 +934,46 @@ $('log').addEventListener('scroll', () => {
   if (was !== logAtBottom || logAtBottom) renderJump();
 }, { passive: true });
 if ($('jump')) $('jump').addEventListener('click', jumpToBottom);
+
+/* Hold the view still (g780). renderLog places the view once, but the page keeps changing size AFTER
+   it: a code block or image lays out, the composer or a bar above the log grows or goes, a clamp or a
+   step list settles. At the bottom that left the newest text below the edge (it "scrolled me up");
+   higher up it slid what he was reading. A ResizeObserver on the log box and every row answers each
+   such change: at the bottom, stay at the bottom; otherwise put the row he was reading back where it
+   was. His own tap (Show more, a Working row, the speaker) is the exception: the thing he tapped
+   stays where his finger was, and nothing jumps to the end. */
+let heldAnchor = null, userTapAt = 0, anchorRaf = 0;
+function noteAnchor() {
+  if (anchorRaf) return;
+  anchorRaf = requestAnimationFrame(() => { anchorRaf = 0; heldAnchor = logAtBottom ? null : readingAnchor($('log')); });
+}
+function holdView() {
+  const log = $('log');
+  if (Date.now() - userTapAt < 700) {
+    if (heldAnchor) restoreAnchor(log, heldAnchor, true);
+    logAtBottom = nearBottom(log);
+  } else if (logAtBottom) {
+    if (log.scrollHeight - log.clientHeight - log.scrollTop > 1) setScrollTop(log, log.scrollHeight);
+  } else if (heldAnchor) {
+    restoreAnchor(log, heldAnchor, true);
+    heldAnchor = readingAnchor(log);   // re-based: the next change is measured from where he now is
+  }
+  renderJump();
+}
+const logRO = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(holdView);
+function observeLog() {
+  if (!logRO) return;
+  const log = $('log');
+  logRO.disconnect();
+  logRO.observe(log);
+  for (const el of log.children) logRO.observe(el);
+}
+$('log').addEventListener('scroll', noteAnchor, { passive: true });
+$('log').addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('summary, .more, .speak, details, button')) return;
+  userTapAt = Date.now();
+  heldAnchor = readingAnchor($('log'));      // taken NOW, before the tap changes anything
+}, { capture: true, passive: true });
 
 $('log').addEventListener('click', (e) => {
   const more = e.target.closest('.more');
@@ -1280,7 +1336,7 @@ async function openChatInner(id) {
   state.attachments = []; renderAttachments();
   state.openGroups.clear();
   htmlCache.clear(); lastSig = '';
-  logAtBottom = true; logNew = 0; seenMsgIds = new Set(); scrollToBottomNext = true;
+  logAtBottom = true; logNew = 0; seenMsgIds = new Set(); seenReplyTs = ''; scrollToBottomNext = true;
   $('pick-hint') && $('pick-hint').remove();
   $('log').innerHTML = '<div class="empty">Loading…</div>';
 
@@ -1642,8 +1698,12 @@ function banner(a) {
 
   document.body.appendChild(el);
   setTimeout(close, 9000);
-  if (navigator.vibrate) { try { navigator.vibrate(a.kind === 'awaiting' ? [80, 60, 80] : 60); } catch {} }
+  // A burst of "Finished" buzzes once a minute at most (g770); "Needs your input" always buzzes.
+  const quiet = a.kind !== 'awaiting' && Date.now() - lastDoneBuzz < 60000;
+  if (a.kind !== 'awaiting' && !quiet) lastDoneBuzz = Date.now();
+  if (navigator.vibrate && !quiet) { try { navigator.vibrate(a.kind === 'awaiting' ? [80, 60, 80] : 60); } catch {} }
 }
+let lastDoneBuzz = 0;
 
 function renderPermission(perm) {
   const box = $('permission');

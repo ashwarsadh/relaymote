@@ -1,5 +1,13 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.34
+
+**The chat stops moving under you.** At the bottom, a new message no longer leaves you looking at the middle of it (content that finished laying out after the scroll used to push the newest text below the edge). Scrolled up to read, nothing moves what you are reading: not new messages, not rows settling above you, not a bar appearing at the top. Tapping Show more or a Working row keeps the thing you tapped where your finger is.
+
+**The "↓ N new" count is of replies you can read.** Tool steps and "Working" rows no longer count, and neither does older history loading at the top: 100 steps and 5 replies reads as 5.
+
+**Fewer buzzes with the app open.** A burst of "Finished" banners vibrates once a minute at most, matching the phone notifications in 0.2.32.
+
 ## 0.2.33
 
 **An open web app tells you when a new version is ready.** Leave Relaymote open on your phone and update the desktop, and a banner at the top now says "Relaymote 0.2.33 is ready" with Reload (or ✕ for later). Before, the only sign was a line at the foot of the session drawer.

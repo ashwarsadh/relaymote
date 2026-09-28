@@ -1388,6 +1388,18 @@ async function openChatInner(id) {
 
   clearTimeout(state.markReadTimer);
   const row = (state.sessions || []).find(x => x.id === id);
+  // Opening a session is seeing it: its dot goes at once, here and on the server (sessions.ackDot),
+  // unless a question or permission prompt is really open -- that one still needs him. The check runs
+  // once the session has loaded, which is when state.question / state.permission are known.
+  if (row && (row.awaiting || row.unread || row.dot === 'unread')) {
+    clearTimeout(state.seenTimer);
+    state.seenTimer = setTimeout(() => {
+      if (state.open !== id || state.question || state.permission) return;
+      for (const L of [state.sessions, state.rawSessions]) for (const r of (L || [])) if (r.id === id) { r.awaiting = false; r.unread = false; r.dot = null; r.seen = true; }
+      try { renderSessions(state.rawSessions || []); } catch {}
+      api('/api/seen?id=' + encodeURIComponent(id)).catch(() => {});
+    }, 1500);
+  }
   if (row && (row.unread || row.dot === 'unread')) {
     state.markReadTimer = setTimeout(() => {
       if (state.open !== id) return;
@@ -3464,8 +3476,30 @@ if (TTS_OK) {
    ▼ walks back toward now. The marks are re-applied after every render, and the bar is an overlay,
    so opening it or a new message arriving never moves what he is reading (g780). */
 // `var`: renderLog can run before this line does (a const would be in its dead zone then).
-var finder = { q: '', sid: null, hits: [], occ: 0, truncated: false, cur: null, seq: 0, timer: 0 };
+var finder = { q: '', sid: null, hits: [], occ: 0, truncated: false, cur: null, seq: 0, timer: 0, work: false };
 const FIND_SKIP = 'button, .tick, .speak, .more, mark, script, style, .work, .stamp';
+// With "Include working steps" ticked, the steps are searched too (not their collapsed summary line).
+const FIND_SKIP_WORK = 'button, .tick, .speak, .more, mark, script, style, .stamp, details.work > summary';
+// The tick is remembered per session; unticked (the default) searches only what was said.
+const FIND_WORK_KEY = 'rm.findWork';
+function findWorkFor(sid) {
+  try { return !!(JSON.parse(localStorage.getItem(FIND_WORK_KEY) || '{}') || {})[sid]; } catch { return false; }
+}
+function findWorkSave(sid, on) {
+  try {
+    const m = JSON.parse(localStorage.getItem(FIND_WORK_KEY) || '{}') || {};
+    if (on) m[sid] = 1; else delete m[sid];
+    localStorage.setItem(FIND_WORK_KEY, JSON.stringify(m));
+  } catch {}
+}
+// Open every fold around a match -- the step group, a tool's own details, a clamped result -- and keep
+// the group open across the next render, which rebuilds the log with its folds closed.
+function findOpenAround(m) {
+  for (let d = m.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) {
+    if (!d.open) d.open = true;
+    if (d.matches('details.work') && d.dataset.key) state.openGroups.add(d.dataset.key);
+  }
+}
 
 function findMarks() { return [...$('log').querySelectorAll('mark.hit')]; }
 function findRow(m) { let el = m; while (el && el.parentElement !== $('log')) el = el.parentElement; return el; }
@@ -3488,9 +3522,10 @@ function findMark() {
   const q = finder.q.toLowerCase(), log = $('log');
   if (!q) return;
   for (const row of log.children) {
-    if (!row.matches('.msg, .peer') || row.matches('.sentfile')) continue;
+    if (!(row.matches('.msg, .peer') || (finder.work && row.matches('details.work'))) || row.matches('.sentfile')) continue;
+    const skip = finder.work ? FIND_SKIP_WORK : FIND_SKIP;
     const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => n.parentElement.closest(FIND_SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+      acceptNode: (n) => n.parentElement.closest(skip) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
     const nodes = [];
     for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeValue.toLowerCase().includes(q)) nodes.push(n);
     for (const n of nodes) {
@@ -3513,7 +3548,7 @@ function findRemark() {
   if (finder.sid !== state.open) { findClose(); return; }
   findMark();
   const marks = findMarks(), i = findByRef(marks, finder.cur);
-  if (i >= 0) marks[i].classList.add('cur');
+  if (i >= 0) { marks[i].classList.add('cur'); findOpenAround(marks[i]); }
   findCount();
 }
 function findCount() {
@@ -3536,7 +3571,7 @@ function findShow(m) {
     state.expanded.add(body.dataset.ck); state.closedClamps.delete(body.dataset.ck);
     const more = body.nextElementSibling; if (more && more.classList.contains('more')) more.textContent = 'Show less';
   }
-  const det = m.closest('details'); if (det && !det.open) det.open = true;
+  findOpenAround(m);
   const log = $('log');
   const y = m.getBoundingClientRect().top - log.getBoundingClientRect().top + log.scrollTop - log.clientHeight / 3;
   logAtBottom = false;
@@ -3594,7 +3629,7 @@ async function findRun(q) {
   finder.busy = true;
   findMark(); findCount();
   try {
-    const r = await api(`/api/session-search?id=${encodeURIComponent(sid)}&q=${encodeURIComponent(q)}`);
+    const r = await api(`/api/session-search?id=${encodeURIComponent(sid)}&q=${encodeURIComponent(q)}` + (finder.work ? '&work=1' : ''));
     if (seq !== finder.seq) return;
     finder.hits = r.hits || []; finder.occ = r.occurrences || 0; finder.truncated = !!r.truncated;
   } catch (e) { if (seq === finder.seq) toast('Search failed: ' + e.message, true); }
@@ -3609,6 +3644,8 @@ function findOpen() {
   const bar = $('findbar');
   bar.style.top = document.querySelector('#main > .bar').offsetHeight + 'px';
   bar.hidden = false;
+  finder.work = findWorkFor(state.open);
+  $('find-work').checked = finder.work;
   $('find-q').focus(); $('find-q').select();
 }
 function findClose() {
@@ -3622,6 +3659,13 @@ if ($('btn-find')) {
   $('btn-find').addEventListener('click', () => ($('findbar').hidden ? findOpen() : findClose()));
   $('find-x').addEventListener('click', findClose);
   $('find-prev').addEventListener('click', () => findStep(-1));
+  $('find-work').addEventListener('change', () => {
+    finder.work = $('find-work').checked;
+    findWorkSave(state.open, finder.work);
+    const v = $('find-q').value.trim();
+    clearTimeout(finder.timer); findRun(v);
+    $('find-q').focus();
+  });
   $('find-next').addEventListener('click', () => findStep(1));
   $('find-q').addEventListener('input', () => {
     clearTimeout(finder.timer);

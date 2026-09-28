@@ -1,5 +1,11 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.44
+
+**Find can include working steps.** The 🔍 bar inside a session has an "Include working steps" box, unticked by default. Unticked, it searches only your messages and the replies, as before. Ticked, it also searches thinking, tool calls and tool output, and opens the folded step that holds a match. The box is remembered for each session.
+
+**Opening a session clears its "needs you" dot.** The dot goes as soon as you open the session in the app, instead of waiting for the desktop to catch up. A new turn that needs you raises it again. A session with an unanswered question or permission prompt keeps its dot until you answer.
+
 ## 0.2.43
 
 **Settings › Models shows model names, not ids.** A difficulty level set to a model id (for example by a script or an older version) now shows as the picker's own name, such as "Sonnet 5.5", instead of a second raw entry beside it. This release also brings back the Intel Mac downloads that 0.2.42's build missed.

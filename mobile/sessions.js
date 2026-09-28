@@ -46,6 +46,10 @@ function shape(d, file) {
     lastActivityAt: d.lastActivityAt || d.lastFocusedAt || d.createdAt || 0,
     turns: d.completedTurns || 0,
     suggestion: d.promptSuggestion || null,
+    // Which turn the Desktop's dot is about: its "Awaiting input" can come from its own post-turn
+    // classifier (postTurnSummary status "blocked"), not only from a real question or permission.
+    turnMark: d.lastAssistantUuid || (d.completedTurns != null ? 'turns:' + d.completedTurns : null),
+    blockedNeed: d.postTurnSummary && d.postTurnSummary.status_category === 'blocked' ? String(d.postTurnSummary.needs_action || '').slice(0, 200) : null,
     file,
   };
 }
@@ -124,6 +128,30 @@ function get(id) { return cache.byId.get(id) || null; }
 
 const STALE_RUN_MS = 10 * 60 * 1000;
 
+/* Seen dots (29-Sep: "needs you" stayed on a session he had opened; it cleared only later). The
+   Desktop keeps "Awaiting input" for a turn its own classifier called blocked, and opening the session
+   there does not clear it (measured: focused at 21:03Z, still awaiting at 21:12Z). So opening a session
+   in the app records its current turn as SEEN, and the dot for THAT turn stays down. A new turn has a
+   new mark, so it can raise the dot again. The app only sends this when no question or permission
+   prompt is actually open in that session. Persisted, pruned after 14 days. */
+const ACK_FILE = path.join(require('../lib/config').STATE, 'dot-seen.json');
+let acks = null, ackVer = 0;
+function loadAcks() {
+  if (acks) return acks;
+  try { acks = JSON.parse(fs.readFileSync(ACK_FILE, 'utf8')) || {}; } catch { acks = {}; }
+  return acks;
+}
+function ackDot(id, mark) {
+  if (!id || !mark) return false;
+  const a = loadAcks(), now = Date.now();
+  a[id] = { mark, at: now };
+  for (const k of Object.keys(a)) if (now - (a[k].at || 0) > 14 * 864e5) delete a[k];
+  ackVer++;
+  try { fs.writeFileSync(ACK_FILE, JSON.stringify(a)); } catch {}
+  return true;
+}
+const ackVersion = () => ackVer;
+
 function decorate(list, snapshot) {
   const dots = new Map();
   if (snapshot && Array.isArray(snapshot.sessions)) {
@@ -138,15 +166,19 @@ function decorate(list, snapshot) {
     }
   }
   const active = snapshot && snapshot.active ? snapshot.active : null;
+  const seen = loadAcks();
   return list.map(s => {
     const d = dots.get(s.id);
+    const ack = seen[s.id];
+    const acked = !!(d && (d.awaiting || d.unread) && !d.running && ack && s.turnMark && ack.mark === s.turnMark);
     return {
       ...s,
-      dot: d ? d.dot : null,
+      dot: d ? (acked ? null : d.dot) : null,
       group: d ? d.group : null,
-      awaiting: d ? d.awaiting : false,
+      awaiting: d ? (d.awaiting && !acked) : false,
       running: d ? d.running : false,
-      unread: d ? d.unread : false,
+      unread: d ? (d.unread && !acked) : false,
+      seen: acked,
       active: s.id === active,
       live: !!d,
       stalled: !!(d && d.running && s.lastActivityAt && (Date.now() - s.lastActivityAt) > STALE_RUN_MS),
@@ -696,8 +728,17 @@ async function searchTranscripts(query, { limit = 30, maxSessions = 250, tailByt
 /* Find text inside ONE session, across its whole transcript (g784): what he said, what peers said,
    and the replies -- never tool input or output. Each hit carries the byte where its line starts, so
    the app can page older history in until that hit is loaded. Oldest first. */
+function workText(f) {
+  if (!f) return '';
+  if (f.role === 'result') return String(f.text || '');
+  if (f.role === 'assistant') {
+    return [f.text, f.thinking].concat((f.tools || []).map(t => (t.label || '') + ' ' + t.name + ' ' + (t.input || '')))
+      .filter(Boolean).join('\n');
+  }
+  return ['user', 'peer'].includes(f.role) ? String(f.text || '') : '';
+}
 async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid = null, tailBytes = 0,
-                                           roles = ['user', 'peer', 'assistant'] } = {}) {
+                                           roles = ['user', 'peer', 'assistant'], work = false } = {}) {
   // `uuid`: find ONE row by its transcript uuid instead (a board card's anchor, g785).
   const want = uuid && /^[0-9a-f-]{8,40}$/i.test(uuid) ? String(uuid).toLowerCase() : null;
   const q = want ? '"uuid":"' + want + '"' : String(query || '').trim().toLowerCase();
@@ -724,8 +765,10 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
                     snippet: String((f && f.text) || '').replace(/\s+/g, ' ').trim().slice(0, 160) });
         found = true; return buf.length;
       }
-      if (!f || !roles.includes(f.role) || (f.role === 'assistant' && !f.text)) continue;
-      const text = String(f.text || '');
+      // `work`: the in-session find's "Include working steps" -- thinking, tool calls and tool output
+      // count too. Off (the default), only what was said matches.
+      const text = work ? workText(f) : (f && roles.includes(f.role) && !(f.role === 'assistant' && !f.text) ? String(f.text || '') : '');
+      if (!text) continue;
       const low = text.toLowerCase();
       let at = low.indexOf(q), n = 0;
       if (at < 0) continue;
@@ -773,6 +816,6 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
 
 module.exports = { unwrapForTest: unwrap,
   refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasks, transcriptStamp, transcriptPath, slugFor,
-  searchTranscripts, searchSession,
+  searchTranscripts, searchSession, ackDot, ackVersion,
   STORE, PROJECTS,
 };

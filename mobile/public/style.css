@@ -1114,6 +1114,9 @@ html[data-density="compact"] .bcard-acts{margin-top:6px; gap:6px}
 .findbar{position:absolute; left:0; right:0; z-index:6; display:flex; align-items:center; gap:2px;
   padding:6px 6px 6px 10px; background:var(--panel); border-bottom:1px solid var(--line); box-shadow:0 6px 14px rgba(0,0,0,.25)}
 .findbar[hidden]{display:none}
+.findbar{flex-wrap:wrap}
+.findbar .find-work{flex-basis:100%; display:flex; align-items:center; gap:6px; font-size:13px; opacity:.85; padding:2px 4px 0}
+.findbar .find-work input{flex:none; width:auto; margin:0}
 .findbar input{flex:1; min-width:0; font:inherit; font-size:16px; padding:6px 10px; border-radius:8px;
   border:1px solid var(--line); background:var(--panel-2); color:var(--txt)}
 .find-n{color:var(--dim); font-size:13px; white-space:nowrap; padding:0 4px}

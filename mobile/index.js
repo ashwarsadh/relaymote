@@ -436,7 +436,7 @@ async function poll() {
     const _dR = Date.now() - _t0;
     if (_dR > 400) log(`poll: sessions.refresh took ${_dR}ms`);
     const snap = desktop.loadSnapshot();
-    const decorKey = String(sessions.index().at) + '|' + String(snap && snap.at);
+    const decorKey = String(sessions.index().at) + '|' + String(snap && snap.at) + '|' + sessions.ackVersion();
     let all;
     if (lastDecor.all && lastDecor.key === decorKey) all = lastDecor.all;
     else { all = sessions.decorate(sessions.index().list, snap); lastDecor = { key: decorKey, all }; }
@@ -1203,6 +1203,18 @@ async function handle(req, res) {
                      (out) => ({ usage: out && out.ok ? out : null }));
   }
 
+  // Opened in the app with no question or permission open: this turn's dot is seen (see sessions.ackDot).
+  if (p === '/api/seen') {
+    const id = url.searchParams.get('id');
+    if (!id) return json(res, 400, { ok: false, error: 'id required' });
+    const s = sessions.get(id);
+    if (!s) return json(res, 404, { ok: false, error: 'NO_SUCH_SESSION' });
+    if (!visibleSessions(identity, [s]).length) return json(res, 403, { ok: false, error: 'forbidden' });
+    const ok = sessions.ackDot(id, s.turnMark);
+    log(`seen: "${String(s.title || id).slice(0, 48)}" turn ${s.turnMark || '?'}${s.blockedNeed ? ' (Desktop said blocked: ' + s.blockedNeed.slice(0, 80) + ')' : ''}`);
+    return json(res, 200, { ok, turnMark: s.turnMark || null });
+  }
+
   if (p === '/api/mark-read') {
     const id = url.searchParams.get('id');
     if (!id) return json(res, 400, { ok: false, error: 'id required' });
@@ -1261,7 +1273,7 @@ async function handle(req, res) {
     const sess = sessions.get(url.searchParams.get('id') || '');
     // Owner only: a scoped sub-user never reaches here (not in READ_OK above).
     if (!sess) return json(res, 404, { ok: false, error: 'no such session' });
-    const r = await sessions.searchSession(sess, url.searchParams.get('q') || '', { uuid: url.searchParams.get('uuid') || null });
+    const r = await sessions.searchSession(sess, url.searchParams.get('q') || '', { uuid: url.searchParams.get('uuid') || null, work: url.searchParams.get('work') === '1' });
     return json(res, r.ok ? 200 : 400, r);
   }
 

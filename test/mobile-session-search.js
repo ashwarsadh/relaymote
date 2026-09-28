@@ -49,7 +49,7 @@ const sessions = require('../mobile/sessions');
   check(hit.hits.length === 1 && hit.hits[0].ts === ts(400) && /late mention/.test(hit.hits[0].snippet), 'an anchor uuid finds its message, with its time and text', hit.hits[0]);
   check(JSON.parse(lineAt.call(null, hit.hits[0].byte).length ? fs.readFileSync(file).toString('utf8', hit.hits[0].byte, fs.readFileSync(file).indexOf(10, hit.hits[0].byte)) : '{}').uuid === U,
         'and its byte is that line');
-  check(/searchSession\(sess, url\.searchParams\.get\('q'\) \|\| '', \{ uuid: url\.searchParams\.get\('uuid'\) \|\| null \}\)/.test(H.src('mobile/index.js')), 'the endpoint takes ?uuid=');
+  check(/searchSession\(sess, url\.searchParams\.get\('q'\) \|\| '', \{ uuid: url\.searchParams\.get\('uuid'\) \|\| null, work: url\.searchParams\.get\('work'\) === '1' \}\)/.test(H.src('mobile/index.js')), 'the endpoint takes ?uuid= and ?work=1');
 
   const inbox = require('../lib/inbox');
   const made = inbox.add('Card about a blocked emulator', { session: sess.id, anchor: U });
@@ -78,6 +78,23 @@ const sessions = require('../mobile/sessions');
   const ui = H.src('mobile/public/app.js');
   check(/function markSnip\(text, q\)/.test(ui) && /markSnip\(s\.snippet, state\.deepQ\)/.test(ui), 'the hint marks the match');
   check(/landAtHit\(\{ byte: s\.byte, ts: s\.ts, snippet: s\.snippet \}, state\.deepQ\)/.test(ui), 'tapping a hit opens the session on that message');
+
+  // 29-Sep: "an option there to search in working, which is unticked by default".
+  {
+    const off = await sessions.searchSession(sess, 'notes.txt');
+    check(off.hits.length === 0, 'unticked: a word only inside a tool call is not found (what was said only)');
+    const on = await sessions.searchSession(sess, 'notes.txt', { work: true });
+    check(on.hits.length === 1 && on.hits[0].ts === ts(2), 'ticked: the tool step is found, at its own message', on.hits.map(h => h.ts));
+    const both = await sessions.searchSession(sess, 'quokkafish', { work: true });
+    check(both.hits.length === 4, 'ticked: said text AND the step both match (3 + 1)', both.hits.length);
+    const html = H.src('mobile/public/index.html');
+    const bar = html.slice(html.indexOf('id="findbar"'), html.indexOf('</div>', html.indexOf('id="findbar"')));
+    check(/<input id="find-work" type="checkbox">\s*Include working steps/.test(bar) && !/find-work" type="checkbox" checked/.test(bar), 'the find bar has "Include working steps", unticked by default');
+    const a = H.src('mobile/public/app.js');
+    check(/finder\.work = findWorkFor\(state\.open\)/.test(a) && /findWorkSave\(state\.open, finder\.work\)/.test(a), 'the tick is remembered per session');
+    check(/finder\.work && row\.matches\('details\.work'\)/.test(a) && /\+ \(finder\.work \? '&work=1' : ''\)/.test(a), 'ticked, the steps are marked on screen and searched on the server');
+    check(/findOpenAround\(marks\[i\]\)/.test(a) && /state\.openGroups\.add\(d\.dataset\.key\)/.test(a), 'a hit inside a folded step opens it, and it stays open across renders');
+  }
 
   // g784 follow-up: the header's 👁 gave its place to 🔍; working steps moved to the ⋯ sheet.
   const html = H.src('mobile/public/index.html');

@@ -1098,6 +1098,7 @@ async function loadSessions() {
     if (state.boot && d.build) {
       const moved = state.boot.build !== d.build;
       state.boot.build = d.build; state.boot.buildAgeMs = d.buildAgeMs;
+      if (d.version) state.boot.version = d.version;
       if (moved || typeof d.buildAgeMs === 'number') paintBuildLine();
     }
   } catch (e) { toast('List failed: ' + e.message, true); }
@@ -3092,6 +3093,28 @@ function paintBuildLine() {
   el.textContent = 'This app is running an OLD build (' + BUILD + '); the desktop has ' + server +
                    '. Tap to load the current one.';
   el.onclick = () => location.reload();
+  updateBanner(server);
+}
+
+// The drawer line above is where nobody looks: a web app left open on the phone kept running an old
+// build for hours (28-Sep). This puts the news where it is seen, once per new build, until reloaded.
+function updateBanner(server) {
+  let b = $('updbanner');
+  let dismissed = null;
+  try { dismissed = sessionStorage.getItem('baton.updDismissed'); } catch {}
+  if (!server || server === BUILD || dismissed === server) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'updbanner';
+    b.className = 'updbanner';
+    b.setAttribute('role', 'status');
+    document.body.appendChild(b);
+  }
+  const v = state.boot && state.boot.version;
+  b.innerHTML = `<span>${v ? 'Relaymote ' + esc(v) + ' is ready' : 'A new version is ready'}</span>` +
+    '<button class="upd-go">Reload</button><button class="upd-x" aria-label="Later">✕</button>';
+  b.querySelector('.upd-go').onclick = () => location.reload();
+  b.querySelector('.upd-x').onclick = () => { try { sessionStorage.setItem('baton.updDismissed', server); } catch {} b.remove(); };
 }
 
 async function watchForUpdates() {

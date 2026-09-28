@@ -47,4 +47,10 @@ check(/!isHeld\(\)\) flush\('reopen'\)/.test(board) && /!isHeld\(\)\) flush\('re
 check(/setHeld\(false\);\s*\n\s*showSheet\(\$\('view-board'\)\)/.test(board), 'opening the board again releases the hold');
 check(/\$\('board-held-send'\)\.onclick = \(\) => flush\('send-all-held'\)/.test(board) && /id="board-held-send"/.test(H.src('mobile/public/index.html')), 'the card has Send all, wired to the same flush');
 
+console.log('--- a web app left open is told a new version is ready ---');
+check(/function updateBanner\(server\)/.test(app) && /updateBanner\(server\);/.test(app), 'a stale build raises the top banner, not only the drawer line');
+check(/if \(d\.version\) state\.boot\.version = d\.version;/.test(app) && /version: APP_VERSION,/.test(H.src('mobile/index.js')), 'the banner names the version the desktop now runs');
+check(/upd-go[\s\S]{0,80}location\.reload\(\)/.test(app), 'Reload loads the new build');
+check(/\/\* build \$\{v\} \*\//.test(H.src('mobile/index.js')), 'sw.js is stamped with the build, so every release also triggers the service-worker reload');
+
 H.finish(W);

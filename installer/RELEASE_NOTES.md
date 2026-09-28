@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.33
+
+**An open web app tells you when a new version is ready.** Leave Relaymote open on your phone and update the desktop, and a banner at the top now says "Relaymote 0.2.33 is ready" with Reload (or ✕ for later). Before, the only sign was a line at the foot of the session drawer.
+
 ## 0.2.32
 
 **Hear a message read aloud.** Each message has a 🔊 button. It uses your phone's or browser's own voice (nothing is downloaded or sent anywhere), with − / + to change the speed, a Stop button, and the message scrolling along as it reads; scroll yourself and it stops following for a few seconds. Code blocks are skipped. The speed you pick is remembered.

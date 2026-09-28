@@ -37,6 +37,8 @@ const PUBLIC = path.join(DIR, 'public');
 const UPLOADS = config.UPLOADS;
 const SECRET_FILE = process.env.RELAYMOTE_MOBILE_SECRET || path.join(config.MOBILE, 'secret.json');
 const PORT = Number(process.env.RELAYMOTE_MOBILE_PORT || config.get().appPort);
+// Read once: an update restarts the daemon, so this is the version the phone should be running.
+const APP_VERSION = (() => { try { return require('../package.json').version; } catch { return null; } })();
 const MAX_UPLOAD = 25 * 1024 * 1024;
 const ROUTE_DEADLINE_MS = Number(process.env.RELAYMOTE_MOBILE_DEADLINE_MS || 20000);
 
@@ -803,6 +805,7 @@ async function handle(req, res) {
       startDefaults: newSessionDefaults(),
       build: assetVersion(),
       buildAgeMs: assetVer.since ? Date.now() - assetVer.since : null,
+      version: APP_VERSION,
     });
   }
 
@@ -825,6 +828,7 @@ async function handle(req, res) {
       snapshotAt: snap.at || null,
       build: assetVersion(),
       buildAgeMs: assetVer.since ? Date.now() - assetVer.since : null,
+      version: APP_VERSION,
       blocker: snap.blocker || null,
       sessions: out.slice(0, limit).map(slimSession),
     });

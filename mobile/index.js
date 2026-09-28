@@ -499,7 +499,8 @@ const MODELS_FILE = path.join(require('../lib/config').STATE, 'models.json');
 let modelsVal = null, modelsAt = 0, modelsRefreshing = false;
 try {
   const j = JSON.parse(fs.readFileSync(MODELS_FILE, 'utf8'));
-  if (Array.isArray(j.models) && j.models.length) { modelsVal = j.models; modelsAt = j.at || 0; }
+  // A list saved before 0.2.39 can carry the picker's badge glyph ("Sonnet 5.5\uE08F").
+  if (Array.isArray(j.models) && j.models.length) { modelsVal = j.models.map(desktop.cleanLabel).filter(Boolean); modelsAt = j.at || 0; }
 } catch {}
 
 function refreshModelsSoon(ttl) {
@@ -691,7 +692,7 @@ async function runningTaskCount(sessionId) {
       if (!(await desktop.navTo(conn, CID, sessionId))) return null;
     }
     const out = await conn.evaluate(desktop.rEval(CID, `(function(){
-      function clean(e){ return (e&&e.textContent||'').replace(/[​-‍﻿­⁠-]/g,'').trim(); }
+      function clean(e){ return (e&&e.textContent||'').replace(/[\u200b-‍﻿­⁠-]/g,'').trim(); }
       var hit = Array.from(document.querySelectorAll('button,[role=button]')).filter(function(e){
         if (e.offsetParent === null) return false;
         var t = clean(e).toLowerCase();

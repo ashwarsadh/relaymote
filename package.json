@@ -1,6 +1,6 @@
 {
   "name": "relaymote",
-  "version": "0.2.39",
+  "version": "0.2.40",
   "description": "Your Claude Code sessions, in your pocket: a phone + desktop client for Claude Desktop's Code tab with multi-session control, auto-resume and a master/worker orchestrator.",
   "license": "MIT",
   "bin": {

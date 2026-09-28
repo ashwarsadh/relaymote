@@ -154,7 +154,10 @@ function ago(ts) {
   if (s < 86400 * 7) return Math.floor(s / 86400) + 'd';
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
-const shortModel = (m) => String(m || '').replace(/^claude-/, '').replace(/-\d{8}$/, '').replace(/-latest$/, '');
+// The desktop picker's badge glyphs are Private Use characters ("Sonnet 5.5\uE08F" showed a box): drop
+// them, and zero-width marks, from every model label.
+const shortModel = (m) => String(m || '').replace(/[\u200b-\u200f\u2060-\u206f\ufeff\ue000-\uf8ff]|[\udb80-\udbff][\udc00-\udfff]/g, '').trim()
+  .replace(/^claude-/, '').replace(/-\d{8}$/, '').replace(/-latest$/, '');
 const modelKey = (m) => shortModel(m).replace(/-.*$/, '');
 const modelFamily = (m) => shortModel(String(m || '').trim()).split(/[\s\-_[]/)[0].toLowerCase();
 // Family is not identity: "Opus 5.5" and "Opus 5" share the family word, so comparing families lit

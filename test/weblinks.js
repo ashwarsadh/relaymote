@@ -21,8 +21,8 @@ function load(src) {
   vm.runInContext(src + '\n;globalThis.md = md;', ctx);
   return ctx.md;
 }
-const parts = [/^function esc\(/m, /^const FILE_RX = /m, /^const URL_RX = /m, /^function renderTables\(/m, /^function md\(/m].map(grab);
-check(parts.every(Boolean), 'esc, FILE_RX, URL_RX, renderTables and md are found in app.js', parts.map(p => p.length));
+const parts = [/^function esc\(/m, /^const CODE_PATH_RX = /m, /^const FILE_RX = /m, /^const URL_RX = /m, /^function renderTables\(/m, /^function md\(/m].map(grab);
+check(parts.every(Boolean), 'esc, CODE_PATH_RX, FILE_RX, URL_RX, renderTables and md are found in app.js', parts.map(p => p.length));
 const md = load(parts.join('\n'));
 const hrefs = (h) => [...h.matchAll(/<a class="weblink" href="([^"]*)"[^>]*>([^<]*)<\/a>/g)].map(m => [m[1], m[2]]);
 
@@ -54,6 +54,24 @@ check(md('hello world') === 'hello world', 'plain text is unchanged');
   const old = load(parts.join('\n').replace(/\n  \/\/ Bare http\(s\) URLs[\s\S]*?\n  \}\);\n/, '\n'));
   const h = old('https://github.com/example/relaymote/blob/main/src/app.js');
   check(hrefs(h).length === 0 && /fileref/.test(h), 'control: without the URL pass the link is missing and the path became a file link', h);
+}
+
+// File paths with spaces (28-Sep report: tapping `memento mcp/docs/GR_REWORK/INTEGRATION_PLAN.md` opened
+// "mcp/docs/..." -> NOT_FOUND: the linkifier cut the path at the space).
+const refs = (h) => [...h.matchAll(/<a class="fileref" data-p="([^"]*)"/g)].map(m => m[1]);
+{
+  const msg = 'The full plan is in `memento mcp/docs/GR_REWORK/INTEGRATION_PLAN.md`';
+  check(JSON.stringify(refs(md(msg))) === JSON.stringify(['memento mcp/docs/GR_REWORK/INTEGRATION_PLAN.md']), 'the reported message: the whole spaced path in backticks is ONE link', refs(md(msg)));
+  check(JSON.stringify(refs(md('`docs/a b/x.md:12`'))) === JSON.stringify(['docs/a b/x.md:12']), 'a :line suffix survives inside a code span');
+  check(refs(md('see [the plan](memento mcp/docs/P.md) now'))[0] === 'memento mcp/docs/P.md', 'a markdown link target may hold spaces');
+  check(refs(md('see [the plan](<memento mcp/docs/P.md>)'))[0] === 'memento mcp/docs/P.md', 'the <angle> link target form works');
+  const abs = 'Saved to D:\\My Documents\\dev work\\projects\\memento mcp\\docs\\PLAN.md, then done.';
+  check(refs(md(abs))[0] === 'D:\\My Documents\\dev work\\projects\\memento mcp\\docs\\PLAN.md', 'a bare Windows path with spaced folders is one link, punctuation outside', refs(md(abs)));
+  const two = refs(md('compare D:\\a b\\x.md and D:\\c\\y.md'));
+  check(two.length === 2 && two[0] === 'D:\\a b\\x.md' && two[1] === 'D:\\c\\y.md', 'two drive paths in a sentence stay two links', two);
+  check(refs(md('`D:\\My Documents\\x y\\P.md`'))[0] === 'D:\\My Documents\\x y\\P.md', 'a spaced Windows path in backticks is one link');
+  check(!/fileref/.test(md('run `npm test` or `git log -1`')), 'code that is not a path stays code');
+  check(refs(md('edit src/app.js:44 now'))[0] === 'src/app.js:44', 'plain relative paths still link as before');
 }
 
 console.log(failed ? `\n${failed} check(s) failed` : '\nall weblink checks passed');

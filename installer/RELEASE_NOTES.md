@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.31
+
+**File paths with spaces open from chat.** A path in backticks such as `` `memento mcp/docs/PLAN.md` `` used to become a link to only the part after the last space (`mcp/docs/PLAN.md`), which the viewer then could not find. A path in a code span now opens whole, a markdown link may point at a path with spaces (plain or in `<...>`), and a bare Windows path such as `D:\My Projects\app\PLAN.md` links in full. The phone and desktop web app pick this up on their next reload.
+
 ## 0.2.30
 
 **The file viewer works when your project folder is reached through a link.** On macOS (where temporary folders live behind `/var` → `/private/var`) and on Windows paths with short or linked names, a file that had not been written yet was reported as outside every project instead of "not found", and the 0.2.29 cross-project lookup never got a chance to run. Paths are now compared through their real location. 0.2.29 was not published: its tests caught this on macOS and Windows.

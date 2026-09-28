@@ -223,10 +223,18 @@ function md(src, doc) {
     fences.push(`<pre class="code">${code.replace(/\n$/, '')}</pre>`);
     return `\u0000${fences.length - 1}\u0000`;
   });
-  h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   const links = [];
-  h = h.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (_, label, target) => {
-    const t = target.replace(/&amp;/g, '&').replace(/"/g, '&quot;');
+  // An inline-code span that IS a path opens as one, whole. A path with a space ("memento mcp/docs/x.md")
+  // was cut at the space by FILE_RX, and the viewer asked for "mcp/docs/x.md" -> NOT_FOUND.
+  h = h.replace(/`([^`\n]+)`/g, (_, c) => {
+    const p = c.trim();
+    if (!CODE_PATH_RX.test(p)) return `<code>${c}</code>`;
+    links.push(`<a class="fileref" data-p="${p.replace(/"/g, '&quot;')}"><code>${c}</code></a>`);
+    return `\u0000L${links.length - 1}\u0000`;
+  });
+  // A markdown link's target may hold spaces: [plan](memento mcp/docs/x.md) or [plan](<a b/x.md>).
+  h = h.replace(/\[([^\]\n]+)\]\((?:&lt;([^\n]+?)&gt;|([^)\n]+?))\)/g, (_, label, angle, plain) => {
+    const t = (angle || plain).trim().replace(/&amp;/g, '&').replace(/"/g, '&quot;');
     links.push(/^https?:/i.test(t)
       ? `<a href="${t}" target="_blank" rel="noreferrer">${label}</a>`
       : `<a class="fileref" data-p="${t}">${label}</a>`);
@@ -263,7 +271,11 @@ function md(src, doc) {
 }
 
 const URL_RX = /\bhttps?:\/\/(?:(?!&quot;|&lt;|&gt;)[^\s<>`"'])+/gi;
-const FILE_RX = /(?:[A-Za-z]:\\[^\s"'<>|`&]+|(?:\.{0,2}[\/])?(?:[\w.@~-]+[\/])+[\w.@~-]+\.\w{1,8})(?::\d+)?/g;
+// A code span holding one path: a drive path, or a relative path with a separator, ending in a file
+// extension (optionally :line). Spaces are allowed, since a code span marks where the path starts and ends.
+const CODE_PATH_RX = /^(?:[A-Za-z]:[\\/]|\.{0,2}[\\/])?(?:[^\\/\n`<>|*?]+[\\/])+[^\\/\s`<>|*?]+\.\w{1,8}(?::\d+(?::\d+)?)?$/;
+// A bare drive path's folders may hold spaces (D:\Documents of X\y\plan.md); its last segment may not.
+const FILE_RX = /(?:[A-Za-z]:\\(?:[^\n"'<>|`&\\:,;]+\\)+[^\s"'<>|`&\\]+\.\w{1,8}|[A-Za-z]:\\[^\s"'<>|`&]+|(?:\.{0,2}[\/])?(?:[\w.@~-]+[\/])+[\w.@~-]+\.\w{1,8})(?::\d+)?/g;
 
 const uiJobs = new Map();
 

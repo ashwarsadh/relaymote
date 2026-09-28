@@ -25,7 +25,26 @@ function inside(child, parent) {
   return c === p || c.startsWith(p.endsWith(path.sep) ? p : p + path.sep);
 }
 
-function readFile(ref, { roots = [], cwd = null } = {}) {
+// A relative path a session mentions is often relative to ANOTHER project than the session's own
+// folder: a session in "email analyzer" that worked on the repo "developmentaton" says
+// "docs/marketing/reddit-post.md", and resolving that against its own cwd gave NOT_FOUND. For the
+// owner only, look for it in the sibling folders of every folder sessions work in, and take it only
+// when exactly one matches -- never a guess between two.
+function siblingMatches(bare, roots) {
+  const parents = [...new Set(roots.filter(Boolean).map(r => path.dirname(path.resolve(r))))];
+  const hits = new Set();
+  for (const p of parents) {
+    let dirs = [];
+    try { dirs = fs.readdirSync(p, { withFileTypes: true }).filter(e => e.isDirectory()).slice(0, 300); } catch {}
+    for (const d of dirs) {
+      const c = path.join(p, d.name, bare);
+      try { if (fs.statSync(c).isFile()) hits.add(realish(c)); } catch {}
+    }
+  }
+  return [...hits];
+}
+
+function readFile(ref, { roots = [], cwd = null, siblings = false } = {}) {
   const raw = String(ref || '').trim().replace(/^['"`]|['"`]$/g, '');
   if (!raw) return { ok: false, error: 'NO_PATH' };
 
@@ -49,6 +68,12 @@ function readFile(ref, { roots = [], cwd = null } = {}) {
   }
   if (!target) return { ok: false, error: 'OUT_OF_SCOPE',
                         message: 'That path is outside every folder this machine has worked in.' };
+  if (siblings && !path.isAbsolute(bare) && !fs.existsSync(target)) {
+    const hits = siblingMatches(bare, allowed);
+    if (hits.length === 1) target = hits[0];
+    else if (hits.length > 1) return { ok: false, error: 'AMBIGUOUS', path: bare, candidates: hits.slice(0, 10),
+                                       message: 'More than one project has a file at that path; open it by its full path.' };
+  }
 
   let st;
   try { st = fs.statSync(target); }

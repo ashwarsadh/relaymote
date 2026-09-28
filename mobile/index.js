@@ -841,7 +841,7 @@ async function handle(req, res) {
     const roots = isSubuser(identity)
       ? [sess && sess.cwd].filter(Boolean)
       : [...new Set(sessions.index().list.map(x => x.cwd).filter(Boolean))].concat([UPLOADS]);
-    const out = readFile(url.searchParams.get('path'), { roots, cwd: sess && sess.cwd });
+    const out = readFile(url.searchParams.get('path'), { roots, cwd: sess && sess.cwd, siblings: !isSubuser(identity) });
     return json(res, out.ok ? 200 : 404, out);
   }
 

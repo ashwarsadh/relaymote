@@ -15,8 +15,20 @@ const IMAGE_EXT = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/j
                     '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
                     '.bmp': 'image/bmp', '.ico': 'image/x-icon' };
 
+// A path that does not exist yet is resolved through its deepest existing ancestor, so it compares
+// equal to a realpath'd root even when that root sits behind a symlink or a short name
+// (macOS /var -> /private/var, Windows RUNNER~1).
 function realish(p) {
-  try { return fs.realpathSync.native(p); } catch { return path.resolve(p); }
+  const abs = path.resolve(p);
+  let head = abs, tail = [];
+  for (;;) {
+    try { return path.join(fs.realpathSync.native(head), ...tail); }
+    catch {
+      const up = path.dirname(head);
+      if (up === head) return abs;
+      tail.unshift(path.basename(head)); head = up;
+    }
+  }
 }
 
 function inside(child, parent) {

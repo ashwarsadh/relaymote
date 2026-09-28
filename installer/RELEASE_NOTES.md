@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.30
+
+**The file viewer works when your project folder is reached through a link.** On macOS (where temporary folders live behind `/var` → `/private/var`) and on Windows paths with short or linked names, a file that had not been written yet was reported as outside every project instead of "not found", and the 0.2.29 cross-project lookup never got a chance to run. Paths are now compared through their real location. 0.2.29 was not published: its tests caught this on macOS and Windows.
+
 ## 0.2.29
 
 **File links from another project now open.** A session often names a file by a path relative to the project it worked in, which may not be its own folder (`docs/marketing/reddit-post.md` from a session started elsewhere). The file viewer used to answer NOT_FOUND. It now also looks in the sibling folders of the projects your sessions work in and opens the file when exactly one matches; if two projects have that path it says so instead of guessing. This applies to the owner only, never to a shared sub-user.

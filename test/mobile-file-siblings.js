@@ -33,5 +33,11 @@ r = readFile('docs.md', { roots, cwd: own, siblings: true });
 check(r.ok && r.text === 'mine', "the session's own folder still wins");
 r = readFile('docs/m/post.md', { roots, cwd: own, siblings: false });
 check(!r.ok, 'a sub-user (siblings off) gets no wider search');
+// A root reached through a link (macOS /var -> /private/var, Windows RUNNER~1): a path not yet
+// written must still be in scope, or every such lookup reads OUT_OF_SCOPE (v0.2.29 CI, mac + win).
+const link = path.join(W.dir, 'linked');
+fs.symlinkSync(own, link, 'junction');
+r = readFile('not/yet.md', { roots: [link], cwd: link });
+check(!r.ok && r.error === 'NOT_FOUND', 'an unwritten path under a linked root is NOT_FOUND, not OUT_OF_SCOPE', r.error);
 check(/siblings: !isSubuser\(identity\)/.test(H.src('mobile/index.js')), '/api/file enables it for the owner only');
 H.finish(W);

@@ -1,5 +1,13 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.45
+
+**Read aloud keeps playing with the screen locked.** The desktop now turns the message into speech and your phone plays it as normal audio, so Chrome no longer silences it when the screen locks. The lock screen and Bluetooth headsets show Play, Pause and a seek bar. Nothing runs in the background unless something is playing. The voice is now the desktop's (Windows David or Zira, the Mac voice, or espeak on Linux) rather than the phone's. If the desktop has no speech engine, the phone voice is used as before.
+
+**Seek bar, Play/Pause, Stop and 15-second skips.** Move back and forth through a message. The position is saved for each message, so a lock, a reload or a phone call resumes where you were instead of starting over.
+
+**After a phone call it carries on by itself.** If a call or another app takes the audio, read-aloud waits and resumes when it is released. A pause you make yourself is never overridden.
+
 ## 0.2.44
 
 **Find can include working steps.** The 🔍 bar inside a session has an "Include working steps" box, unticked by default. Unticked, it searches only your messages and the replies, as before. Ticked, it also searches thinking, tool calls and tool output, and opens the folded step that holds a match. The box is remembered for each session.

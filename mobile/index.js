@@ -21,6 +21,7 @@ const { readRunningTasks, stopRunningTask } = require('./tasks');
 const { pasteFiles } = require('./attach');
 const { readFile } = require('./files');
 const sentfiles = require('./sentfiles');   // files a session sent with SendUserFile
+const tts = require('./tts');               // read-aloud audio the phone plays through <audio> (g808)
 const { readSuggestion } = require('./suggest');
 const config = require('../lib/config');
 const tunnel = require('../lib/tunnel');
@@ -907,6 +908,13 @@ async function handle(req, res) {
     return sentfiles.stream(req, res, file, st.size);
   }
 
+  if (p === '/api/tts-audio') {
+    const file = tts.fileOf(url.searchParams.get('k'));
+    let st; try { st = file && fs.statSync(file); } catch { st = null; }
+    if (!st || !st.isFile()) return json(res, 404, { ok: false, error: 'GONE', message: 'That audio is no longer cached.' });
+    return sentfiles.stream(req, res, file, st.size);
+  }
+
   if (p === '/api/permission') {
     const id = url.searchParams.get('id');
     if (!id) return json(res, 400, { ok: false, error: 'id required' });
@@ -1484,6 +1492,10 @@ async function handle(req, res) {
   }
 
   try {
+    if (p === '/api/tts') {
+      const out = await tts.synth(body.text);
+      return json(res, out.ok ? 200 : (out.error === 'NO_TEXT' ? 400 : 501), out);
+    }
     if (p === '/api/send') {
       const jobId = crypto.randomBytes(6).toString('hex');
       const job = { id: jobId, session: body.id, text: String(body.text || ''), at: Date.now(),

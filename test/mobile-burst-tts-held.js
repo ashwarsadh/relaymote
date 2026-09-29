@@ -32,11 +32,11 @@ check(/alerts\.deliver\(pushEvt, log\)/.test(H.src('mobile/index.js')) && /sseSe
 
 console.log('--- g757: read aloud ---');
 const app = H.src('mobile/public/app.js');
-check(/speechSynthesis\.speak\(u\)/.test(app) && !/https?:\/\/[^'"\s]*(tts|speech)/i.test(app), 'speech comes from the device speechSynthesis; nothing is fetched');
+check(/speechSynthesis\.speak\(u\)/.test(app) && !/https?:\/\/[^'"\s]*(tts|speech)/i.test(app), 'the phone voice remains as the fallback; no third-party speech service is called');
 check(/function speakBtn/.test(app) && /\$\{speakBtn\(cls\)\}/.test(app), 'every assistant/user bubble gets the button (via clampable)');
 check(/data-tts="slower"/.test(app) && /data-tts="faster"/.test(app) && /data-tts="stop"/.test(app), 'the bar has slower, faster and stop');
 check(/function ttsFollow/.test(app) && /userScrollAt/.test(app), 'the message scrolls with the voice, and a manual scroll pauses the follow');
-check(/TTS_OK && \//.test(app), 'no button where the browser has no speech engine');
+check(/TTS_OK && \//.test(app), 'no button where the browser has no audio element');
 
 console.log('--- g775: Open session holds the board queue ---');
 const board = H.src('mobile/public/board-ui.js');

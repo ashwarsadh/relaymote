@@ -1085,13 +1085,19 @@ html[data-density="compact"] .bcard-acts{margin-top:6px; gap:6px}
 .msg.speaking{box-shadow:0 0 0 2px var(--accent)}
 .msg.speaking .speak{opacity:1}
 .ttsbar{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(84px + env(safe-area-inset-bottom)); z-index:60;
-        display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:var(--panel);
-        border:1px solid var(--line); box-shadow:0 4px 18px rgba(0,0,0,.25); font-size:14px; max-width:calc(100vw / var(--z,1) - 32px)}
+        display:flex; flex-direction:column; gap:6px; padding:8px 12px; border-radius:18px; background:var(--panel);
+        border:1px solid var(--line); box-shadow:0 4px 18px rgba(0,0,0,.25); font-size:14px; width:min(420px, calc(100vw / var(--z,1) - 32px))}
 .ttsbar.hidden{display:none}
+.ttsbar .ttsrow{display:flex; align-items:center; gap:8px}
+.ttsbar .ttsbtns{justify-content:space-between}
 .ttsbar button{min-width:36px; height:32px; border-radius:999px; border:1px solid var(--line); background:transparent; color:inherit; font-size:16px; cursor:pointer}
+.ttsbar .ttsplay{min-width:44px; background:var(--accent); color:#fff; border-color:transparent}
 .ttsbar .ttsstop{padding:0 12px; font-size:13px; white-space:nowrap}
-.ttsbar .ttsrate{min-width:40px; text-align:center; font-variant-numeric:tabular-nums}
-.ttsbar .ttspos{color:var(--dim); font-size:12px; min-width:34px; text-align:center}
+.ttsbar .ttsrate{min-width:38px; text-align:center; font-variant-numeric:tabular-nums}
+.ttsbar .ttsnow,.ttsbar .ttstot{color:var(--dim); font-size:12px; min-width:34px; text-align:center; font-variant-numeric:tabular-nums}
+.ttsbar .ttsseek{flex:1; min-width:0; height:28px; accent-color:var(--accent)}
+.ttsbar.loading .ttsseek{opacity:.4; pointer-events:none}
+.ttsbar.synth .ttsplay,.ttsbar.synth [data-tts=back],.ttsbar.synth [data-tts=fwd]{display:none}
 
 /* Board replies held by "Open session" (g775): shown where notifications appear */
 .heldcard{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--safe-b) + 84px); z-index:49;

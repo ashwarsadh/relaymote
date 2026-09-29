@@ -304,9 +304,9 @@ function hash(s) {
   for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
   return h.toString(36);
 }
-// Read-aloud button (g757): the device's own speechSynthesis, nothing fetched. Hidden where the
-// browser has none, so it never appears as a dead control.
-const TTS_OK = typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined';
+// Read-aloud button (g757, g808): the desktop speaks, the phone plays the audio. Hidden where the
+// browser has no audio element, so it never appears as a dead control.
+const TTS_OK = typeof Audio !== 'undefined';
 function speakBtn(cls) {
   return TTS_OK && /^msg (assistant|user)/.test(cls) ? '<button class="speak" title="Read aloud" aria-label="Read aloud">🔊</button>' : '';
 }
@@ -3370,12 +3370,16 @@ const tmark = (k) => { try { window.__batonT[k] = Math.round(performance.now());
   }
 })();
 
-/* ---- Read aloud (g757) ----------------------------------------------------------------------
-   The device's own speechSynthesis only. Text is spoken in sentence-sized chunks: Chrome on
-   Android cuts one long utterance off after ~15 s, and chunks let a speed change take effect at
-   once (the current chunk restarts at the new rate). While it speaks, the message scrolls with it,
-   unless you scroll yourself, which pauses the follow for a few seconds. */
-const tts = { el: null, chunks: [], i: 0, rate: 1, userScrollAt: 0, token: 0 };
+/* ---- Read aloud (g757, g808) ----------------------------------------------------------------
+   The desktop speaks the text (POST /api/tts -> a cached WAV) and the phone plays it through ONE
+   <audio> element with the Media Session API. That is why it keeps playing with the screen locked:
+   Chrome silences speechSynthesis the moment the page is hidden, but not an <audio> element. The
+   phone's own voice is kept only as a fallback for a desktop with no speech engine.
+   Position is saved per message, so a call, a lock or a reload resumes instead of restarting.
+   While it plays, the message scrolls with it, unless you scroll yourself (paused for a few seconds).
+   Nothing runs when nothing is playing: the retry timer exists only while an interruption is open. */
+const tts = { el: null, mode: 'audio', hash: '', chunks: [], i: 0, rate: 1, userScrollAt: 0, token: 0,
+              audio: null, loading: false, userPaused: false, retry: null, retryUntil: 0, seeking: false, savedAt: 0 };
 try { tts.rate = Math.min(3, Math.max(0.5, Number(localStorage.getItem('baton.ttsRate')) || 1)); } catch {}
 
 function ttsText(el) {
@@ -3393,33 +3397,102 @@ function ttsChunks(text) {
   }
   return out;
 }
+function ttsHash(text) {
+  let h = 5381;
+  for (let k = 0; k < text.length; k++) h = ((h << 5) + h + text.charCodeAt(k)) | 0;
+  return (h >>> 0).toString(36) + '.' + text.length;
+}
+function ttsPosLoad() { try { return JSON.parse(localStorage.getItem('baton.ttsPos') || '{}') || {}; } catch { return {}; } }
+function ttsPosSave(hash, t) {
+  if (!hash || !(t > 0)) return;
+  try {
+    const all = ttsPosLoad(), now = Date.now();
+    all[hash] = { t: Math.round(t * 10) / 10, at: now };
+    for (const [k, v] of Object.entries(all)) if (now - (v.at || 0) > 14 * 86400000) delete all[k];
+    const keys = Object.keys(all).sort((a, b) => all[b].at - all[a].at);
+    for (const k of keys.slice(40)) delete all[k];
+    localStorage.setItem('baton.ttsPos', JSON.stringify(all));
+  } catch {}
+}
+function ttsPosForget(hash) { try { const all = ttsPosLoad(); delete all[hash]; localStorage.setItem('baton.ttsPos', JSON.stringify(all)); } catch {} }
+function ttsClock(s) { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+let ttsSilentUrl = null;
+function ttsSilent() {                         // played inside the tap, so the real audio may start after the fetch
+  if (ttsSilentUrl) return ttsSilentUrl;
+  const n = 800, b = new DataView(new ArrayBuffer(44 + n));
+  const w = (o, s) => { for (let k = 0; k < s.length; k++) b.setUint8(o + k, s.charCodeAt(k)); };
+  w(0, 'RIFF'); b.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true);
+  b.setUint16(22, 1, true); b.setUint32(24, 8000, true); b.setUint32(28, 16000, true); b.setUint16(32, 2, true);
+  b.setUint16(34, 16, true); w(36, 'data'); b.setUint32(40, n, true);
+  ttsSilentUrl = URL.createObjectURL(new Blob([b.buffer], { type: 'audio/wav' }));
+  return ttsSilentUrl;
+}
+
 function ttsBar() {
   let bar = document.getElementById('ttsbar');
   if (bar) return bar;
   bar = document.createElement('div');
   bar.id = 'ttsbar';
   bar.className = 'ttsbar hidden';
-  bar.innerHTML = '<button data-tts="slower" aria-label="Slower">−</button>' +
-    '<span class="ttsrate"></span>' +
+  bar.innerHTML =
+    '<div class="ttsrow"><span class="ttsnow"></span>' +
+    '<input class="ttsseek" type="range" min="0" max="1000" value="0" aria-label="Position">' +
+    '<span class="ttstot"></span></div>' +
+    '<div class="ttsrow ttsbtns">' +
+    '<button data-tts="slower" aria-label="Slower">−</button><span class="ttsrate"></span>' +
     '<button data-tts="faster" aria-label="Faster">+</button>' +
-    '<span class="ttspos"></span>' +
-    '<button data-tts="stop" class="ttsstop" aria-label="Stop">Stop</button>';
+    '<button data-tts="back" aria-label="Back 15 seconds">⏪</button>' +
+    '<button data-tts="play" class="ttsplay" aria-label="Play or pause">⏸</button>' +
+    '<button data-tts="fwd" aria-label="Forward 15 seconds">⏩</button>' +
+    '<button data-tts="stop" class="ttsstop" aria-label="Stop">Stop</button></div>';
   bar.addEventListener('click', (e) => {
     const b = e.target.closest('[data-tts]');
     if (!b) return;
     const a = b.dataset.tts;
     if (a === 'stop') return ttsStop();
+    if (a === 'play') return ttsToggle();
+    if (a === 'back') return ttsSeekBy(-15);
+    if (a === 'fwd') return ttsSeekBy(15);
     tts.rate = Math.round(Math.min(3, Math.max(0.5, tts.rate + (a === 'faster' ? 0.25 : -0.25))) * 100) / 100;
     try { localStorage.setItem('baton.ttsRate', String(tts.rate)); } catch {}
-    ttsSpeak();                                  // restart the current chunk at the new speed
+    if (tts.mode === 'synth') ttsSpeak();      // restart the current chunk at the new speed
+    else if (tts.audio) tts.audio.playbackRate = tts.rate;
+    ttsPaint();
+  });
+  const seek = bar.querySelector('.ttsseek');
+  seek.addEventListener('input', () => { tts.seeking = true; ttsPaint(); });
+  seek.addEventListener('change', () => {
+    tts.seeking = false;
+    const f = Number(seek.value) / 1000;
+    if (tts.mode === 'synth') { tts.i = Math.min(tts.chunks.length - 1, Math.floor(f * tts.chunks.length)); ttsSpeak(); return; }
+    const a = tts.audio;
+    if (a && a.duration > 0) { a.currentTime = f * a.duration; ttsPosSave(tts.hash, a.currentTime); ttsFollow(); ttsSession(); }
   });
   document.body.appendChild(bar);
   return bar;
 }
+function ttsFrac() {
+  if (tts.mode === 'synth') return tts.chunks.length ? tts.i / tts.chunks.length : 0;
+  const a = tts.audio;
+  return a && a.duration > 0 ? Math.min(1, a.currentTime / a.duration) : 0;
+}
 function ttsPaint() {
   const bar = ttsBar();
+  const a = tts.audio, synth = tts.mode === 'synth';
   bar.querySelector('.ttsrate').textContent = (+tts.rate.toFixed(2)) + '×';
-  bar.querySelector('.ttspos').textContent = tts.chunks.length ? `${Math.min(tts.i + 1, tts.chunks.length)}/${tts.chunks.length}` : '';
+  const seek = bar.querySelector('.ttsseek');
+  if (!tts.seeking) seek.value = String(Math.round(ttsFrac() * 1000));
+  const shown = tts.seeking ? Number(seek.value) / 1000 : ttsFrac();
+  const dur = !synth && a && a.duration > 0 ? a.duration : 0;
+  bar.querySelector('.ttsnow').textContent = synth ? `${Math.min(tts.i + 1, tts.chunks.length)}/${tts.chunks.length}` : (dur ? ttsClock(shown * dur) : (tts.loading ? '…' : '0:00'));
+  bar.querySelector('.ttstot').textContent = dur ? ttsClock(dur) : '';
+  const playing = synth ? true : !!(a && !a.paused && !tts.loading);
+  const pb = bar.querySelector('.ttsplay');
+  pb.textContent = playing ? '⏸' : '▶';
+  pb.title = tts.loading ? 'Preparing the audio…' : tts.retry ? 'Interrupted: will resume, or tap ▶' : '';
+  bar.classList.toggle('loading', tts.loading);
+  bar.classList.toggle('synth', synth);
   bar.classList.toggle('hidden', !tts.el);
   document.querySelectorAll('.msg.speaking').forEach(n => { if (n !== tts.el) n.classList.remove('speaking'); });
   if (tts.el) tts.el.classList.add('speaking');
@@ -3428,12 +3501,109 @@ function ttsFollow() {
   const el = tts.el;
   if (!el || !el.isConnected || Date.now() - tts.userScrollAt < 4000) return;
   const log = $('log');
-  const frac = tts.chunks.length ? tts.i / tts.chunks.length : 0;
   // Rect-based: a message's offsetParent is #main, not the scrolling #log.
   const y = log.scrollTop + (el.getBoundingClientRect().top - log.getBoundingClientRect().top) +
-            frac * el.offsetHeight - log.clientHeight / 3;
+            ttsFrac() * el.offsetHeight - log.clientHeight / 3;
   log.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
 }
+
+/* Media Session: lock-screen / notification controls, and Bluetooth buttons. */
+function ttsSession() {
+  if (!('mediaSession' in navigator)) return;
+  const a = tts.audio;
+  try {
+    if (a && a.duration > 0 && isFinite(a.duration)) {
+      navigator.mediaSession.setPositionState({ duration: a.duration, playbackRate: tts.rate, position: Math.min(a.currentTime, a.duration) });
+    }
+  } catch {}
+}
+function ttsSessionInit() {
+  if (!('mediaSession' in navigator) || ttsSessionInit.done) return;
+  ttsSessionInit.done = true;
+  const set = (n, fn) => { try { navigator.mediaSession.setActionHandler(n, fn); } catch {} };
+  set('play', () => { tts.userPaused = false; ttsPlay(); });
+  set('pause', () => { tts.userPaused = true; ttsHold(); if (tts.audio) tts.audio.pause(); });
+  set('stop', () => ttsStop());
+  set('seekbackward', (d) => ttsSeekBy(-((d && d.seekOffset) || 15)));
+  set('seekforward', (d) => ttsSeekBy((d && d.seekOffset) || 15));
+  set('seekto', (d) => { if (tts.audio && d && d.seekTime != null) { tts.audio.currentTime = d.seekTime; ttsSession(); ttsPaint(); } });
+}
+function ttsMeta() {
+  if (!('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+  try {
+    const t = (state.meta && (state.meta.title || state.meta.name)) || 'Read aloud';
+    navigator.mediaSession.metadata = new MediaMetadata({ title: 'Read aloud', artist: String(t).slice(0, 80), album: 'Relaymote',
+      artwork: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }, { src: 'icon-512.png', sizes: '512x512', type: 'image/png' }] });
+  } catch {}
+}
+
+/* An interruption (a phone call, another app taking the audio) pauses the element without our say-so.
+   While the read is open and he has not paused it himself, try to resume when the page comes back and,
+   quietly, every few seconds for a while; the timer is cleared the moment it plays or is stopped. */
+function ttsHold() { clearInterval(tts.retry); tts.retry = null; }
+function ttsTryResume() {
+  const a = tts.audio;
+  if (!tts.el || tts.mode !== 'audio' || tts.userPaused || !a || !a.paused || a.ended || tts.loading) return ttsHold();
+  if (Date.now() > tts.retryUntil) { ttsHold(); ttsPaint(); return; }
+  const p = a.play(); if (p && p.catch) p.catch(() => {});
+}
+function ttsInterrupted() {
+  if (!tts.el || tts.userPaused || tts.loading || tts.mode !== 'audio') return;
+  ttsPosSave(tts.hash, tts.audio.currentTime);
+  tts.retryUntil = Date.now() + 30 * 60000;
+  if (!tts.retry) tts.retry = setInterval(ttsTryResume, 4000);
+  ttsPaint();
+}
+function ttsPlay() {
+  const a = tts.audio;
+  if (!a || !tts.el) return;
+  tts.userPaused = false;
+  const p = a.play(); if (p && p.catch) p.catch(() => {});
+}
+function ttsToggle() {
+  if (tts.mode === 'synth') return ttsStop();
+  const a = tts.audio;
+  if (!a || tts.loading) return;
+  if (a.paused) ttsPlay();
+  else { tts.userPaused = true; ttsHold(); a.pause(); ttsPosSave(tts.hash, a.currentTime); }
+  ttsPaint();
+}
+function ttsSeekBy(d) {
+  const a = tts.audio;
+  if (tts.mode === 'synth') { tts.i = Math.max(0, Math.min(tts.chunks.length - 1, tts.i + (d > 0 ? 1 : -1))); return ttsSpeak(); }
+  if (!a || !(a.duration > 0)) return;
+  a.currentTime = Math.max(0, Math.min(a.duration - 0.5, a.currentTime + d));
+  ttsPosSave(tts.hash, a.currentTime); ttsSession(); ttsPaint(); ttsFollow();
+}
+function ttsAudio() {
+  if (tts.audio) return tts.audio;
+  const a = new Audio();
+  a.preload = 'auto';
+  a.setAttribute('playsinline', '');
+  a.addEventListener('timeupdate', () => {
+    if (tts.loading || tts.mode !== 'audio') return;
+    ttsPaint();
+    const now = Date.now();
+    if (now - tts.savedAt > 2000) { tts.savedAt = now; ttsPosSave(tts.hash, a.currentTime); ttsSession(); ttsFollow(); }
+  });
+  a.addEventListener('play', () => { if (tts.loading) return; ttsHold(); tts.userPaused = false; ttsPaint(); });
+  a.addEventListener('pause', () => {
+    if (a.ended || tts.loading || tts.mode !== 'audio' || !tts.el) return;
+    if (tts.userPaused) { ttsPaint(); return; }
+    ttsInterrupted();
+  });
+  a.addEventListener('ended', () => { if (tts.loading || tts.mode !== 'audio') return; ttsPosForget(tts.hash); ttsStop(); });
+  a.addEventListener('error', () => { if (tts.loading || !tts.el) return; toast('Read aloud stopped: the audio could not be played', true); ttsStop(); });
+  a.addEventListener('ratechange', ttsSession);
+  tts.audio = a;
+  return a;
+}
+for (const ev of ['visibilitychange', 'focus', 'pageshow']) {
+  window.addEventListener(ev, () => { if (!document.hidden && tts.retry) ttsTryResume(); });
+}
+window.addEventListener('pagehide', () => { if (tts.audio && tts.el && tts.mode === 'audio') ttsPosSave(tts.hash, tts.audio.currentTime); });
+
+/* Fallback only: the phone's own voice, in chunks, when the desktop has no speech engine. */
 function ttsSpeak() {
   const my = ++tts.token;                      // a stale utterance's onend must not advance the new one
   speechSynthesis.cancel();
@@ -3445,18 +3615,54 @@ function ttsSpeak() {
   ttsPaint(); ttsFollow();
   speechSynthesis.speak(u);
 }
-function ttsStart(msgEl) {
-  if (tts.el === msgEl) return ttsStop();      // the same button again = stop
+
+async function ttsStart(msgEl) {
+  if (tts.el === msgEl) return ttsToggle();    // the same button again = pause / play
   const text = ttsText(msgEl);
   if (!text) return;
-  tts.el = msgEl; tts.chunks = ttsChunks(text); tts.i = 0; tts.userScrollAt = 0;
-  ttsSpeak();
+  ttsStop();
+  const my = ++tts.token;
+  tts.el = msgEl; tts.hash = ttsHash(text); tts.userScrollAt = 0; tts.userPaused = false; tts.loading = true; tts.mode = 'audio';
+  const a = ttsAudio();
+  try { a.src = ttsSilent(); const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch {}   // inside the tap
+  ttsSessionInit(); ttsMeta();
+  ttsPaint();
+  let out;
+  try { out = await api('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }), timeoutMs: 180000 }); }
+  catch (e) {
+    if (my !== tts.token) return;
+    if (typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined') {
+      a.pause(); tts.loading = false; tts.mode = 'synth'; tts.chunks = ttsChunks(text); tts.i = 0;
+      toast('The desktop has no speech engine, so this uses the phone voice and stops when the screen locks.');
+      return ttsSpeak();
+    }
+    toast('Read aloud failed: ' + ((e && e.message) || 'no speech engine'), true); return ttsStop();
+  }
+  if (my !== tts.token) return;
+  const saved = ttsPosLoad()[tts.hash];
+  const startAt = saved && saved.t > 3 ? saved.t : 0;
+  a.src = '/api/tts-audio?k=' + encodeURIComponent(out.key);
+  a.playbackRate = tts.rate;
+  await new Promise((res) => {
+    const done = () => { a.removeEventListener('loadedmetadata', done); a.removeEventListener('error', done); res(); };
+    a.addEventListener('loadedmetadata', done); a.addEventListener('error', done);
+    setTimeout(done, 15000);
+  });
+  if (my !== tts.token) return;
+  if (startAt && a.duration > startAt + 3) { a.currentTime = startAt; toast('Resuming from ' + ttsClock(startAt)); }
+  tts.loading = false; tts.savedAt = 0;
+  a.playbackRate = tts.rate;
+  const p = a.play(); if (p && p.catch) p.catch(() => { tts.userPaused = true; toast('Tap ▶ to start the audio.'); ttsPaint(); });
+  ttsSession(); ttsPaint(); ttsFollow();
 }
 function ttsStop() {
   tts.token++;
-  if (TTS_OK) speechSynthesis.cancel();
+  ttsHold();
+  if (typeof speechSynthesis !== 'undefined') { try { speechSynthesis.cancel(); } catch {} }
+  if (tts.audio) { try { tts.audio.pause(); tts.audio.removeAttribute('src'); tts.audio.load(); } catch {} }
+  if ('mediaSession' in navigator) { try { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; } catch {} }
   if (tts.el) tts.el.classList.remove('speaking');
-  tts.el = null; tts.chunks = []; tts.i = 0;
+  tts.el = null; tts.chunks = []; tts.i = 0; tts.loading = false; tts.userPaused = false; tts.seeking = false; tts.mode = 'audio';
   ttsPaint();
 }
 if (TTS_OK) {

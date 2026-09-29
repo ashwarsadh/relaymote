@@ -1,6 +1,6 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
-## 0.2.45
+## 0.2.46
 
 **Read aloud keeps playing with the screen locked.** The desktop now turns the message into speech and your phone plays it as normal audio, so Chrome no longer silences it when the screen locks. The lock screen and Bluetooth headsets show Play, Pause and a seek bar. Nothing runs in the background unless something is playing. The voice is now the desktop's (Windows David or Zira, the Mac voice, or espeak on Linux) rather than the phone's. If the desktop has no speech engine, the phone voice is used as before.
 

@@ -26,8 +26,17 @@ function engine(inFile, outFile) {
   return { cmd: 'espeak-ng', args: ['-w', outFile, '-f', inFile], alt: { cmd: 'espeak', args: ['-w', outFile, '-f', inFile] } };
 }
 
-function keyOf(text) { return crypto.createHash('sha1').update(process.platform + '\n' + text).digest('hex'); }
-function fileOf(key) { return /^[0-9a-f]{40}$/.test(key || '') ? path.join(DIR, key + '.wav') : null; }
+// Natural voice first: Microsoft's free Edge neural voices through the python `edge-tts` package (no key,
+// no account, needs internet). Without python/edge-tts/internet the desktop's own voice below is used.
+const VOICE = process.env.RELAYMOTE_TTS_VOICE || 'en-IN-NeerjaNeural';
+let edgePy = null;                                    // the python command that has edge_tts, once found
+
+function keyOf(text) { return crypto.createHash('sha1').update('edge1|' + VOICE + '|' + process.platform + '\n' + text).digest('hex'); }
+function fileOf(key) {
+  if (!/^[0-9a-f]{40}$/.test(key || '')) return null;
+  const mp3 = path.join(DIR, key + '.mp3');
+  return fs.existsSync(mp3) ? mp3 : path.join(DIR, key + '.wav');
+}
 
 function run(spec, env) {
   return new Promise((resolve) => {
@@ -49,12 +58,26 @@ const inflight = new Map();
 function prune() {
   try {
     const now = Date.now();
-    const rows = fs.readdirSync(DIR).filter(n => n.endsWith('.wav')).map(n => {
+    const rows = fs.readdirSync(DIR).filter(n => n.endsWith('.wav') || n.endsWith('.mp3')).map(n => {
       const p = path.join(DIR, n); const st = fs.statSync(p); return { p, at: st.mtimeMs, size: st.size };
     }).sort((a, b) => b.at - a.at);
     let total = 0;
     for (const r of rows) { total += r.size; if (now - r.at > KEEP_MS || total > KEEP_BYTES) { try { fs.unlinkSync(r.p); } catch {} } }
   } catch {}
+}
+
+async function edgeSynth(inFile, outFile) {
+  const cands = edgePy ? [edgePy] : [process.env.RELAYMOTE_TTS_PYTHON, 'python', 'python3', 'py',
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'Python', 'Python311', 'python.exe'),
+    'C:\Program Files\Python\Python311\python.exe'].filter(Boolean);
+  for (const py of cands) {
+    if (!edgePy) { const chk = await run({ cmd: py, args: ['-c', 'import edge_tts'] }, {}); if (!chk.ok) continue; }
+    const r = await run({ cmd: py, args: ['-m', 'edge_tts', '--voice', VOICE, '--file', inFile, '--write-media', outFile] }, {});
+    if (r.ok) { edgePy = py; return true; }
+    try { fs.unlinkSync(outFile); } catch {}
+    return false;                                     // python is fine, the service is not (offline): fall back
+  }
+  return false;
 }
 
 async function synth(rawText) {
@@ -68,6 +91,11 @@ async function synth(rawText) {
     const tmpIn = path.join(os.tmpdir(), 'rm-tts-' + key + '.txt'), tmpOut = out + '.part';
     fs.writeFileSync(tmpIn, text, 'utf8');
     try {
+      const mp3 = path.join(DIR, key + '.mp3'), mp3Part = mp3 + '.part';
+      if (await edgeSynth(tmpIn, mp3Part)) {
+        const ms = (() => { try { return fs.statSync(mp3Part); } catch { return null; } })();
+        if (ms && ms.size > 1000) { fs.renameSync(mp3Part, mp3); prune(); return { ok: true, key, bytes: ms.size, cached: false, voice: VOICE }; }
+      }
       const spec = engine(tmpIn, tmpOut);
       let r = await run(spec, { RM_TTS_IN: tmpIn, RM_TTS_OUT: tmpOut });
       if (!r.ok && spec.alt) r = await run(spec.alt, {});

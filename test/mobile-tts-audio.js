@@ -13,6 +13,7 @@ const ix = H.src('mobile/index.js');
 
 console.log('--- server ---');
 check(/p === '\/api\/tts'/.test(ix) && /tts\.synth\(body\.text\)/.test(ix), 'POST /api/tts synthesises the text');
+check(!/tts-audio\?k=/.test(app), 'the audio URL must not use ?k= (that is the login token parameter, so every fetch was a 401)');
 check(/p === '\/api\/tts-audio'/.test(ix) && /sentfiles\.stream\(req, res, file, st\.size\)/.test(ix), 'GET /api/tts-audio streams the WAV with Range (needed to seek on the phone)');
 const readOk = ix.slice(ix.indexOf('const READ_OK'), ix.indexOf('const WRITE_OK'));
 check(!/\/api\/tts/.test(readOk), 'a scoped sub-user cannot spend desktop time on speech');
@@ -34,7 +35,7 @@ check(tts.fileOf('../../etc/passwd') === null && tts.fileOf('zz') === null && /\
   }
 
   console.log('--- phone ---');
-  check(/new Audio\(\)/.test(app) && /a\.src = '\/api\/tts-audio\?k='/.test(app), 'the phone plays the desktop audio through an <audio> element');
+  check(/new Audio\(\)/.test(app) && /a\.src = '\/api\/tts-audio\?a='/.test(app), 'the phone plays the desktop audio through an <audio> element');
   check(/navigator\.mediaSession\.setActionHandler/.test(app) && /'seekto'/.test(app) && /'play'/.test(app) && /'pause'/.test(app), 'Media Session play, pause and seek: lock-screen and Bluetooth controls');
   check(/type="range"/.test(app) && /data-tts="play"/.test(app) && /data-tts="stop"/.test(app) && /data-tts="back"/.test(app) && /data-tts="fwd"/.test(app), 'visible seek bar, Play/Pause, Stop and 15 s back/forward');
   check(/baton\.ttsPos/.test(app) && /ttsPosSave\(tts\.hash/.test(app) && /Resuming from/.test(app), 'the position is saved per message and used to resume after a reload');
@@ -80,7 +81,7 @@ check(tts.fileOf('../../etc/passwd') === null && tts.fileOf('zz') === null && /\
   await new Promise(r => setImmediate(r));
   (audio._l.loadedmetadata || []).forEach(f => f());
   await started;
-  check(log.includes('play') && audio.src === '/api/tts-audio?k=' + 'k'.repeat(40), 'starting a read plays the desktop audio');
+  check(log.includes('play') && audio.src === '/api/tts-audio?a=' + 'k'.repeat(40), 'starting a read plays the desktop audio');
   check(audio.currentTime === 42, 'it resumed from the saved position, not from the start', audio.currentTime);
   log.length = 0;
   audio.pause();                                   // what a phone call does: the page did not ask for it

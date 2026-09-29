@@ -3641,7 +3641,7 @@ async function ttsStart(msgEl) {
   if (my !== tts.token) return;
   const saved = ttsPosLoad()[tts.hash];
   const startAt = saved && saved.t > 3 ? saved.t : 0;
-  a.src = '/api/tts-audio?k=' + encodeURIComponent(out.key);
+  a.src = '/api/tts-audio?a=' + encodeURIComponent(out.key);
   a.playbackRate = tts.rate;
   await new Promise((res) => {
     const done = () => { a.removeEventListener('loadedmetadata', done); a.removeEventListener('error', done); res(); };

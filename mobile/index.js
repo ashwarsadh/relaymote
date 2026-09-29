@@ -909,7 +909,7 @@ async function handle(req, res) {
   }
 
   if (p === '/api/tts-audio') {
-    const file = tts.fileOf(url.searchParams.get('k'));
+    const file = tts.fileOf(url.searchParams.get('a'));
     let st; try { st = file && fs.statSync(file); } catch { st = null; }
     if (!st || !st.isFile()) return json(res, 404, { ok: false, error: 'GONE', message: 'That audio is no longer cached.' });
     return sentfiles.stream(req, res, file, st.size);

@@ -53,6 +53,16 @@ const w = H.world('subscope');
   check(subLists.length > 0 && subLists.every(e => e.data.sessions.length === 1 && e.data.sessions[0].id === GRANTED),
         'every SSE session list sent to the sub-user admits only the granted id', subLists.map(e => e.data.sessions.length));
 
+  // A token that is an Object.prototype member name used to resolve to a sub-user (db[token]):
+  // ?k=constructor signed anyone in. Every way of presenting a key is tried.
+  for (const bad of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+    const viaK = await d.req('/api/bootstrap?k=' + bad, { token: null });
+    const viaBearer = await d.req('/api/bootstrap', { token: bad });
+    const viaCookie = await d.req('/api/bootstrap', { cookie: bad });
+    check(viaK.status === 401 && viaBearer.status === 401 && viaCookie.status === 401,
+      `the key "${bad}" is refused by ?k=, Bearer and cookie (401)`, [viaK.status, viaBearer.status, viaCookie.status]);
+  }
+
   su.revoke();
   check((await as('/api/sessions')).status === 401, 'after revoke, the SAME token is unauthenticated (401)');
   su.remove();

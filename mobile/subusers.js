@@ -21,10 +21,13 @@ function list() {
 }
 
 function find(token) {
-  if (!token) return null;
+  if (!token || typeof token !== 'string') return null;
   const db = readAll();
+  // Own keys only: "constructor", "__proto__", "toString"… are on every object, and db[token] for one
+  // of them used to come back as an unrevoked sub-user, so ?k=constructor signed anyone in.
+  if (!Object.prototype.hasOwnProperty.call(db, token)) return null;
   const r = db[token];
-  if (!r || r.revoked) return null;
+  if (!r || typeof r !== 'object' || r.revoked) return null;
   return { token, name: r.name, sessions: new Set(r.sessions || []) };
 }
 
@@ -61,13 +64,16 @@ function revokeSessions(name, sessionIds) {
   return { ok: true, token, ...r };
 }
 
+// Every live record with that name: a name reused after an earlier revoke has two records, and taking
+// the first one re-revoked the old record and left the live link working while reporting success.
 function revoke(name) {
   const db = readAll();
-  const entry = Object.entries(db).find(([, r]) => r.name === name);
-  if (!entry) return { ok: false, error: 'NOT_FOUND' };
-  entry[1].revoked = true;
-  writeAll(db);
-  return { ok: true };
+  const all = Object.values(db).filter(r => r.name === name);
+  if (!all.length) return { ok: false, error: 'NOT_FOUND' };
+  const live = all.filter(r => !r.revoked);
+  for (const r of live) r.revoked = true;
+  if (live.length) writeAll(db);
+  return { ok: true, revoked: live.length };
 }
 
 function remove(name) {

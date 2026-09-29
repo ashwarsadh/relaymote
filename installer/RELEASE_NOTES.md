@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.47
+
+**Relaymote no longer switches your session while you are typing.** Actions that open a session for you (starting a suggested task, moving or renaming) now wait until you have had no keyboard or mouse input for 2 minutes (was 15 seconds), and give up politely instead of forcing it. If you start typing while it is already switching, it puts you straight back on the session you were on and does not press anything.
+
 ## 0.2.46
 
 **Read aloud keeps playing with the screen locked.** The desktop now turns the message into speech and your phone plays it as normal audio, so Chrome no longer silences it when the screen locks. The lock screen and Bluetooth headsets show Play, Pause and a seek bar. Nothing runs in the background unless something is playing. The voice is now the desktop's (Windows David or Zira, the Mac voice, or espeak on Linux) rather than the phone's. If the desktop has no speech engine, the phone voice is used as before.

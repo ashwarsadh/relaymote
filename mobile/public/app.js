@@ -1113,7 +1113,7 @@ function renderFolders() {
 }
 
 function sortSessions(list) {
-  const rank = (s) => (s.awaiting ? 0 : s.running ? 1 : 2);
+  const rank = (s) => (s.running ? 0 : s.awaiting ? 1 : 2);
   const arr = list.slice();
   if (state.sort === 'fav') return arr.filter(s => state.favs.has(s.id)).sort((a, b) => b.at - a.at);
   if (state.sort === 'recent') return arr.sort((a, b) => b.at - a.at);

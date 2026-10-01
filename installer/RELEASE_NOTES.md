@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.50
+
+**Working sessions come first.** In the session list, sessions that are working (blue dot) now sit above the ones waiting for you (yellow dot), then the rest. Newest first inside each group.
+
 ## 0.2.49
 
 **Read aloud sounds natural.** It now uses a free Microsoft neural voice (Indian English, Neerja) instead of the robotic built-in one. No account, no key, no payment. It needs Python with the `edge-tts` package and an internet connection on the desktop; without them it falls back to the built-in voice as before.

@@ -64,14 +64,7 @@ function safeEq(a, b) {
   return crypto.timingSafeEqual(x, y);
 }
 
-function cookieToken(req) {
-  const raw = req.headers.cookie || '';
-  for (const part of raw.split(';')) {
-    const [k, ...v] = part.trim().split('=');
-    if (k === 'baton_m') return decodeURIComponent(v.join('='));
-  }
-  return null;
-}
+const cookieToken = (req) => require('./cookies').cookieValue(req, 'baton_m');
 
 async function resolveIdentity(req, url) {
   const k = url.searchParams.get('k');
@@ -712,35 +705,6 @@ async function doSend(id, text, attachments) {
   }
   if (slip) outbox.markSent(slip.id, { ok: false, error: (last && (last.result || last.error)) || 'exhausted' });
   return { ...(last || {}), attempts: 3, exhausted: true, outboxId: slip && slip.id };
-}
-
-async function runningTaskCount(sessionId) {
-  const conn = await desktop.connect(await desktop.wsUrl());
-  let CID, original = null;
-  try {
-    CID = await desktop.pickChat(conn);
-    const before = String(await conn.evaluate(desktop.rEval(CID, `location.href.split('/').pop()`)));
-    original = before.startsWith('local_') ? before : null;
-    if (sessionId && before !== sessionId) {
-      const found = await desktop.findSessionRow(conn, CID, sessionId);
-      if (!found.row) return null;
-      if (!(await desktop.navTo(conn, CID, sessionId))) return null;
-    }
-    const out = await conn.evaluate(desktop.rEval(CID, `(function(){
-      function clean(e){ return (e&&e.textContent||'').replace(/[\u200b-‍﻿­⁠-]/g,'').trim(); }
-      var hit = Array.from(document.querySelectorAll('button,[role=button]')).filter(function(e){
-        if (e.offsetParent === null) return false;
-        var t = clean(e).toLowerCase();
-        return t.indexOf('running task') > 0 && parseInt(t, 10) > 0;
-      })[0];
-      return hit ? String(parseInt(clean(hit), 10)) : '0';
-    })()`));
-    return Number(out);
-  } catch { return null; }
-  finally {
-    try { if (original) await desktop.restoreActive(conn, CID, original); } catch {}
-    conn.close();
-  }
 }
 
 async function handle(req, res) {
@@ -1775,7 +1739,6 @@ function transcriptTail(id, span = TAIL_BYTES) {
 }
 
 let startDefaults = null;
-function startDefaultsCached() { return startDefaults; }
 let enableDebuggerRun = null;
 function devModeOn() {
   try { return JSON.parse(fs.readFileSync(path.join(config.APPDATA, 'Claude', 'developer_settings.json'), 'utf8')).allowDevTools === true; } catch { return false; }

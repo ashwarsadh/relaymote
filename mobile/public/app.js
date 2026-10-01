@@ -160,7 +160,6 @@ function ago(ts) {
 // symbol badges go, so a glyph on a model that ships later needs no code change.
 const shortModel = (m) => String(m || '').normalize('NFKC').replace(/[\p{Cc}\p{Cf}\p{Co}]|(?![\x00-\x7F])[\p{So}\p{Sk}]/gu, '').trim()
   .replace(/^claude-/, '').replace(/-\d{8}$/, '').replace(/-latest$/, '');
-const modelKey = (m) => shortModel(m).replace(/-.*$/, '');
 const modelFamily = (m) => shortModel(String(m || '').trim()).split(/[\s\-_[]/)[0].toLowerCase();
 // Family is not identity: "Opus 5.5" and "Opus 5" share the family word, so comparing families lit
 // both buttons. The id is the whole version: "Opus 5.5" / "claude-opus-5-5" / "claude-opus-5-5[1m]"

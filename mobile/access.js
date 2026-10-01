@@ -106,12 +106,7 @@ fetchCerts();
 function tokenFrom(req) {
   const h = req.headers['cf-access-jwt-assertion'];
   if (h) return Array.isArray(h) ? h[0] : h;
-  const raw = req.headers.cookie || '';
-  for (const part of raw.split(';')) {
-    const [k, ...v] = part.trim().split('=');
-    if (k === 'CF_Authorization') return decodeURIComponent(v.join('='));
-  }
-  return null;
+  return require('./cookies').cookieValue(req, 'CF_Authorization');
 }
 
 async function identify(req) { return verify(tokenFrom(req)); }

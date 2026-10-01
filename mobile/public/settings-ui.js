@@ -215,12 +215,12 @@
   }
 
   function banner() {
-    var b = $('baton-desk-banner');
+    var b = $('relaymote-desk-banner');
     var show = desk && desk.ok && !desk.cdp && S;
     if (!show) { if (b) b.remove(); return; }
     if (b) return;
-    document.body.insertAdjacentHTML('afterbegin', '<div id="baton-desk-banner" class="set-banner" role="status">Claude Desktop is not connected — sending and resuming are paused. <a href="#" id="baton-desk-fix">Set it up</a></div>');
-    $('baton-desk-fix').onclick = function (e) { e.preventDefault(); open('desktop'); };
+    document.body.insertAdjacentHTML('afterbegin', '<div id="relaymote-desk-banner" class="set-banner" role="status">Claude Desktop is not connected — sending and resuming are paused. <a href="#" id="relaymote-desk-fix">Set it up</a></div>');
+    $('relaymote-desk-fix').onclick = function (e) { e.preventDefault(); open('desktop'); };
   }
 
   function renderRemote() {
@@ -514,7 +514,7 @@
     if (/^#(settings|pair|desktop)$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
   }
 
-  window.batonSettings = { open: open, close: close };
+  window.relaymoteSettings = { open: open, close: close };
 
   function boot() {
     ensureDom();

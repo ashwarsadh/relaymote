@@ -1360,7 +1360,7 @@ async function handle(req, res) {
     return json(res, 200, { ok: true, commands: slashCommands() });
   }
 
-  if (p === '/api/baton-task') {
+  if (p === '/api/relaymote-task') {
     const id = url.searchParams.get('id');
     const t = registry.allTasks().find(x => x.id === id);
     if (!t) return json(res, 404, { ok: false, error: 'NO_SUCH_TASK' });
@@ -1629,7 +1629,7 @@ async function handle(req, res) {
                        { id: body.id, kind: body.kind });
     }
 
-    if (p === '/api/baton-task/stop') {
+    if (p === '/api/relaymote-task/stop') {
       const out = await orch.stopTask(String(body.id || ''), { by: 'phone (Relaymote mobile)' });
       return json(res, out && out.ok !== false ? 200 : 400, { ok: !(out && out.ok === false), result: out });
     }
@@ -1670,7 +1670,7 @@ async function handle(req, res) {
       return json(res, 200, { ok: true, subs: push.count() });
     }
     if (p === '/api/notify/test-backup') {
-      const r = await alerts.sendBackup({ kind: 'test', title: 'Relaymote', body: 'Test alert from Relaymote — the backup channel works.', tag: 'baton-test', url: '/' }, { test: true });
+      const r = await alerts.sendBackup({ kind: 'test', title: 'Relaymote', body: 'Test alert from Relaymote — the backup channel works.', tag: 'relaymote-test', url: '/' }, { test: true });
       return json(res, 200, { ok: !!r.ok, result: r });
     }
   } catch (e) {

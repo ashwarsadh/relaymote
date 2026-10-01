@@ -3,8 +3,8 @@ const desktop = require('../lib/desktop');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-const CLEAN = `function batonClean(e){ return (e&&e.textContent||'').replace(/[\\u200B-\\u200D\\uFEFF\\u00AD\\u2060\\uE000-\\uF8FF]/g,'').trim(); }`;
-const PTR = `function batonPtr(el){
+const CLEAN = `function relaymoteClean(e){ return (e&&e.textContent||'').replace(/[\\u200B-\\u200D\\uFEFF\\u00AD\\u2060\\uE000-\\uF8FF]/g,'').trim(); }`;
+const PTR = `function relaymotePtr(el){
   el.scrollIntoView({block:'center',behavior:'instant'});
   var r=el.getBoundingClientRect();
   var o={bubbles:true,cancelable:true,clientX:r.left+r.width/2,clientY:r.top+r.height/2,button:0,isPrimary:true,pointerId:1,pointerType:'mouse'};
@@ -12,33 +12,33 @@ const PTR = `function batonPtr(el){
     el.dispatchEvent(new (t.indexOf('pointer')===0?PointerEvent:MouseEvent)(t,o));
   });
 }`;
-const BOX = `function batonBox(){
+const BOX = `function relaymoteBox(){
   var dismiss = Array.from(document.querySelectorAll('button')).filter(function(b){
     return b.getAttribute('aria-label')==='Dismiss question' && b.offsetParent!==null; })[0];
   if(!dismiss) return null;
   var box = dismiss;
   for (var i=0;i<20 && box;i++){
     var hasConfirm = Array.from(box.querySelectorAll('button')).some(function(b){
-      return /^(submit|next|skip)$/i.test(batonClean(b)); });
+      return /^(submit|next|skip)$/i.test(relaymoteClean(b)); });
     if (hasConfirm) return box;
     box = box.parentElement;
   }
   return null;
 }`;
 const CHROME_RX = `var RELAYMOTE_CHROME = /^(back|skip|submit|next)$/i;`;
-const OPTIONS = `function batonOptions(){
-  var box = batonBox(); if(!box) return [];
+const OPTIONS = `function relaymoteOptions(){
+  var box = relaymoteBox(); if(!box) return [];
   return Array.from(box.querySelectorAll('button')).filter(function(b){
     if (b.offsetParent === null) return false;
     if (b.getAttribute('aria-label')) return false;      // chrome is aria-labelled, options are not
-    var t = batonClean(b);
+    var t = relaymoteClean(b);
     return t && !RELAYMOTE_CHROME.test(t);
   });
 }`;
-const CHROME = `function batonChrome(name){
-  var box = batonBox(); if(!box) return null;
+const CHROME = `function relaymoteChrome(name){
+  var box = relaymoteBox(); if(!box) return null;
   return Array.from(box.querySelectorAll('button')).filter(function(b){
-    return b.offsetParent !== null && batonClean(b).toLowerCase() === name;
+    return b.offsetParent !== null && relaymoteClean(b).toLowerCase() === name;
   })[0] || null;
 }`;
 
@@ -48,7 +48,7 @@ const STATE_JS = `(function(){ ${CLEAN} ${CHROME_RX} ${BOX} ${OPTIONS} ${CHROME}
   if(!dismiss) return JSON.stringify({widget:false});
   var box = dismiss, m = null, qbox = dismiss;
   for (var i=0;i<16 && box;i++){
-    var txt = batonClean(box);
+    var txt = relaymoteClean(box);
     if (txt.length > 400) break;                  // left the widget; keep the last good box
     qbox = box;
     var mm = null, sl = txt.indexOf('/');
@@ -69,17 +69,17 @@ const STATE_JS = `(function(){ ${CLEAN} ${CHROME_RX} ${BOX} ${OPTIONS} ${CHROME}
     box = box.parentElement;
   }
   box = qbox;
-  var opts = batonOptions().map(function(b){
-    return { text: batonClean(b).slice(0,60), pressed: b.getAttribute('aria-pressed')==='true' };
+  var opts = relaymoteOptions().map(function(b){
+    return { text: relaymoteClean(b).slice(0,60), pressed: b.getAttribute('aria-pressed')==='true' };
   });
-  var submit = batonChrome('submit');
+  var submit = relaymoteChrome('submit');
   return JSON.stringify({
     widget: true,
     index: m ? Number(m[1]) : 1,
     total: m ? Number(m[2]) : 1,
-    question: box ? batonClean(box).replace(/^\\d+\\s*\\/\\s*\\d+/,'').slice(0,120) : '',
+    question: box ? relaymoteClean(box).replace(/^\\d+\\s*\\/\\s*\\d+/,'').slice(0,120) : '',
     options: opts,
-    hasNext: !!batonChrome('next'),
+    hasNext: !!relaymoteChrome('next'),
     hasSubmit: !!submit,
     submitEnabled: !!(submit && !submit.disabled),
     otherBox: !!document.querySelector('textarea[aria-label="Other option"]')
@@ -88,31 +88,31 @@ const STATE_JS = `(function(){ ${CLEAN} ${CHROME_RX} ${BOX} ${OPTIONS} ${CHROME}
 
 const clickOptionJs = (label) => `(function(){ ${CLEAN} ${PTR} ${CHROME_RX} ${BOX} ${OPTIONS}
   var want = ${JSON.stringify(String(label).toLowerCase())};
-  var hit = batonOptions().filter(function(b){
-    return batonClean(b).toLowerCase().indexOf(want) === 0;
+  var hit = relaymoteOptions().filter(function(b){
+    return relaymoteClean(b).toLowerCase().indexOf(want) === 0;
   })[0];
-  if(!hit) return 'not-found:' + batonOptions().map(function(b){return batonClean(b).slice(0,20);}).join('|');
+  if(!hit) return 'not-found:' + relaymoteOptions().map(function(b){return relaymoteClean(b).slice(0,20);}).join('|');
   if (hit.getAttribute('aria-pressed') === 'true') return 'already';
-  batonPtr(hit);
+  relaymotePtr(hit);
   return 'clicked';
 })()`;
 
 const deselectOthersJs = (wanted) => `(function(){ ${CLEAN} ${CHROME_RX} ${BOX} ${OPTIONS} ${PTR}
   var want = ${JSON.stringify(wanted.map(w => String(w).toLowerCase()))};
   var off = 0;
-  batonOptions().forEach(function(b){
+  relaymoteOptions().forEach(function(b){
     if (b.getAttribute('aria-pressed') !== 'true') return;   // single-select has no toggles
-    var t = batonClean(b).toLowerCase();
+    var t = relaymoteClean(b).toLowerCase();
     var keep = want.some(function(w){ return t.indexOf(w) === 0; });
-    if (!keep) { batonPtr(b); off++; }
+    if (!keep) { relaymotePtr(b); off++; }
   });
   return 'deselected:' + off;
 })()`;
 
 const clickChromeJs = (name) => `(function(){ ${CLEAN} ${PTR} ${CHROME_RX} ${BOX} ${CHROME}
-  var b = batonChrome(${JSON.stringify(String(name).toLowerCase())});
+  var b = relaymoteChrome(${JSON.stringify(String(name).toLowerCase())});
   if(!b) return 'not-found';
-  batonPtr(b); return 'clicked';
+  relaymotePtr(b); return 'clicked';
 })()`;
 
 const typeOtherJs = (text) => `(function(){

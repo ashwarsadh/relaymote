@@ -64,9 +64,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $setup = Resolve-Path "dist/Relaymote-Setup-$v-x64.exe"
-          $dir = Join-Path $env:RUNNER_TEMP 'baton-install'
-          $log = Join-Path $env:RUNNER_TEMP 'baton-setup.log'
-          $env:RELAYMOTE_HOME = Join-Path $env:RUNNER_TEMP 'baton-home'
+          $dir = Join-Path $env:RUNNER_TEMP 'relaymote-install'
+          $log = Join-Path $env:RUNNER_TEMP 'relaymote-setup.log'
+          $env:RELAYMOTE_HOME = Join-Path $env:RUNNER_TEMP 'relaymote-home'
           $env:RELAYMOTE_PORT = '18788'; $env:RELAYMOTE_APP_PORT = '18790'
           $env:APPDATA = Join-Path $env:RUNNER_TEMP 'appdata'
 
@@ -96,7 +96,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: baton-windows
+          name: relaymote-windows
           path: |
             dist/*.exe
             dist/*.zip
@@ -134,7 +134,7 @@ jobs:
           set -euo pipefail
           v="$(node -p "require('./package.json').version")"
           dmg="dist/Relaymote-$v-${{ matrix.arch }}.dmg"
-          mnt="$RUNNER_TEMP/baton-dmg"
+          mnt="$RUNNER_TEMP/relaymote-dmg"
           mkdir -p "$mnt"
           hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg"
           c="$mnt/Relaymote.app/Contents"
@@ -144,7 +144,7 @@ jobs:
           plutil -lint "$c/Info.plist"
           node_bin="$c/Resources/app/runtime/node"
           file "$node_bin"
-          export RELAYMOTE_HOME="$RUNNER_TEMP/baton-home" RELAYMOTE_PORT=18788 RELAYMOTE_APP_PORT=18790 APPDATA="$RUNNER_TEMP/appdata"
+          export RELAYMOTE_HOME="$RUNNER_TEMP/relaymote-home" RELAYMOTE_PORT=18788 RELAYMOTE_APP_PORT=18790 APPDATA="$RUNNER_TEMP/appdata"
           "$node_bin" --version
           "$node_bin" "$c/Resources/app/bin/relaymote.js" help
           got="$("$node_bin" "$c/Resources/app/bin/relaymote.js" --version)"
@@ -155,7 +155,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: baton-macos-${{ matrix.arch }}
+          name: relaymote-macos-${{ matrix.arch }}
           path: |
             dist/*.dmg
             dist/*.tar.gz

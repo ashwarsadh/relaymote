@@ -29,7 +29,6 @@ AppComments=Your Claude Code sessions, in your pocket.
 VersionInfoVersion={#AppVersion}
 PrivilegesRequired=lowest
 DefaultDirName={localappdata}\Programs\Relaymote
-; Installs from before v0.2.27 lived in Programs\Baton; scripts\migrate-from-baton.ps1 moves them. Never reuse that folder.
 UsePreviousAppDir=no
 DefaultGroupName=Relaymote
 DisableProgramGroupPage=yes

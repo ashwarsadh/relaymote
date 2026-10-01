@@ -3,8 +3,8 @@ const desktop = require('../lib/desktop');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-const CLEAN = `function batonClean(e){ return (e&&e.textContent||'').replace(/[\\u200B-\\u200D\\uFEFF\\u00AD\\u2060\\uE000-\\uF8FF]/g,'').trim(); }`;
-const PTR = `function batonPtr(el){
+const CLEAN = `function relaymoteClean(e){ return (e&&e.textContent||'').replace(/[\\u200B-\\u200D\\uFEFF\\u00AD\\u2060\\uE000-\\uF8FF]/g,'').trim(); }`;
+const PTR = `function relaymotePtr(el){
   el.scrollIntoView({block:'center',behavior:'instant'});
   var r=el.getBoundingClientRect();
   var o={bubbles:true,cancelable:true,clientX:r.left+r.width/2,clientY:r.top+r.height/2,button:0,isPrimary:true,pointerId:1,pointerType:'mouse'};
@@ -16,16 +16,16 @@ const PTR = `function batonPtr(el){
 const EXPAND_JS = `(function(){ ${CLEAN} ${PTR}
   var b = Array.from(document.querySelectorAll('button,[role=button]')).filter(function(e){
     if (e.offsetParent === null) return false;
-    var t = batonClean(e).toLowerCase();
+    var t = relaymoteClean(e).toLowerCase();
     return t.indexOf('running task') > 0 && parseInt(t, 10) > 0;
   })[0];
   if(!b) return '0';
-  var n = parseInt(batonClean(b), 10) || 0;
+  var n = parseInt(relaymoteClean(b), 10) || 0;
   var alreadyOpen = Array.from(document.querySelectorAll('button')).some(function(x){
     return x.offsetParent !== null &&
            (x.getAttribute('aria-label')||'').toLowerCase().indexOf('stop this task') >= 0;
   });
-  if (!alreadyOpen) batonPtr(b);
+  if (!alreadyOpen) relaymotePtr(b);
   return String(n);
 })()`;
 
@@ -36,7 +36,7 @@ const LIST_JS = `(function(){ ${CLEAN}
   var out = stops.map(function(b, i){
     var n = b.parentElement, label = '';
     for (var k = 0; k < 6 && n; k++) {
-      var t = batonClean(n);
+      var t = relaymoteClean(n);
       if (t && t.length > 2) { label = t; break; }
       n = n.parentElement;
     }
@@ -53,7 +53,7 @@ const stopJs = (i) => `(function(){ ${CLEAN} ${PTR}
     return b.offsetParent !== null && (b.getAttribute('aria-label')||'').toLowerCase().indexOf('stop this task') >= 0;
   });
   if(!stops[${i}]) return 'not-found';
-  batonPtr(stops[${i}]);
+  relaymotePtr(stops[${i}]);
   return 'stopped';
 })()`;
 

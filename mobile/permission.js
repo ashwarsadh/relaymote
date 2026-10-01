@@ -69,18 +69,18 @@ const READ_JS = `(function(){
   var ask=askOf(host);
   for(var h=0; h<6 && host && ask.length<40; h++){ host=host.parentElement; ask=askOf(host); }
 
-  window.__batonPerm={};
+  window.__relaymotePerm={};
   var list=[];
   for(var n=0;n<opts.length;n++){
     var raw=cl(opts[n]);
-    window.__batonPerm['k'+n]=opts[n];
+    window.__relaymotePerm['k'+n]=opts[n];
     list.push({ key:'k'+n, label:pretty(raw), raw:raw.slice(0,60), kind:isDeny(raw)?'deny':'allow' });
   }
   return JSON.stringify({ present:true, request: ask ? ask.slice(0,700) : null, options:list });
 })()`;
 
 const CLICK_JS = (key) => `(function(){
-  var m = window.__batonPerm || {};
+  var m = window.__relaymotePerm || {};
   var b = m[${JSON.stringify(String(key))}];
   if(!b) return 'gone';
   if(b.disabled) return 'disabled';

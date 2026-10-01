@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.51
+
+**Tidy-up.** Documentation and release notes now describe Relaymote only. The importer from an older tool and the old-install migration script are removed.
+
 ## 0.2.50
 
 **Working sessions come first.** In the session list, sessions that are working (blue dot) now sit above the ones waiting for you (yellow dot), then the rest. Newest first inside each group.
@@ -114,27 +118,19 @@ Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desk
 
 **Phone alerts can no longer stop silently.** If every phone's push subscription is gone for 30 minutes, Relaymote now says so once over your backup channel (or `notifications.healthAlarm`), and again when a phone is back; while it lasts it repeats once a day, never more. Each alert is logged with what actually happened (`web push sent 1/1`, pruned or failed phones by name), and one that reached no phone is logged as DROPPED instead of looking delivered. A push service that answers 5xx, 429 or times out no longer costs you the subscription (only 404/410 remove one), and an unreadable `push.json` is refused instead of being replaced by an empty one, which used to unsubscribe every phone. The app now tells the desktop what happened when it re-subscribes on open.
 
-## 0.2.27
-
-**The rename is complete.** Everything now carries the name Relaymote: the `relaymote` command, the `relaymote_*` tools (were `baton_*`), the data folder `~/.relaymote` (was `~/.baton`), the install folder `Programs\Relaymote`, the scheduled tasks "Relaymote" and "Relaymote Watchdog", and the environment variables `RELAYMOTE_*`. An install from before this release does not move by itself: run `scripts\migrate-from-baton.ps1 -Installer <this installer>`, which moves the data, registers the new names, checks the new copy runs, and only then removes the old ones. Releases no longer carry a Baton-Setup copy. GUI dispatch now matches the model and effort exactly ("Opus 5" is never taken for "Opus 5.5", "high" never for "Extra high").
-
-## 0.2.26
-
-**Baton is now Relaymote.** Same app, new name: the old name clashed with other apps and made it hard to find. Your install updates itself as usual. The `baton` command, the `baton_*` tools, your settings and data in `~/.baton`, the install folder and the scheduled tasks keep their names, so nothing needs redoing. The installer is now Relaymote-Setup-<version>-x64.exe; each release also carries a signed Baton-Setup copy so installs from before the rename keep updating.
-
 ## 0.2.25
 
-**Baton puts you back on the session you were on.** When a call has to open another session (a goal, a chip start, a picker change, a compaction, an answer), Baton now routes you back, reveals your session's row if the sidebar had scrolled it out of view, and checks that it worked. Before, it clicked the row only if it was visible and never checked, and a goal that hit an error skipped the step entirely.
+**Relaymote puts you back on the session you were on.** When a call has to open another session (a goal, a chip start, a picker change, a compaction, an answer), Relaymote now routes you back, reveals your session's row if the sidebar had scrolled it out of view, and checks that it worked. Before, it clicked the row only if it was visible and never checked, and a goal that hit an error skipped the step entirely.
 
 ## 0.2.24
 
-**Your own model and effort choices are kept; everything else starts on the default.** A model or effort you change by hand in a session is left alone for 4 hours (Settings › Models, "Keep my own changes for"); after that, Baton may put the Settings › New session default back. With "Use these before a wake" on (the default), Baton moves a session to the default before the Conductor or a master wakes it. Chips now start on the default model and effort before their first message: the session that starts a chip is switched for the moment of the start and then put back. New tool: baton_prepare_wake, to call before waking sessions with send_message.
+**Your own model and effort choices are kept; everything else starts on the default.** A model or effort you change by hand in a session is left alone for 4 hours (Settings › Models, "Keep my own changes for"); after that, Relaymote may put the Settings › New session default back. With "Use these before a wake" on (the default), Relaymote moves a session to the default before the Conductor or a master wakes it. Chips now start on the default model and effort before their first message: the session that starts a chip is switched for the moment of the start and then put back. New tool: relaymote_prepare_wake, to call before waking sessions with send_message.
 
 ## 0.2.23
 
 **Every spawn starts on the model and effort you chose.** A worker started with no model or effort now takes Settings › New session, the same default the phone uses. The Conductor protocol tells it to set model and effort before every wake or spawn; ops lanes may go lower.
 
-**General teachings ship with Baton.** Rules that fit anyone (finish the task, clean up, never tune a figure to sit under a threshold, a check must be able to fail) now come in the box and are read with baton_protocol "teachings". Your own teachings file stays on your machine and is never shipped.
+**General teachings ship with Relaymote.** Rules that fit anyone (finish the task, clean up, never tune a figure to sit under a threshold, a check must be able to fail) now come in the box and are read with relaymote_protocol "teachings". Your own teachings file stays on your machine and is never shipped.
 
 ## 0.2.22
 
@@ -143,41 +139,41 @@ Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desk
 ## 0.2.21
 
 **The debugger countdown says why it paused, and sits at the top of the screen.** When you move the mouse, click
-or type during the "3, 2, 1", the bar now reads, for example, "Baton: snoozed - mouse moved. Trying again in 5s".
+or type during the "3, 2, 1", the bar now reads, for example, "Relaymote: snoozed - mouse moved. Trying again in 5s".
 The bar moved from the bottom of the screen, where it covered Claude's message box, to the top centre.
 
 ## 0.2.20
 
-**The debugger countdown waits for you.** If you move the mouse or type during Baton's "3, 2, 1", it pauses
+**The debugger countdown waits for you.** If you move the mouse or type during Relaymote's "3, 2, 1", it pauses
 ("paused while you use the computer - trying again in 5s") and counts down again once you have been still for
 5 seconds. If you keep working for a minute, it gives up for now and tries again a minute later. When it is
 done, the mouse pointer goes back to exactly where it was.
 
-**Baton comes back as soon as Claude Desktop opens, without the tray too.** With "Run Baton only while Claude
-Desktop is open" on and Baton started without its tray icon (headless autostart), Baton used to return only on
+**Relaymote comes back as soon as Claude Desktop opens, without the tray too.** With "Run Relaymote only while Claude
+Desktop is open" on and Relaymote started without its tray icon (headless autostart), Relaymote used to return only on
 the 10-minute check. It now starts within a few seconds of Claude Desktop opening.
 
 ## 0.2.19
 
-**"Turn it on for me" always says what happened.** Pressing it could end with nothing on screen: Baton threw
+**"Turn it on for me" always says what happened.** Pressing it could end with nothing on screen: Relaymote threw
 away the reason the switch-on failed. It now always ends with a result or a plain reason, kept on the card, for
 example that Claude Desktop is not signed in, or that Windows blocked the clicks because the computer is locked
 or its Remote Desktop session is closed. Windows does not deliver simulated clicks to a locked or disconnected
 session. With no answer after 90 seconds, the button says so.
 
 **The debugger comes back on by itself, fast, and without touching the window size.** After Claude Desktop starts
-and you are signed in, Baton shows a small bar at the bottom of the screen ("Baton: turning on Claude's debugger
+and you are signed in, Relaymote shows a small bar at the bottom of the screen ("Relaymote: turning on Claude's debugger
 in 3, 2, 1"), then switches it on in a few seconds. It no longer waits for you to be away from the keyboard. A
 maximised Claude window stays maximised; before, it could be restored to a smaller size.
 
-**Run Baton only while Claude Desktop is open** (Settings › Advanced, off by default). With the tray icon, Baton
-starts within seconds of Claude Desktop opening. When Desktop exits, Baton runs the account sync if it is on
-(that is the only time every account can be written), then stops. It waits for running Baton tasks first, and it
+**Run Relaymote only while Claude Desktop is open** (Settings › Advanced, off by default). With the tray icon, Relaymote
+starts within seconds of Claude Desktop opening. When Desktop exits, Relaymote runs the account sync if it is on
+(that is the only time every account can be written), then stops. It waits for running Relaymote tasks first, and it
 stays up if Desktop reopens during the sync.
 
 ## 0.2.18
 
-**Markdown and text files a session sends open in Baton.** Tapping a sent `.md` file opens it in Baton's file
+**Markdown and text files a session sends open in Relaymote.** Tapping a sent `.md` file opens it in Relaymote's file
 viewer, formatted: headings are real headings that wrap on a phone, lists show as bullets, and bold that runs
 across a line break still reads as bold. Other text files (`.txt`, `.log`, `.json`, `.csv`, scripts and the like) open
 there as plain text instead of in a new tab. A very large file shows its first 2 MB.
@@ -186,7 +182,7 @@ there as plain text instead of in a new tab. A very large file shows its first 2
 
 **Files a session sends you open in the app.** When a session hands you a file (Claude Code's SendUserFile), the
 chat now shows it as its own card: audio and video play and seek in place, images show inline, and every file has a
-link that opens it in a new tab. Before, the file usually sat outside the project folder, so Baton could not open it,
+link that opens it in a new tab. Before, the file usually sat outside the project folder, so Relaymote could not open it,
 and the send was hidden inside the "Working" steps. Only files the session actually sent can be opened this way.
 
 ## 0.2.16
@@ -198,35 +194,35 @@ group also stays open while the turn runs.
 
 ## 0.2.15
 
-**The connection dot is round.** In 0.2.14 the green dot beside "Baton" was stretched into a wide oval. It is a
+**The connection dot is round.** In 0.2.14 the green dot beside "Relaymote" was stretched into a wide oval. It is a
 round dot again, the same size as the others.
 
 ## 0.2.14
 
-**Reopening Baton continues where you were.** Close the app and open it again within 30 minutes and you land exactly
+**Reopening Relaymote continues where you were.** Close the app and open it again within 30 minutes and you land exactly
 where you left off: the same session, the Board, or the session list. After longer than that, the first time, or when
-that session has gone, Baton opens the session that is open in Claude Desktop on your PC, so the most relevant
+that session has gone, Relaymote opens the session that is open in Claude Desktop on your PC, so the most relevant
 conversation is in front of you and you can switch from there. The Board no longer opens by itself.
 
-**A green dot when Baton is connected.** With no session open, the dot beside "Baton" is green while the app is
+**A green dot when Relaymote is connected.** With no session open, the dot beside "Relaymote" is green while the app is
 connected to your PC and Claude Desktop answers, red when Desktop cannot be reached, and grey while connecting.
 
 **"This app cannot be installed" fixed over plain http.** Chrome can only install web apps from an `https://` address.
 Opened over a Tailscale or LAN `http://` address, Install and Create shortcut used to fail with that message. Over
-http Baton now offers no app manifest, so Chrome's **Add to Home screen** makes an ordinary shortcut. Opened over
-`https://`, Baton installs as an app as before.
+http Relaymote now offers no app manifest, so Chrome's **Add to Home screen** makes an ordinary shortcut. Opened over
+`https://`, Relaymote installs as an app as before.
 
 ## 0.2.13
 
 **Web links in chat are tappable.** A plain `http://` or `https://` address in a message now opens in a new tab
-when you tap it. Only web addresses become links, never `javascript:` or `data:`. File paths still open Baton's
+when you tap it. Only web addresses become links, never `javascript:` or `data:`. File paths still open Relaymote's
 file viewer, and the path inside a web address is no longer mistaken for a file.
 
 ## 0.2.12
 
-**No more console windows.** On Windows, starting Baton in the background (`baton start`, `baton open`, the Start-menu
+**No more console windows.** On Windows, starting Relaymote in the background (`relaymote start`, `relaymote open`, the Start-menu
 shortcut, a self-repair, and the restart after an automatic update) could leave an empty "node" console window on
-the desktop. Closing it stopped Baton. Every background start now goes through the same hidden launcher the sign-in
+the desktop. Closing it stopped Relaymote. Every background start now goes through the same hidden launcher the sign-in
 task uses, so no window appears. The update that installs 0.2.12 is still started by the version you have now, so
 one brief window may appear during it; later updates do not show one.
 
@@ -257,11 +253,11 @@ session or to the Board still goes straight there.
 
 ## 0.2.9
 
-**Automatic updates.** A Windows install now keeps itself current. Every 6 hours Baton checks for a new release,
-downloads the installer, and installs it only if the release's checksum file carries a valid signature by the Baton
+**Automatic updates.** A Windows install now keeps itself current. Every 6 hours Relaymote checks for a new release,
+downloads the installer, and installs it only if the release's checksum file carries a valid signature by the Relaymote
 release key and the installer matches it. It then restarts, which takes about 15 seconds and never happens while a task
-is running. Turn it off under Settings › Main features › Automatic updates. `baton update` says whether a newer
-release is out; `baton update --apply` installs it now. The portable zip and macOS copies only report a new release
+is running. Turn it off under Settings › Main features › Automatic updates. `relaymote update` says whether a newer
+release is out; `relaymote update --apply` installs it now. The portable zip and macOS copies only report a new release
 for now. Install 0.2.9 once by hand; from then on updates arrive by themselves.
 
 ## 0.2.8
@@ -286,7 +282,7 @@ earlier look). Both are saved per device. On a desktop window, sheets now open c
 ## 0.2.5
 
 **Idle-CLI reaper: a Remote Control session is now never released, and the option to allow it is gone.** 0.2.4
-had a `reaper.spareRemoteControl` setting and a `baton reaper --rc-too` flag. Releasing a Remote Control session
+had a `reaper.spareRemoteControl` setting and a `relaymote reaper --rc-too` flag. Releasing a Remote Control session
 clears its phone link, so it disappears from the phone, and a message from the desktop brings it back under a new
 link, leaving the old phone entry dead. Both were removed; an old `spareRemoteControl: false` in your settings is
 ignored. The guard also covers a session that only has a live Remote Control link.
@@ -297,11 +293,11 @@ ignored. The guard also covers a session that only has a live Remote Control lin
 used or not. The reaper frees the ones idle for 3 hours or more through Claude's own teardown; your next message
 resumes the session with its full history. It never touches a session that is running, unread, waiting on you,
 queued, on Remote Control, owning a goal or in an await. For its first 24 hours it only logs
-what it would free (`baton reaper` shows a pass now).
+what it would free (`relaymote reaper` shows a pass now).
 
 ## 0.2.3
 
-Windows: no Baton command opens a console window any more. `baton setup`, `baton debugger` and the
+Windows: no Relaymote command opens a console window any more. `relaymote setup`, `relaymote debugger` and the
 MCP registration (also run by the uninstaller) now start their helpers hidden; in a terminal their output still
 shows. A new check fails the build if any future helper could open a window.
 
@@ -331,7 +327,7 @@ the macOS downloads. Also fixed: account sync now copies a record's modified tim
 - **Accounts** — safer sync (group folding opt-in, a fresh check that Claude is closed inside the lock), a check
   after Claude restarts, Gateway-mode groups, undo.
 - **Backup alerts** via ntfy, a webhook or a local command; **finish-the-task hook** (optional).
-- **Fixes:** web push was rejected by push services; `baton stop <task-id>` stopped the whole daemon; "This
+- **Fixes:** web push was rejected by push services; `relaymote stop <task-id>` stopped the whole daemon; "This
   computer only" also listened on the Tailscale address; the session drawer's icons spilled onto the main screen
   on phones.
 
@@ -340,10 +336,10 @@ the macOS downloads. Also fixed: account sync now copies a record's modified tim
 | File | For |
 |---|---|
 | `Relaymote-Setup-<version>-x64.exe` | **Windows 10/11 installer (recommended).** Installs for your user only and needs no admin rights. |
-| `Baton-<version>-win-x64-portable.zip` | Windows without installing. Unzip it, then run `start-baton.cmd` (or `baton.cmd setup`). |
-| `Baton-<version>-arm64.dmg` | macOS on Apple Silicon (M1 and newer). **Untested, see below.** |
-| `Baton-<version>-x64.dmg` | macOS on Intel. **Untested, see below.** |
-| `Baton-<version>-macos-<arch>-portable.tar.gz` | macOS without the app bundle. Run `./baton setup`. |
+| `Relaymote-<version>-win-x64-portable.zip` | Windows without installing. Unzip it, then run `start-relaymote.cmd` (or `relaymote.cmd setup`). |
+| `Relaymote-<version>-arm64.dmg` | macOS on Apple Silicon (M1 and newer). **Untested, see below.** |
+| `Relaymote-<version>-x64.dmg` | macOS on Intel. **Untested, see below.** |
+| `Relaymote-<version>-macos-<arch>-portable.tar.gz` | macOS without the app bundle. Run `./relaymote setup`. |
 | `SHA256SUMS.txt` | Checksums for every file above. |
 
 You also need **Claude Desktop**, installed and signed in: https://claude.ai/download
@@ -352,12 +348,12 @@ You also need **Claude Desktop**, installed and signed in: https://claude.ai/dow
 
 1. Run `Relaymote-Setup-<version>-x64.exe`. Windows SmartScreen may say the publisher is unknown, because the installer is not code-signed. Click **More info › Run anyway**.
 2. Leave both boxes on the last page ticked:
-   - **Start Baton when I sign in** starts Baton and its tray icon when you log in.
-   - **Run first-time setup** checks Claude Desktop, turns on its **Developer Mode** and **main-process debugger** (Baton needs the debugger to send messages and resume sessions), registers Baton's tools with Claude Code, and opens Baton.
-3. If setup had to turn Developer Mode on, quit Claude Desktop (tray icon › Quit) and open it again. Baton then switches the debugger on by itself once you are signed in, after a 3-2-1 countdown on screen. You can also run **Baton — Status** from the Start menu, or `baton debugger`.
-4. To connect your phone, use **Start menu › Baton — Pair a phone** and scan the QR code.
+   - **Start Relaymote when I sign in** starts Relaymote and its tray icon when you log in.
+   - **Run first-time setup** checks Claude Desktop, turns on its **Developer Mode** and **main-process debugger** (Relaymote needs the debugger to send messages and resume sessions), registers Relaymote's tools with Claude Code, and opens Relaymote.
+3. If setup had to turn Developer Mode on, quit Claude Desktop (tray icon › Quit) and open it again. Relaymote then switches the debugger on by itself once you are signed in, after a 3-2-1 countdown on screen. You can also run **Relaymote — Status** from the Start menu, or `relaymote debugger`.
+4. To connect your phone, use **Start menu › Relaymote — Pair a phone** and scan the QR code.
 
-The installer adds a `baton` command to your PATH (open a new terminal to use it). Uninstall from **Settings › Apps**. Uninstalling stops Baton and removes its autostart and its Claude Code tool registration. It keeps your settings and pairing key in `%USERPROFILE%\.baton`; delete that folder yourself if you no longer want them.
+The installer adds a `relaymote` command to your PATH (open a new terminal to use it). Uninstall from **Settings › Apps**. Uninstalling stops Relaymote and removes its autostart and its Claude Code tool registration. It keeps your settings and pairing key in `%USERPROFILE%\.relaymote`; delete that folder yourself if you no longer want them.
 
 ## macOS: untested
 
@@ -365,14 +361,14 @@ The installer adds a `baton` command to your PATH (open a new terminal to use it
 
 The app is **not signed or notarized**, so macOS blocks the first launch:
 
-1. Drag **Baton.app** into **Applications**.
+1. Drag **Relaymote.app** into **Applications**.
 2. Open it once. When macOS refuses:
-   - macOS 14 and older: right-click Baton.app, choose **Open**, then click **Open**.
+   - macOS 14 and older: right-click Relaymote.app, choose **Open**, then click **Open**.
    - macOS 15 and newer: go to **System Settings › Privacy & Security** and click **Open Anyway**.
-   - Or in Terminal: `xattr -dr com.apple.quarantine /Applications/Baton.app`
-3. The first launch runs setup: it turns on Claude Desktop's Developer Mode and opens Baton. Quit and reopen Claude Desktop, then choose **Developer › Enable Main Process Debugger** in Claude Desktop's menu.
+   - Or in Terminal: `xattr -dr com.apple.quarantine /Applications/Relaymote.app`
+3. The first launch runs setup: it turns on Claude Desktop's Developer Mode and opens Relaymote. Quit and reopen Claude Desktop, then choose **Developer › Enable Main Process Debugger** in Claude Desktop's menu.
 
-The command line is inside the app: `/Applications/Baton.app/Contents/Resources/app/baton status`. The launcher writes its log to `~/.baton/state/launcher.log`.
+The command line is inside the app: `/Applications/Relaymote.app/Contents/Resources/app/relaymote status`. The launcher writes its log to `~/.relaymote/state/launcher.log`.
 
 ## Checking a download
 

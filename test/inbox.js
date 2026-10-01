@@ -166,7 +166,7 @@ const item = (n) => inbox.fold().items.get(n);
     { id: sid(8), title: 'Fresh question', cwd: path.join(TMP, 'web'), lastActivityAt: NOW - 10 * MIN, awaiting: true, live: true },
   ];
   const index = { sessions: { [sid(5)]: { project: 'web', title: 'Web lane' } } };
-  const built = await boardBuild.build({ now: NOW, sessions: bsessions, pendingQuestion: () => null, conductor: sid(99), index, hygiene: { counts: { 'CTX-FULL': 2, OK: 1 }, wakes: { baton24: 3, lastDay: { warm: 5, cold: 2 } },
+  const built = await boardBuild.build({ now: NOW, sessions: bsessions, pendingQuestion: () => null, conductor: sid(99), index, hygiene: { counts: { 'CTX-FULL': 2, OK: 1 }, wakes: { relaymote24: 3, lastDay: { warm: 5, cold: 2 } },
     items: [{ id: sid(7), title: 'Big lane', verdict: 'CTX-FULL', why: 'over the threshold', tokens: 9 }, { id: sid(8), title: 'Fine lane', verdict: 'OK', tokens: 1 }] }, maintain: false });
   const bj = JSON.parse(fs.readFileSync(boardBuild.boardFile(), 'utf8'));
   check(built.written && ['inbox_waiting', 'inbox_resolved', 'goals_health', 'hygiene', 'owner_name', 'projects'].every(k => k in bj), 'board.json passes inbox_waiting, inbox_resolved, goals_health, hygiene and owner_name through', Object.keys(bj));

@@ -97,7 +97,7 @@ const lsLog = f => /[\\/]leveldb[\\/](LOG|LOG\.old|LOCK)$/.test(f);
 const ids = s => fs.readdirSync(dirOf(s)).filter(f => f.startsWith('local_')).sort();
 const tasksOf = s => JSON.parse(fs.readFileSync(path.join(dirOf(s), 'scheduled-tasks.json'), 'utf8')).scheduledTasks;
 const rec = (s, n) => JSON.parse(fs.readFileSync(path.join(dirOf(s), sid(n) + '.json'), 'utf8'));
-const notBaton = f => f.startsWith(path.join(ROOT, 'relaymote'));
+const notRelaymote = f => f.startsWith(path.join(ROOT, 'relaymote'));
 
 (async () => {
   await build();
@@ -110,7 +110,7 @@ const notBaton = f => f.startsWith(path.join(ROOT, 'relaymote'));
   require('../lib/account-sync/presence').setProbe(async () => ({ state: desk, procs: desk === 'live' ? [{ pid: 4242, age: 999, main: true, kids: true }] : [] }));
 
   console.log('-- discovery and dry run');
-  const before = hashTree(ROOT, notBaton);
+  const before = hashTree(ROOT, notRelaymote);
   const dry = await sync.run({ presence: 'absent', mode: 'two-way' });
   const sa = dry.scopes.find(s => s.account === A.acct), keyA = sa.key, keyB = dry.scopes.find(s => s.account === B.acct).key;
   check(dry.ok && dry.dryRun && dry.scopes.length === 2, 'dry run sees the two real scopes, cross-account stub ignored', dry.scopes.map(s => s.records).join('/'));
@@ -118,7 +118,7 @@ const notBaton = f => f.startsWith(path.join(ROOT, 'relaymote'));
   sync.setLabel(keyB, 'Personal');
   check((await sync.status({ presence: 'absent' })).scopes.find(s => s.key === keyB).label === 'Personal', 'a scope can be labelled by the user');
   check(dry.changeCount > 0, 'dry run plans changes', JSON.stringify(dry.totals.now));
-  check(hashTree(ROOT, notBaton) === before, 'dry run changed no Claude file (hash before = after)');
+  check(hashTree(ROOT, notRelaymote) === before, 'dry run changed no Claude file (hash before = after)');
   check(dry.active === keyA, 'active scope = the one with the newest record');
 
   console.log('-- two-way, Desktop running then closed');

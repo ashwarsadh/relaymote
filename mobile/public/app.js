@@ -2764,7 +2764,7 @@ async function openTasks() {
           ev.stopPropagation();
           live.innerHTML = '<div class="empty">Reading…</div>';
           try {
-            const d = await api('/api/baton-task?id=' + encodeURIComponent(t.id));
+            const d = await api('/api/relaymote-task?id=' + encodeURIComponent(t.id));
             const out = [];
             if (d.events && d.events.length) {
               out.push(`<div class="tsec">progress${d.streaming ? ' · live' : ''}</div>`);
@@ -2795,7 +2795,7 @@ async function openTasks() {
           if (!confirm('Stop ' + t.id + '?\n\n' + (t.title || ''))) return;
           b3.disabled = true; b3.textContent = 'stopping…';
           try {
-            await api('/api/baton-task/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            await api('/api/relaymote-task/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ id: t.id }) });
             toast('Stopped ' + t.id); openTasks();
           } catch (e) { toast('Stop failed: ' + e.message, true); b3.disabled = false; b3.textContent = 'stop it'; }
@@ -3303,8 +3303,8 @@ $('cmdlist').addEventListener('click', (e) => {
   autosize();
 });
 
-window.__batonT = { nav: performance.timeOrigin };
-const tmark = (k) => { try { window.__batonT[k] = Math.round(performance.now()); } catch {} };
+window.__relaymoteT = { nav: performance.timeOrigin };
+const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now()); } catch {} };
 
 (async function boot() {
   const bootTouched = navTouched;
@@ -3358,7 +3358,7 @@ const tmark = (k) => { try { window.__batonT[k] = Math.round(performance.now());
     const userMoved = navTouched !== bootTouched || !!visibleSheetId() || !!state.open;
     if (userMoved) { /* their navigation stands */ }
     else if (want) openChat(want);
-    else firstScreen(bootTouched).then(r => { window.__batonFirstScreen = r; });
+    else firstScreen(bootTouched).then(r => { window.__relaymoteFirstScreen = r; });
     watchForUpdates();
   } catch (e) {
     setTimeout(registerSW, 0);

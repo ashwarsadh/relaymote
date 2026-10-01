@@ -4,7 +4,7 @@
 // (default ~/.claude/settings.json). It is never installed by default.
 //   - Every other hook and setting in that file is left exactly as it was.
 //   - --dry-run prints what would change and writes nothing.
-//   - Before any write the current file is copied to settings.json.baton-backup-<timestamp>.
+//   - Before any write the current file is copied to settings.json.relaymote-backup-<timestamp>.
 //   - A settings.json that is not valid JSON is refused, never overwritten.
 //   - Installing twice changes nothing; remove takes out only Relaymote's entry.
 // install also switches modules.finishHook on in Relaymote's settings; remove switches it off.

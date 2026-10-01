@@ -1,7 +1,7 @@
 // mobile-live-ui.js — the app must keep itself current, and must not carry a private copy of the
 // desktop's vocabulary. Ported from the private tool's test-live-ui.js: mostly assertions on the
 // source (each names the incident it pins down), plus the parts that can run against the
-// stand-in desktop. Adapted for Relaymote's names (__batonLastKey, relaymote-mcp.js). Not ported: the
+// stand-in desktop. Adapted for Relaymote's names (__relaymoteLastKey, relaymote-mcp.js). Not ported: the
 // board / goals-register checks (that code is owned and tested by the board work package) and
 // the checks that need a real Electron renderer (model menu contents, timer throttling, the
 // modal-blocker scrape) — listed as SKIP.
@@ -99,10 +99,10 @@ const { check: chk, src } = H;
     const c = await desktop.connect(await desktop.wsUrl());
     try {
       const CID = await desktop.pickChat(c);
-      await c.evaluate(desktop.rEval(CID, '(function(){ window.__batonLastKey=Date.now()-1000; return 1; })()'));
+      await c.evaluate(desktop.rEval(CID, '(function(){ window.__relaymoteLastKey=Date.now()-1000; return 1; })()'));
       const t = Date.now(); await desktop.awaitUserIdle(c, CID, { idleMs: 2500 }); const ms = Date.now() - t;
       chk(ms >= 1200 && ms <= 2600, `a keystroke 1s ago makes the guard wait until 2.5s of quiet (${ms}ms)`, ms);
-      await c.evaluate(desktop.rEval(CID, '(function(){ window.__batonLastKey=0; return 1; })()'));
+      await c.evaluate(desktop.rEval(CID, '(function(){ window.__relaymoteLastKey=0; return 1; })()'));
       const t2 = Date.now(); await desktop.awaitUserIdle(c, CID, { idleMs: 2500 }); const ms2 = Date.now() - t2;
       chk(ms2 < 800, `with nobody typing it does not wait (${ms2}ms)`, ms2);
     } finally { c.close(); }

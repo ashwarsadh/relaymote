@@ -7,14 +7,14 @@ const FIND_JS = `(function(){
   var all=document.querySelectorAll('[aria-label]');
   for(var i=0;i<all.length;i++){
     var e=all[i], l=e.getAttribute('aria-label')||'';
-    if(l.indexOf('Usage:')===0 && e.offsetParent!==null){ window.__batonUsage=e; return l; }
+    if(l.indexOf('Usage:')===0 && e.offsetParent!==null){ window.__relaymoteUsage=e; return l; }
   }
   return '';
 })()`;
 
 const TOGGLE_JS = `(function(){
-  if(!window.__batonUsage) return 'no-control';
-  window.__batonUsage.click();
+  if(!window.__relaymoteUsage) return 'no-control';
+  window.__relaymoteUsage.click();
   return 'ok';
 })()`;
 

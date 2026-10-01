@@ -256,9 +256,9 @@ else {
   heal._setProbes({ httpJson: httpStub({ [PORT]: { ok: true, body: { ok: true, app: 'someone-else' } } }) });
   check(!(await heal.checkDaemon()).healthy, 'another program answering on the port is not our daemon');
   heal._setProbes({ ps: () => 'C:\\somewhere\\other-app.exe --serve' });
-  check(heal.isBatonProcess(4242) === false && heal.killPid(4242) === false, 'killPid refuses a process that is not Relaymote\'s own daemon (guard fires)');
+  check(heal.isRelaymoteProcess(4242) === false && heal.killPid(4242) === false, 'killPid refuses a process that is not Relaymote\'s own daemon (guard fires)');
   heal._setProbes({ ps: () => `"${process.execPath}" "${path.join(ROOT, 'server.js')}"` });
-  check(heal.isBatonProcess(4242) === true, '…and recognises Relaymote\'s own server.js');
+  check(heal.isRelaymoteProcess(4242) === true, '…and recognises Relaymote\'s own server.js');
   heal._setProbes(prev);
 
   // ------------------------------------------------------------------------------------------------
@@ -410,49 +410,6 @@ else {
   check(salvage.run({ apply: true }).added === 0, 'running it twice adds nothing');
   const col = salvage.mergeTasks({ tasks: { t0001: { id: 't0001', prompt: 'other', createdAt: 'x' } }, seq: 1 }, mkState(2));
   check(col.renumbered.t0001 && col.merged.tasks[col.renumbered.t0001].originalId === 't0001' && col.merged.tasks.t0001.prompt === 'other', 'an id taken by a different live task: the salvaged one is renumbered, never dropped', col.renumbered);
-
-  // ------------------------------------------------------------------------------------------------
-  section('import from an AGO state folder');
-  const imp = require('../lib/import-ago');
-  const AGO = path.join(TMP, 'ago'), AS = path.join(AGO, 'state');
-  fs.mkdirSync(AS, { recursive: true });
-  const agoReg = { version: 1, seq: 2, tasks: {
-    t0001: { id: 't0001', title: 'ago one', prompt: 'ago one', createdAt: '2026-01-01T00:00:00.000Z', status: 'done', dependsOn: [] },
-    t0002: { id: 't0002', title: 'ago two', prompt: 'ago two', createdAt: '2026-01-02T00:00:00.000Z', status: 'queued', dependsOn: ['t0001'] } } };
-  fs.writeFileSync(path.join(AS, 'registry.json'), JSON.stringify(agoReg, null, 2));
-  fs.writeFileSync(path.join(AS, 'masters.json'), JSON.stringify({
-    web: { sessionId: 'local_master_web', claimedAt: '2026-01-01', expiresAt: new Date(Date.now() + 3600000).toISOString(), fleet: ['local_w1'] },
-    old: { sessionId: 'local_master_old', expiresAt: new Date(Date.now() - 1000).toISOString() } }));
-  fs.writeFileSync(path.join(AS, 'awaits.json'), JSON.stringify({ version: 1, watches: [
-    { id: 'wopen', masterSessionId: 'local_master_web', waitingOn: ['t0001', 't0002'], deadlineAt: new Date(Date.now() + 3600000).toISOString(), resolvedAt: null },
-    { id: 'wdone', masterSessionId: 'local_master_x', waitingOn: ['t0001'], resolvedAt: '2026-01-01' }] }));
-  fs.writeFileSync(path.join(AS, 'notify-state.json'), JSON.stringify({ version: 1, notified: { 'task:t0001:done': '2026-01-01' }, notifiedAt: {}, sessionState: {}, ranSince: {}, lastActivityAt: {},
-    pending: [{ key: 'task:t0001:done', kind: 'task-done', taskId: 't0001', masterSessionId: 'local_master_web', line: 'one done' }, { key: 'sess:x:unread:1', kind: 'session-unread', line: 'x' }], delivery: {}, log: [] }));
-  fs.writeFileSync(path.join(AS, 'notify-config.json'), JSON.stringify({ enabled: true }));
-  const srcHashes = Object.fromEntries(fs.readdirSync(AS).map(f => [f, md5(path.join(AS, f))]));
-  const DEST = path.join(TMP, 'import-dest');
-  fs.mkdirSync(DEST, { recursive: true });
-  fs.writeFileSync(path.join(DEST, 'registry.json'), JSON.stringify({ version: 1, seq: 1, tasks: { t0001: { id: 't0001', title: 'relaymote own', prompt: 'relaymote own', createdAt: '2026-05-05T00:00:00.000Z', status: 'running' } } }, null, 2));
-  const destHash = md5(path.join(DEST, 'registry.json'));
-  check(imp.run({ dir: AGO, destDir: AS }).error === 'SAME_FOLDER', 'importing a folder into itself is refused (guard fires)');
-  check(imp.run({ dir: path.join(TMP, 'nope') }).error === 'NO_AGO_STATE', 'a folder with no AGO state is reported, not treated as empty');
-  const d1 = imp.run({ dir: AGO, destDir: DEST });
-  check(d1.ok && !d1.applied && md5(path.join(DEST, 'registry.json')) === destHash && !fs.existsSync(path.join(DEST, 'masters.json')), 'dry run by default: nothing written', d1.wouldWrite);
-  check(d1.files['masters.json'].added === 1 && d1.files['masters.json'].expired === 1, 'expired master claims are skipped', d1.files['masters.json']);
-  const ap = imp.run({ dir: AGO, destDir: DEST, apply: true });
-  const R = JSON.parse(fs.readFileSync(path.join(DEST, 'registry.json'), 'utf8'));
-  const newId = ap.renumbered.t0001;
-  check(ap.applied && R.tasks.t0001.title === 'relaymote own' && newId && R.tasks[newId].title === 'ago one', 'a colliding task id is renumbered; Relaymote\'s own task keeps its id', ap.renumbered);
-  check(R.tasks.t0002.dependsOn[0] === newId && R.tasks.t0002.importedFrom === 'ago', '…and dependsOn follows the renumbering', R.tasks.t0002);
-  const W = JSON.parse(fs.readFileSync(path.join(DEST, 'awaits.json'), 'utf8')).watches;
-  check(W.length === 1 && W[0].waitingOn.join() === newId + ',t0002', 'open watches imported (resolved ones skipped), with renumbered task ids', W);
-  const NS = JSON.parse(fs.readFileSync(path.join(DEST, 'notify-state.json'), 'utf8'));
-  check(NS.pending.length === 2 && NS.pending[0].key === `task:${newId}:done` && NS.notified[`task:${newId}:done`] && !NS.notified['task:t0001:done'], 'the notify queue and its dedupe keys follow the renumbering (Relaymote\'s own t0001 is not silenced)', NS.pending.map(p => p.key));
-  check(JSON.parse(fs.readFileSync(path.join(DEST, 'masters.json'), 'utf8')).web.sessionId === 'local_master_web' && fs.existsSync(path.join(DEST, 'notify-config.json')), 'master claims and notify config imported');
-  check(ap.backup && fs.existsSync(path.join(ap.backup, 'registry.json')), 'Relaymote\'s previous files are backed up before being replaced');
-  check(Object.entries(srcHashes).every(([f, h]) => md5(path.join(AS, f)) === h) && fs.readdirSync(AS).length === Object.keys(srcHashes).length, 'the AGO source folder is byte-for-byte unchanged');
-  const again = imp.run({ dir: AGO, destDir: DEST, apply: true });
-  check(again.files['registry.json'].added === 0 && JSON.parse(fs.readFileSync(path.join(DEST, 'awaits.json'), 'utf8')).watches.length === 1, 'importing twice adds nothing', again.files);
 
   // ------------------------------------------------------------------------------------------------
   section('launcher: stderr kept, rotated, launch/exit lines');

@@ -1032,7 +1032,7 @@ html[data-density="compact"] .sheet-bar{margin:0 -14px 2px; padding:0 14px}
 .sheet-x:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
 @media (min-width:900px){ .sheet-body{border-radius:14px} .sheet-bar{border-radius:14px 14px 0 0} }
 
-/* ---------------- Board: space at phone width, queued replies (mirrors AGO g430 / g427) ----------------
+/* ---------------- Board: space at phone width, queued replies (g430 / g427) ----------------
    The list scrolls INSIDE the sheet, so every pixel of header is a pixel of list lost. Refresh is an icon
    in the title row, the Conductor line is one line when it is fine (the box stays for a problem), search
    and the day chips share a row, and in compact the footer Done gives way to the top bar's X. */

@@ -51,7 +51,7 @@
 | Accounts | `lib/account-sync.js`, `lib/account-sync/*`, `lib/account-scope.js`, `mobile/accounts.js` |
 | Alerts | `mobile/push.js`, `mobile/alerts.js` (ntfy / webhook / command backup, rate cap), `mobile/pushhealth.js` (alarm when no phone is subscribed) |
 | Finish-the-task hook | `hooks/finish-the-task.js`, `hooks/install.js` |
-| Operations | `lib/heal.js`, `lib/launch.js`, `scripts/register-autostart.ps1`, `lib/salvage.js`, `lib/import-ago.js` (import from the predecessor's state format), `lib/dashboard.html` (loopback control page) |
+| Operations | `lib/heal.js`, `lib/launch.js`, `scripts/register-autostart.ps1`, `lib/salvage.js`, `lib/dashboard.html` (loopback control page) |
 | Remote access | `lib/tunnel.js` (cloudflared), `lib/pair.js` (links + QR), `mobile/access.js` (Cloudflare Access) |
 | Settings | `lib/config.js` (`~/.relaymote/settings.json`, hot-reloaded), `mobile/public/settings-ui.js` |
 

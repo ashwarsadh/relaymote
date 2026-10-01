@@ -170,7 +170,7 @@ function devMode(enable) {
 }
 
 async function setup() {
-  console.log(C.b('\nBaton setup\n'));
+  console.log(C.b('\nRelaymote setup\n'));
   await doctor();
   if (!(await cdpUp()) && devMode(true) === 'changed') {
     console.log(C.y('\nTurned on Claude Desktop Developer Mode. Quit Claude Desktop (tray icon › Quit) and open it again, then run `relaymote debugger`' +
@@ -231,7 +231,6 @@ ${C.b('Orchestrator')}
   relaymote run <task> · preview <task> · ls · show <id> · stop <id> · escalate <id>
   relaymote sessions · archivable · health · prune [days]
   relaymote salvage [file] [--apply]      recover tasks from a quarantined registry.json.corrupt-*
-  relaymote import-ago [dir] [--apply]    import tasks, masters, watches and the notify queue from AGO
   relaymote index build|route|who|session|tree|masters|progress|buried|learn|tag|log|tasks|newproject|digest
                                       project index + transcript intelligence (\`relaymote index help\`)
   relaymote hygiene [compact [--send] [--cap N] | show]   what each session's context needs (HYGIENE.md); compact = last-warm-cycle /compact
@@ -278,7 +277,7 @@ async function accountsCmd() {
       const dir = args[2] && !args[2].startsWith('--') ? args[2] : path.join(config.CLAUDE_HOME, 'migrate');
       return say(await sync.importMigrate(dir, { apply: args.includes('--apply'), merge: args.includes('--merge') }));
     }
-    case 'launch': return say(await lnch().launchThroughBaton({ pass: () => sync.bootPass({ force: true, trigger: 'launch' }) }));
+    case 'launch': return say(await lnch().launchThroughRelaymote({ pass: () => sync.bootPass({ force: true, trigger: 'launch' }) }));
     case 'launch-hook': {
       const v = (args[2] || 'status').toLowerCase();
       const r = v === 'install' ? await lnch().hookInstall() : v === 'remove' ? await lnch().hookRemove() : await lnch().hookStatus();
@@ -343,18 +342,6 @@ async function accountsCmd() {
       console.log(r.applied ? C.g(`Wrote ${r.total} task(s) to ${r.wrote} (${r.added} added).`)
         : C.y(`Dry run: would add ${r.added} task(s) (${r.alreadyPresent} already present), ${r.total} in total. Add --apply to write.`));
       if (r.applied && await running()) console.log(C.d('The daemon picks the change up on its next read.'));
-      return;
-    }
-    case 'import-ago': {
-      const r = require('../lib/import-ago').run({ dir: args[1] && !args[1].startsWith('-') ? args[1] : undefined, apply: args.includes('--apply') });
-      if (!r.ok) return console.log(C.r(`${r.error}: ${r.message}`));
-      console.log(`from ${r.source}\n  to ${r.dest}`);
-      for (const [f, v] of Object.entries(r.files)) console.log(`  ${f.padEnd(19)} ${JSON.stringify(v)}`);
-      if (Object.keys(r.renumbered).length) console.log(C.y(`  ${Object.keys(r.renumbered).length} task id(s) renumbered because Relaymote already uses them; references follow.`));
-      for (const w of r.warnings) console.log(C.y('  ! ' + w));
-      if (r.applied) console.log(C.g(`Imported: ${r.wrote.join(', ')}.`) + (r.backup ? C.d(` Previous Relaymote files saved in ${r.backup}.`) : '') + C.d(' The source was not modified.'));
-      else console.log(r.wouldWrite.length ? C.y(`Dry run: would write ${r.wouldWrite.join(', ')}. Add --apply to import (the source is never modified).`) : C.g('Nothing to import.'));
-      if (r.applied && await running()) console.log(C.d('Restart Relaymote (`relaymote restart`) so the notify queue and watches are re-read.'));
       return;
     }
     case 'restart':

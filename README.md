@@ -4,10 +4,6 @@
 
 <h1 align="center">Relaymote</h1>
 
-> **Relaymote was called Baton until v0.2.26.** From v0.2.27 everything carries the new name: the `relaymote` command,
-> the `relaymote_*` tools, `~/.relaymote`, the install folder and the scheduled tasks. An older install moves over with
-> `scripts/migrate-from-baton.ps1`.
-
 > **Unofficial; not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.**
 
 <p align="center"><b>Your Claude Code sessions, in your pocket.</b><br>
@@ -359,7 +355,6 @@ relaymote setup | open | pair | status
 relaymote start | stop | restart | tray | doctor
 relaymote autostart [remove | status] [--headless] [--dry-run]
 relaymote salvage [file] [--apply]           # recover tasks from a quarantined registry.json.corrupt-*
-relaymote import-ago [dir] [--apply]         # bring tasks, master claims, waits and alerts over from AGO
 relaymote debugger | mcp install | mcp remove
 relaymote tunnel quick | login | setup <hostname> | off | status
 relaymote accounts | accounts sync [--apply] [--fold] | undo | hold | freeze | import-migrate <dir> | launch-hook
@@ -378,8 +373,7 @@ relaymote index progress "<project>" | buried [days] | learn | tag | log | dispa
   for every launch and exit.
 - `http://127.0.0.1:8788/` is a control dashboard: submit a task with a live routing preview, stop or
   escalate tasks, and see sessions by group. Loopback only.
-- `relaymote salvage` and `relaymote import-ago` are dry runs unless you pass `--apply`; both back up or leave
-  their source untouched.
+- `relaymote salvage` is a dry run unless you pass `--apply`; it backs up before it writes.
 
 ## Platform support
 

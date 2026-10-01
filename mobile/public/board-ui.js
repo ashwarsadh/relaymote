@@ -170,7 +170,7 @@
       B.flushing = false; pendingBar();
     }
   }
-  window.batonBoardFlush = flush;
+  window.relaymoteBoardFlush = flush;
 
   const EXP_KEY = 'baton_board_expanded';
   try {
@@ -534,7 +534,7 @@
       + counts.map(([k, n]) => ' <span class="n">' + esc(n) + ' ' + esc(String(k).toLowerCase().replace(/[-_]/g, ' ')) + '</span>').join('')
       + (h.at ? '<p>as at ' + esc(fmtWhen(h.at)) + '</p>' : '')
       + (wl ? '<p>Wakes, last day: ' + esc(wl.warm || 0) + ' inside the cache window · ' + esc(wl.cold || 0) + ' outside'
-        + (h.wakes.baton24 != null ? ' · Relaymote sent ' + esc(h.wakes.baton24) + ' in 24 h' : '') + '</p>' : '') + '</summary>'
+        + (h.wakes.relaymote24 != null ? ' · Relaymote sent ' + esc(h.wakes.relaymote24) + ' in 24 h' : '') + '</p>' : '') + '</summary>'
       + rows.slice(0, 40).map(r => '<div class="gcard"><div class="gtitle">' + esc(r.title || r.id || r.sessionId || '') + '</div><div class="gmeta">'
         + esc([r.verdict || r.state || '', r.reason || r.why || ''].filter(Boolean).join(' — ')) + '</div></div>').join('')
       + (h.more ? '<p class="gmore">' + esc(h.more) + ' more — <code>relaymote hygiene</code></p>' : '')

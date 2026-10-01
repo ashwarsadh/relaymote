@@ -236,7 +236,7 @@ async function act({ kind, id, text, who }) {
   };
   audit(rec);
   log(rec.result + ': ' + l.line);
-  if (out.ok) { recordActed(id, kind); closeBatonNote(board, l, kind); }
+  if (out.ok) { recordActed(id, kind); closeRelaymoteNote(board, l, kind); }
 
   if (!out.ok) {
     return { code: 429, body: { ok: false, error: 'send-failed', reason: rec.reason || 'the send did not complete', line: l.line, conductor: st.id } };
@@ -250,7 +250,7 @@ function _setSender(fn) { const p = SEND; SEND = fn || ((s, m, o) => bridge.send
 function _setConductorState(fn) { const p = STATE_FN; STATE_FN = fn || ((b, o) => conductorState(b, o)); return p; }
 
 /** On Relaymote's own board a delivered Done closes the inbox item and a Reinstate re-opens (and pins) it. */
-function closeBatonNote(board, l, kind) {
+function closeRelaymoteNote(board, l, kind) {
   if ((kind !== 'done' && kind !== 'reopen') || l.target !== 'inbox' || board.generator !== 'relaymote') return;
   const n = String(l.line).split(' ')[1];
   try {
@@ -301,7 +301,7 @@ async function actBatch({ items, bid, who } = {}) {
   audit({ at, kind: 'batch', batch, n: lines.length, ids: lines.map(l => l.id), who: who || 'mobile', conductor: st.id, result, reason: out.reason || out.error || null });
   for (const l of lines) {
     audit({ at, kind: l.kind, id: l.id, target: l.target, line: l.line, batch, conductor: st.id, who: who || 'mobile', result, reason: out.reason || out.error || null });
-    if (out.ok) { recordActed(l.id, l.kind); closeBatonNote(board, l, l.kind); }
+    if (out.ok) { recordActed(l.id, l.kind); closeRelaymoteNote(board, l, l.kind); }
   }
   log(`${result}: batch of ${lines.length}`);
   if (!out.ok) return { code: 429, body: { ok: false, error: 'send-failed', reason: out.reason || out.error || 'the send did not complete', rejected } };

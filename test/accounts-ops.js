@@ -58,10 +58,10 @@ const { check } = fx;
   const snapName = AA + '__' + AO + '.json';
   fs.writeFileSync(path.join(SRC, 'scope-snapshots', snapName), JSON.stringify({ scope: keyA, groups: [{ id: 'g1', name: 'Kept' }], assignments: {}, order: {}, forgotten: ['g-dead'], forgottenNames: ['old stuff'] }));
   fs.writeFileSync(path.join(SRC, 'scope-snapshots', AA + '__' + AO + '-before-restore.json'), JSON.stringify({ groups: [] }));
-  const srcHash = fx.hashTree(SRC), batonHash0 = fx.hashTree(fx.RELAYMOTE_ACCOUNTS);
+  const srcHash = fx.hashTree(SRC), relaymoteHash0 = fx.hashTree(fx.RELAYMOTE_ACCOUNTS);
 
   let im = await sync.importMigrate(SRC);
-  check(im.ok && im.dryRun && /Preview only/.test(lines(im)) && fx.hashTree(fx.RELAYMOTE_ACCOUNTS) === batonHash0, 'dry run by default: a preview, nothing written', lines(im));
+  check(im.ok && im.dryRun && /Preview only/.test(lines(im)) && fx.hashTree(fx.RELAYMOTE_ACCOUNTS) === relaymoteHash0, 'dry run by default: a preview, nothing written', lines(im));
   check(/412|1 dated fact\(s\), 1 tombstone\(s\), 1 synced record id\(s\), 1 synced routine id\(s\)/.test(lines(im)), 'the preview counts the history it would bring');
   check(/labels: 2 scope\(s\) named, 1 account\(s\) not on this computer/.test(lines(im)), 'an account label maps to every scope of that account; an unknown account is reported', lines(im));
   im = await sync.importMigrate(SRC, { apply: true });
@@ -178,19 +178,19 @@ const { check } = fx;
     sleep: async ms => { clock += ms; }, now: () => clock, lockHeld: () => lockTurns-- > 0, presence: async () => 'absent', ...over,
   });
   let passes = 0;
-  let L = await launch.launchThroughBaton({ pass: async () => { passes++; return { applied: { count: 3 } }; } }, deps());
+  let L = await launch.launchThroughRelaymote({ pass: async () => { passes++; return { applied: { count: 3 } }; } }, deps());
   check(L.ok && passes === 1 && /pass done: 3 change/.test(L.log.join()) && L.started.how === 'msix', 'Desktop absent: repair first, then start', L.log.join(' | '));
   check(spawned.pop() === 'explorer.exe shell:AppsFolder\\Vendor.Claude_abc123xyz!Claude', 'no exe installed: the Store app is started by its AppsFolder id');
-  L = await launch.launchThroughBaton({ pass: async () => { passes++; } }, deps({ presence: async () => 'live' }));
+  L = await launch.launchThroughRelaymote({ pass: async () => { passes++; } }, deps({ presence: async () => 'live' }));
   check(L.ok && passes === 1 && /no pass: Desktop is live/.test(L.log.join()), 'Desktop already running: no pass, never closed, just started (a no-op for a running app)');
   lockTurns = 3;
-  L = await launch.launchThroughBaton({ pass: async () => ({}) }, deps());
+  L = await launch.launchThroughRelaymote({ pass: async () => ({}) }, deps());
   check(L.ok && /waited 1\.5s for another writer/.test(L.log.join()), 'Desktop is started only after another writer releases the lock', L.log.join(' | '));
-  L = await launch.launchThroughBaton({ pass: () => new Promise(() => {}), capMs: 40 }, deps({ now: () => Date.now(), sleep: ms => new Promise(res => setTimeout(res, ms)) }));
+  L = await launch.launchThroughRelaymote({ pass: () => new Promise(() => {}), capMs: 40 }, deps({ now: () => Date.now(), sleep: ms => new Promise(res => setTimeout(res, ms)) }));
   check(L.ok && /hit the 0s cap/.test(L.log.join()), 'a pass that hangs is capped; Desktop still starts', L.log.join(' | '));
-  L = await launch.launchThroughBaton({ pass: async () => { throw new Error('boom'); } }, deps());
+  L = await launch.launchThroughRelaymote({ pass: async () => { throw new Error('boom'); } }, deps());
   check(L.ok && /pass failed: boom/.test(L.log.join()), 'a failing pass still starts Desktop');
-  L = await launch.launchThroughBaton({}, deps({ aumid: async () => null }));
+  L = await launch.launchThroughRelaymote({}, deps({ aumid: async () => null }));
   check(!L.ok && /could not start/.test(L.log.join()), 'nothing to start: reported, not claimed');
 
   console.log('-- the logon hook (fake registry)');

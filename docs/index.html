@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Relaymote — Claude Code sessions on your phone</title>
+<meta name="description" content="A free phone and desktop client for the Claude Desktop Code tab: watch, answer and resume your Claude Code sessions from anywhere.">
+<link rel="icon" href="img/logo.svg">
+<style>
+:root{--bg:#faf9f6;--fg:#1f1e1c;--dim:#6b6860;--card:#fff;--line:#e6e3dc;--accent:#b5502f}
+@media (prefers-color-scheme:dark){:root{--bg:#1a1918;--fg:#ecebe7;--dim:#a19e96;--card:#242321;--line:#34322f;--accent:#e07a55}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:960px;margin:0 auto;padding:40px 16px 64px}
+header{text-align:center}
+header img{width:88px;height:88px}
+h1{font-size:2.4rem;margin:12px 0 4px}
+.tag{font-size:1.2rem;color:var(--dim);margin:0 auto 24px;max-width:620px}
+.dl{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:20px 0 8px}
+.dl a{display:inline-block;padding:12px 18px;border-radius:10px;text-decoration:none;border:1px solid var(--line);background:var(--card);color:var(--fg);font-weight:600}
+.dl a.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.ver{color:var(--dim);font-size:.9rem;text-align:center}
+.shots{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin:36px 0}
+.shots img{width:220px;max-width:44vw;border-radius:14px;border:1px solid var(--line)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h3{margin:0 0 6px;font-size:1.05rem}
+.card p{margin:0;color:var(--dim);font-size:.95rem}
+h2{margin-top:44px}
+ol li{margin:6px 0}
+a{color:var(--accent)}
+footer{margin-top:48px;color:var(--dim);font-size:.85rem;text-align:center}
+code{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <img src="img/logo.svg" alt="Relaymote logo">
+  <h1>Relaymote</h1>
+  <p class="tag">Your Claude Code sessions, in your pocket. The Code tab of Claude Desktop on your phone and in any browser: every session, live, exactly as it is on your computer.</p>
+  <div class="dl" id="dl">
+    <a class="primary" id="win" href="https://github.com/ashwarsadh/relaymote/releases/latest">Download for Windows</a>
+    <a id="macarm" href="https://github.com/ashwarsadh/relaymote/releases/latest">macOS (Apple Silicon)</a>
+    <a id="macx64" href="https://github.com/ashwarsadh/relaymote/releases/latest">macOS (Intel)</a>
+    <a href="https://github.com/ashwarsadh/relaymote/releases/latest">All downloads</a>
+  </div>
+  <p class="ver" id="ver">Free and open source (MIT). Includes its own Node.js runtime.</p>
+</header>
+
+<div class="shots">
+  <img src="img/shot-sessions.png" alt="Session list on a phone">
+  <img src="img/shot-chat.png" alt="A session on the phone">
+  <img src="img/shot-pair.png" alt="Pairing a phone with a QR code">
+</div>
+
+<h2>What it does</h2>
+<div class="grid">
+  <div class="card"><h3>Mirrors your desktop</h3><p>The same sessions, groups and state you see in Claude Desktop, not a separate copy.</p></div>
+  <div class="card"><h3>Reply from anywhere</h3><p>Send messages, answer questions, switch model and effort, stop or resume a session.</p></div>
+  <div class="card"><h3>Nothing stalls</h3><p>Sessions that hit a usage limit continue when it resets. Read-aloud and push alerts keep you in the loop.</p></div>
+  <div class="card"><h3>Several accounts</h3><p>One app across every Claude account on your computer, with their sessions kept in sync.</p></div>
+  <div class="card"><h3>Organised for you</h3><p>New sessions land in their project's group; a board shows everything that needs you.</p></div>
+  <div class="card"><h3>Conductor and masters</h3><p>Run many sessions at once: a conductor above all projects, a master per project, workers below.</p></div>
+</div>
+
+<h2>Get started</h2>
+<ol>
+  <li>Download and run the installer for your computer.</li>
+  <li>In Claude Desktop, turn on Developer Mode and the Main Process Debugger (setup does most of this for you).</li>
+  <li>Open <b>Pair a phone</b> and scan the QR code.</li>
+</ol>
+<p>Full instructions, settings and security notes are in the <a href="https://github.com/ashwarsadh/relaymote#readme">README</a>.</p>
+
+<footer>Unofficial; not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.<br>
+<a href="https://github.com/ashwarsadh/relaymote">Source on GitHub</a> · MIT licence</footer>
+</main>
+<script>
+fetch('https://api.github.com/repos/ashwarsadh/relaymote/releases/latest').then(function(r){return r.ok?r.json():null}).then(function(d){
+  if(!d||!d.assets)return;
+  function pick(re){var a=d.assets.find(function(x){return re.test(x.name)});return a&&a.browser_download_url}
+  var m={win:/Setup-.*-x64\.exe$/,macarm:/-arm64\.dmg$/,macx64:/-x64\.dmg$/};
+  Object.keys(m).forEach(function(id){var u=pick(m[id]);if(u)document.getElementById(id).href=u});
+  document.getElementById('ver').textContent='Latest: '+d.tag_name+'. Free and open source (MIT). Includes its own Node.js runtime.';
+}).catch(function(){});
+</script>
+</body>
+</html>

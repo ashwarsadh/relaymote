@@ -13,6 +13,7 @@ conductor for running many sessions at once.</p>
 
 <p align="center">
   <a href="https://github.com/ashwarsadh/relaymote/releases/latest"><b>⬇ Download</b></a> ·
+  <a href="https://ashwarsadh.github.io/relaymote/">Website</a> ·
   <a href="#let-your-ai-install-it">Let your AI install it</a> ·
   <a href="#get-started-in-three-steps">Get started</a> ·
   <a href="docs/ARCHITECTURE.md">How it works</a>

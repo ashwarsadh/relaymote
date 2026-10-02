@@ -1,5 +1,11 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.61
+
+- A queued message with attachments now has Send now and ×, like any other message.
+- A queued message that has waited more than two minutes shows how long it has waited.
+- Running is read from Claude Desktop's own session state on every refresh; the sidebar label is only the fallback.
+
 ## 0.2.60
 
 - Session dots work again. Claude Desktop now keeps its CLI one folder deeper (claude-code/<version>/<build>/claude.exe); Relaymote could not find it, the sidebar refresh aborted, and every session showed a grey dot. Both layouts are found now, and a missing CLI no longer stops the dots, which come from Desktop's own sidebar.

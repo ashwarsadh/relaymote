@@ -63,6 +63,9 @@ async function refreshDesktop() {
   desktop.cdpAvailable().then(ok => { lastCdpOk = ok; lastCdpAt = Date.now(); }).catch(() => { lastCdpOk = false; lastCdpAt = Date.now(); });
   try {
     const sidebar = await desktop.scrapeSidebar();
+    // Running comes from Desktop's session API when it answers; the sidebar label is the fallback.
+    const truth = await desktop.readRunningAll(sidebar.sessions.map(s => s.id)).catch(() => ({}));
+    for (const s of sidebar.sessions) if (typeof truth[s.id] === 'boolean') s.running = truth[s.id];
     const agents = await claudeAgents();
     const cwdMap = desktop.buildCwdMap(agents);
     const merged = desktop.mergeSessions(

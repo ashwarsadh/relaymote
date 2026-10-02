@@ -470,7 +470,7 @@ function messageHtml(m) {
   }
   else if (m.role === 'user') {
     out += clampable(md(m.text), m.text, 'msg user' + (m.queued ? ' queued' : ''), m.ts);
-    if (m.queued) out += '<div class="queuetag">queued · waiting to be picked up' + sendNowBtn() + '</div>';
+    if (m.queued) out += '<div class="queuetag">queued · waiting to be picked up' + waitedNote(Date.now() - (Date.parse(m.ts || '') || Date.now())) + sendNowBtn() + '</div>';
     out += stampHtml(m);
   }
   else if (m.role === 'attachment') {
@@ -627,7 +627,11 @@ function cached(k, m) {
 }
 
 const sendNowBlocked = new Map();
-const ATT_QUEUED_NOTE = 'queued — goes when the current turn ends · no Send now or × for a message with an attachment';
+// A queued message that has waited past two minutes says so, so a stuck one is visible at a glance.
+function waitedNote(ms) {
+  const m = Math.floor((Number(ms) || 0) / 60000);
+  return m >= 2 ? '<span class="waited"> · waiting ' + (m < 60 ? m + 'm' : Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm') + '</span>' : '';
+}
 function heldControls(outboxId) {
   return ' <button class="sendnow ob-sendnow" type="button" data-ob="' + esc(outboxId) + '"' +
          ' title="Interrupt the current turn and send this now">Send now</button>' +
@@ -856,9 +860,9 @@ function renderLog(messages, force) {
             `<button class="linkish ob-retry" data-ob="${esc(e.id)}">Send again</button> ` +
             `<button class="linkish ob-forget" data-ob="${esc(e.id)}">Discard</button></span>`
           : `<span class="tick">${e.held
-              ? 'queued — waiting for the current turn' + sn
+              ? 'queued — waiting for the current turn' + waitedNote(e.ageMs) + sn
               : e.delivery === 'queued'
-                ? (/^@/m.test(e.text) ? ATT_QUEUED_NOTE : 'queued — waiting for the current turn' + sn + heldNote(e.at))
+                ? 'queued — waiting for the current turn' + waitedNote(e.ageMs) + sn + heldNote(e.at)
                 : 'sending…'}</span>`) +
         `</div>`;
     }
@@ -872,7 +876,7 @@ function renderLog(messages, force) {
       : '<div class="muted">(empty)</div>';
     const sn2 = p2.status === 'queued' ? (p2.held && p2.outboxId ? heldControls(p2.outboxId) : sendNowBtn()) : '';
     const tick = p2.status === 'sent' ? 'sent ✓'
-               : p2.status === 'queued' ? (!p2.held && p2.atts && p2.atts.length ? ATT_QUEUED_NOTE : 'queued — waiting for the current turn' + sn2 + (p2.held ? '' : heldNote(p2.at)))
+               : p2.status === 'queued' ? 'queued — waiting for the current turn' + waitedNote(Date.now() - (p2.at || Date.now())) + sn2 + (p2.held ? '' : heldNote(p2.at))
                : 'sending…';
     html += `<div class="msg user pending${sn2 ? ' act' : ''}">${body}<span class="tick">${tick}</span></div>`;
   }

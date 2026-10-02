@@ -662,7 +662,9 @@ async function doSend(id, text, attachments) {
 
   const slip = outbox.add({ session: id, text: body });
 
-  if (!(Array.isArray(attachments) && attachments.length)) {
+  // Attachments travel as "@<path>" lines in the text (the composer delivers them the same way), so a
+  // message with attachments takes the bridge too and gets a handle for Send now and ×.
+  {
     let live = null;
     try { live = await desktop.readAppliedModel(id); } catch { live = null; }
     if (live && live.ok && live.running) {

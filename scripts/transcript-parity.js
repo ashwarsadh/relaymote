@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Live parity check: does Relaymote's reading view hold everything a real session said in a window?
 //   node scripts/transcript-parity.js <local_session_id> <fromISO> <toISO>
-// Every user message must appear once, and every assistant text and thinking block must be present.
+// Every user message must appear once and every assistant text must be present -- what Desktop shows.
+// Thinking blocks are counted for information only: Desktop does not show them, so neither do we (g1069).
 // Exit 0 = parity, 1 = something missing or doubled (printed). Reads only; changes nothing.
 'use strict';
 const fs = require('fs');
@@ -39,7 +40,7 @@ const INJECTED = /^\s*(<task-notification>|<command-|<local-command-|\[SYSTEM NO
   const users = view.filter(m => m.role === 'user' && !m.queued).map(m => nn(m.text));
   const peers = view.filter(m => m.role === 'peer').length;
   const said = view.filter(m => m.role === 'assistant');
-  const texts = said.map(m => nn(m.text)).join(' ‖ '), thoughts = said.map(m => nn(m.thinking)).join(' ‖ ');
+  const texts = said.map(m => nn(m.text)).join(' ‖ ');
   // The view clips long blocks, so a block is "present" when its opening is.
   const present = (hay, x) => hay.includes(x.slice(0, 120));
   const report = {
@@ -50,9 +51,9 @@ const INJECTED = /^\s*(<task-notification>|<command-|<local-command-|\[SYSTEM NO
     doubledUser: raw.user.filter(u => users.filter(g => g.includes(u.slice(0, 80))).length > 1).map(x => x.slice(0, 70)),
     missingPeer: Math.max(0, raw.peer.length - peers),
     missingText: raw.text.filter(x => !present(texts, x)).map(x => x.slice(0, 70)),
-    missingThinking: raw.thinking.filter(x => !present(thoughts, x)).map(x => x.slice(0, 70)),
+    thinkingNotShown: raw.thinking.length,
   };
-  const bad = report.missingUser.length + report.doubledUser.length + report.missingPeer + report.missingText.length + report.missingThinking.length;
+  const bad = report.missingUser.length + report.doubledUser.length + report.missingPeer + report.missingText.length;
   console.log(JSON.stringify(report, null, 2));
   console.log(bad ? 'PARITY FAILED' : 'parity ok');
   process.exit(bad ? 1 : 0);

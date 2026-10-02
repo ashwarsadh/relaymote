@@ -1,7 +1,7 @@
-// Transcript parity (g1050): everything the session said is in the reading view, once. On 03-Oct he
-// saw replies on Desktop that the phone "did not have": they were thinking blocks, folded out of sight
-// into "Working". This builds a turn with a held message, thinking, a tool step, text and a peer
-// message, and checks the reader returns each exactly once and the client shows thinking in the flow.
+// Transcript parity (g1050, g1069): what Desktop shows is in the reading view, once -- every user
+// message, peer message and assistant text. Thinking is NOT shown: Desktop does not show it (g1069
+// reversed 0.2.65, which drew it as grey prose). This builds a turn with a held message, thinking, a
+// tool step, text and a peer message, and checks the reader and the client agree.
 const fs = require('fs'), os = require('os'), path = require('path');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-parity-'));
 process.env.CLAUDE_CONFIG_DIR = TMP;
@@ -40,15 +40,16 @@ check(count(users, 'only alert after the due date') === 1, 'the held reply, once
 check(!ms.some(m => m.queued), 'no queued leftover once the reply was delivered', ms.filter(m => m.queued));
 const thinking = ms.filter(m => m.role === 'assistant').map(m => m.thinking).join('\n');
 const text = ms.filter(m => m.role === 'assistant').map(m => m.text).join('\n');
-check(thinking.includes('Found a bug') && thinking.includes('I found the issue'), 'both thinking blocks are present');
+check(thinking.includes('Found a bug') && thinking.includes('I found the issue'), 'the reader keeps thinking (search only; never drawn)');
 check(text.includes('Fixed: each check') && text.includes('Understood, alerts'), 'both text replies are present');
 check(ms.some(m => (m.tools || []).some(x => /Redeploy and rerun/.test(JSON.stringify(x)))), 'the tool step carries its description');
 check(ms.filter(m => m.role === 'peer').length === 1, 'the peer message, once, as a peer row');
 
-// Client: thinking renders as its own visible row, not inside the collapsed "Working" group.
+// Client: thinking is drawn nowhere -- not in the flow, not inside the collapsed "Working" group.
 const app = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'public', 'app.js'), 'utf8');
-check(/const thought = m\.role === 'assistant' && m\.thinking/.test(app) && /class=\\?"msg thought\\?"/.test(app), 'app.js shows thinking in the flow as msg thought');
-check(/workHtml\(\{ \.\.\.m, thinking: '' \}\)/.test(app), 'and does not repeat it inside Working');
+check(!/msg thought/.test(app), 'app.js draws no thought row in the flow');
+check(!/class="think"/.test(app), 'and no thinking section inside Working');
+check(!/m\.thinking\)\s*out \+=/.test(app) && !/\$\{esc\(m\.thinking\)\}/.test(app), 'and never writes m.thinking into the page');
 
 fs.rmSync(TMP, { recursive: true, force: true });
 if (fails) { console.error(fails + ' failed'); process.exit(1); }

@@ -1,5 +1,10 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.66
+
+- The model's thinking is no longer shown anywhere in a session view, neither as grey text in the conversation nor inside "Working". Desktop does not show it, and 0.2.65 should not have.
+- The parity check now counts only what Desktop shows: user and peer messages and reply text.
+
 ## 0.2.65
 
 - The model's thinking now shows in the chat as quiet prose, the way Claude Desktop shows it. It used to be folded inside the collapsed "Working" group, so replies you could read on Desktop seemed to be missing on the phone.

@@ -52,5 +52,19 @@ check(/const held = \(state\.outbox/.test(app), 'a held message is drawn once, f
   check(!make(null)({ id: 'ob1', text: 'x' }), 'no bubble pending: every outbox entry shows');
 }
 
+// g1050: a reply sent during a running turn takes Desktop's "next" lane (in at the next tool call, as
+// the composer does), not the end-of-turn lane where it waited 20 minutes.
+{
+  const dsk = read('lib', 'desktop.js');
+  const sq = dsk.slice(dsk.indexOf('async function sendQueued('), dsk.indexOf('async function cancelQueued('));
+  const call = (sq.match(/LS\.sendMessage\(([^;]*)\);/) || [])[1] || '';
+  const args = call.split(',').map(x => x.trim());
+  check(args.length === 8 && args[5] === "'next'", 'sendMessage gets priority \'next\' as its 6th argument', call);
+  check(/\$\{JSON\.stringify\(uuid\)\}/.test(args[7] || ''), 'and the message uuid as its 8th, so Send now and × can find it', args[7]);
+  const sn = dsk.slice(dsk.indexOf('async function sendQueuedNowByUuid'), dsk.indexOf('async function sendQueuedNowByUuid') + 1500);
+  check(sn.indexOf('LS.sendSteeredNow') > 0 && sn.indexOf('LS.sendSteeredNow') < sn.indexOf('LS.promoteQueuedMessage'), 'Send now pushes a steer-lane message in before falling back to promote + interrupt');
+  check(/outboxTick\(\)\.catch\([^)]*\)\); \}, 5000\)/.test(index), 'the outbox is re-checked every 5 s while a message is pending');
+}
+
 if (fails) { console.error(fails + ' failed'); process.exit(1); }
 console.log('queue-attachments: all checks passed');

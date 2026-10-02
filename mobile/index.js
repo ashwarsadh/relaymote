@@ -1815,9 +1815,16 @@ async function refreshStartDefaults() {
   try { const v = await desktop.readStartDefaults(); if (v && v.ok) startDefaults = { model: v.model, effort: v.effort, effortSource: v.effortSource }; } catch {}
 }
 
+// Runs every 5 s while anything is pending, so a message reads "sent" within seconds of Desktop taking
+// it (g1050). The session index is refreshed at most once a minute; a refresh can take seconds.
+let outboxBusy = false, outboxRefreshedAt = 0;
 async function outboxTick() {
-  if (!outbox.pending().length) return;
-  try { await sessions.refresh(); } catch {}
+  if (outboxBusy || !outbox.pending().length) return;
+  outboxBusy = true;
+  try { await outboxTickInner(); } finally { outboxBusy = false; }
+}
+async function outboxTickInner() {
+  if (Date.now() - outboxRefreshedAt > 60000) { outboxRefreshedAt = Date.now(); try { await sessions.refresh(); } catch {} }
   const busy = (id) => { const s = sessions.get(id); return !!(s && (s.running || s.dot === 'Running')); };
   const { confirmed, suspect } = outbox.reconcile(transcriptTail, Date.now(), busy);
   for (const e of confirmed) log(`outbox: confirmed ${e.id} in ${e.session}`);
@@ -1846,7 +1853,7 @@ function start() {
   bind('127.0.0.1', 'loopback');
   rebindLoop();
   ensurePoll();
-  const ob = setInterval(() => { outboxTick().catch(e => log('outbox tick: ' + e.message)); }, 60000);
+  const ob = setInterval(() => { outboxTick().catch(e => log('outbox tick: ' + e.message)); }, 5000);
   setTimeout(() => { refreshStartDefaults(); }, 8000);
   const sdT = setInterval(refreshStartDefaults, 5 * 60000);
   if (sdT.unref) sdT.unref();

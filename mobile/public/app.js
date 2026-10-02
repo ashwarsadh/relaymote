@@ -869,9 +869,9 @@ function renderLog(messages, force) {
             `<button class="linkish ob-retry" data-ob="${esc(e.id)}">Send again</button> ` +
             `<button class="linkish ob-forget" data-ob="${esc(e.id)}">Discard</button></span>`
           : `<span class="tick">${e.held
-              ? 'queued — waiting for the current turn' + waitedNote(e.ageMs) + sn
+              ? 'queued — goes in at its next step' + waitedNote(e.ageMs) + sn
               : e.delivery === 'queued'
-                ? 'queued — waiting for the current turn' + waitedNote(e.ageMs) + sn + heldNote(e.at)
+                ? 'queued — goes in at its next step' + waitedNote(e.ageMs) + sn + heldNote(e.at)
                 : 'sending…'}</span>`) +
         `</div>`;
     }
@@ -885,7 +885,7 @@ function renderLog(messages, force) {
       : '<div class="muted">(empty)</div>';
     const sn2 = p2.status === 'queued' ? (p2.held && p2.outboxId ? heldControls(p2.outboxId) : sendNowBtn()) : '';
     const tick = p2.status === 'sent' ? 'sent ✓'
-               : p2.status === 'queued' ? 'queued — waiting for the current turn' + waitedNote(Date.now() - (p2.at || Date.now())) + sn2 + (p2.held ? '' : heldNote(p2.at))
+               : p2.status === 'queued' ? 'queued — goes in at its next step' + waitedNote(Date.now() - (p2.at || Date.now())) + sn2 + (p2.held ? '' : heldNote(p2.at))
                : 'sending…';
     html += `<div class="msg user pending${sn2 ? ' act' : ''}">${body}<span class="tick">${tick}</span></div>`;
   }

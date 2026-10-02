@@ -1,5 +1,11 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.64
+
+- A message sent while a session is working now goes in at its next step, within seconds, the same as typing it in Claude Desktop. Before, it waited for the whole turn to end, which could be 20 minutes or more.
+- Send now pushes such a message in at once without stopping the turn.
+- A delivered message shows as sent within about 5 seconds; it used to take up to a minute.
+
 ## 0.2.63
 
 - One queued message, one bubble. A message with an attachment was drawn twice while queued (the just-sent copy and the waiting copy, which differ by the attachment line). It was only ever delivered once.

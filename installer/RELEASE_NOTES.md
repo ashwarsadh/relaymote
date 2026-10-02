@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.52
+
+**Conductor behaviour settings.** Settings › Advanced now has a Conductor behaviour section: when a goal counts as stuck, how soon to ask again, when to give up, how many sessions to wake per pass, and the warm-cache window for nudges, each with a one-line explanation. Fixed: "Chase after" showed blank and could be ignored because it saved an old setting name.
+
 ## 0.2.51
 
 **Tidy-up.** Documentation and release notes now describe Relaymote only. The importer from an older tool and the old-install migration script are removed.

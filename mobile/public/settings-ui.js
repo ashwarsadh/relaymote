@@ -304,7 +304,7 @@
   }
 
   function renderAdvanced() {
-    var w = S.workers || {};
+    var w = S.workers || {}, G = S.goals || {}, C = S.cacheKeeper || {};
     return '<p class="set-lead">Ports apply after restarting Relaymote.</p>' +
       field('appPort', 'App port', S.appPort, 'The phone/desktop app.', 'number') +
       field('port', 'Control port', S.port, 'Local API used by the CLI and MCP tools (loopback only).', 'number') +
@@ -320,14 +320,20 @@
       field('conductorSession', 'Conductor session id', S.conductorSession || '', 'Set when a session calls relaymote_become_conductor: the one session above all projects. Masters report to it and the Board sends your taps to it.') +
       field('board.dir', 'Board folder', (S.board || {}).dir || '', 'Folder containing board.json. Blank = the default in Relaymote’s data folder.') +
       field('ownerIndex', 'Owner index folder', S.ownerIndex || '', 'Optional folder describing which session owns which topic.') +
-      '<h3>Goals and cache</h3>' +
-      toggle('goals.autoSpawn', 'Start a session for unowned goals', 'When no session owns a goal, start one in its project folder.', !!(S.goals || {}).autoSpawn) +
-      field('goals.stuckHours', 'Chase after (hours without a report)', (S.goals || {}).stuckHours, '', 'number') +
-      field('goals.maxChasesPerCycle', 'Messages per cycle', (S.goals || {}).maxChasesPerCycle, 'Each owner gets one message carrying all its goals.', 'number') +
-      field('cacheKeeper.pingFromMinutes', 'Warm ping from (minutes idle)', (S.cacheKeeper || {}).pingFromMinutes, '', 'number') +
-      field('cacheKeeper.pingUntilMinutes', 'Warm ping until (minutes idle)', (S.cacheKeeper || {}).pingUntilMinutes, 'Must end before the cache window (' + ((S.cacheKeeper || {}).windowMinutes || 60) + ' min).', 'number') +
-      field('cacheKeeper.coldAfterHours', 'Wake a cold session after (hours)', (S.cacheKeeper || {}).coldAfterHours, 'Unless a goal is late.', 'number') +
-      toggle('cacheKeeper.keepConductorWarm', 'Keep the Conductor warm', 'At most twice in 3 hours, only while goal owners are working.', !!(S.cacheKeeper || {}).keepConductorWarm);
+      '<h3>Conductor behaviour</h3>' +
+      '<p class="set-lead">How hard Relaymote chases and wakes your sessions. The defaults suit most people; your own numbers stay in settings.json on this computer.</p>' +
+      toggle('goals.autoSpawn', 'Start a session for unowned goals', 'When no session owns a goal, start one in its project folder.', !!G.autoSpawn) +
+      field('goals.quietHours', 'Chase after (hours without a report)', G.quietHours, 'A goal with no progress report for this long counts as stuck and its owner is asked for status.', 'number') +
+      field('goals.warmPingMinQuietHours', 'Chase a warm session after (hours)', G.warmPingMinQuietHours, 'A session whose cache is still warm costs little to wake, so it may be asked sooner.', 'number') +
+      field('goals.rechaseHours', 'Ask again after (hours)', G.rechaseHours, 'Hold time before the same stuck goal is chased again.', 'number') +
+      field('goals.maxChases', 'Give up after (chases)', G.maxChases, 'After this many unanswered chases the goal is flagged to you instead of chased again.', 'number') +
+      field('goals.maxChasesPerCycle', 'Messages per cycle', G.maxChasesPerCycle, 'Pace: at most this many sessions are woken per pass. Each owner gets one message carrying all its goals.', 'number') +
+      field('cacheKeeper.windowMinutes', 'Prompt-cache window (minutes)', C.windowMinutes, 'How long your plan keeps a session’s prompt cache. Claude’s default is 60.', 'number') +
+      field('cacheKeeper.pingFromMinutes', 'Warm ping from (minutes idle)', C.pingFromMinutes, 'Warm-window sends: a nudge inside the cache window is cheap, one after it re-reads the whole context.', 'number') +
+      field('cacheKeeper.pingUntilMinutes', 'Warm ping until (minutes idle)', C.pingUntilMinutes, 'Must end before the cache window (' + (C.windowMinutes || 60) + ' min).', 'number') +
+      field('cacheKeeper.coldAfterHours', 'Wake a cold session after (hours)', C.coldAfterHours, 'Unless a goal is late.', 'number') +
+      toggle('cacheKeeper.keepConductorWarm', 'Keep the Conductor warm', 'At most twice in 3 hours, only while goal owners are working.', !!C.keepConductorWarm) +
+      '<p class="set-lead">Usage-limit resets are read from Claude itself for every signed-in account (Auto-resume), so there is nothing to enter here.</p>';
   }
 
   function renderEngine() {

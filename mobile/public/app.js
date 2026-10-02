@@ -3411,7 +3411,7 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
 const tts = { el: null, mode: 'audio', hash: '', chunks: [], i: 0, rate: 1, userScrollAt: 0, token: 0,
               audio: null, loading: false, userPaused: false, retry: null, retryUntil: 0, seeking: false, savedAt: 0 };
 // Speeds he can step through (g1011: "add 1.1, 1.2 … can remove 2x"). A saved speed snaps to the nearest one.
-const TTS_RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5];
+const TTS_RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8];
 function ttsNearestRate(r) { return TTS_RATES.reduce((b, x) => Math.abs(x - r) < Math.abs(b - r) ? x : b, 1); }
 try { tts.rate = ttsNearestRate(Number(localStorage.getItem('baton.ttsRate')) || 1); } catch {}
 

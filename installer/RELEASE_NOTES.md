@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.56
+
+**Fix:** the top sessions in your list are now actually fetched in the background, so opening one of them is instant too (0.2.53 only did this for sessions you had already opened).
+
 ## 0.2.55
 
 **Fix:** the compression added in 0.2.53 never switched on, so sessions still travelled to the phone at full size. Opening a session now sends about a tenth of the data.

@@ -1132,6 +1132,7 @@ function toggleFav(id) {
 }
 
 function renderSessions(list, opts = {}) {
+  setTimeout(() => prefetchChats(sortSessions(state.rawSessions || state.sessions || [])), 1500);
   state.rawSessions = list;
   const shown = opts.noSort ? list : sortSessions(list);
   state.sessions = shown;
@@ -1213,7 +1214,6 @@ async function loadSessions() {
     const d = await api('/api/sessions?' + p);
     renderSessions(d.sessions);
     noteLinkState(d);
-    setTimeout(() => prefetchChats(sortSessions(d.sessions || [])), 1500);
     if (state.boot && d.build) {
       const moved = state.boot.build !== d.build;
       state.boot.build = d.build; state.boot.buildAgeMs = d.buildAgeMs;

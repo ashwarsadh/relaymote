@@ -480,6 +480,10 @@ function messageHtml(m) {
     out += `<details class="peer"><summary>Received message from <b>${esc(peerName(m))}</b><span class="line"></span></summary>` +
            `<div class="body">${md(m.text)}</div>${stampHtml(m)}</details>`;
   }
+  else if (m.role === 'compact') {
+    out += `<details class="peer compact"><summary>Session compacted<span class="line"></span></summary>` +
+           `<div class="body">${md(m.text)}</div>${stampHtml(m)}</details>`;
+  }
   else if (m.role === 'system') {
     out += `<div class="msg system"><span class="sysline">${esc(systemLine(m.text))}</span>` +
            `<span class="sysfull">${esc(m.text)}</span></div>`;
@@ -551,7 +555,7 @@ function blocks(messages) {
     const note = m.role === 'system';
     const working = m.thinking || (m.tools && m.tools.length) || m.role === 'result' || note;
     const speaks = m.role === 'assistant' && (m.text || m.ask);
-    const theirs = m.role === 'user' || m.role === 'answered' || m.role === 'attachment' || m.role === 'peer';
+    const theirs = m.role === 'user' || m.role === 'answered' || m.role === 'attachment' || m.role === 'peer' || m.role === 'compact';
 
     if (note && said) flushSaid();
 

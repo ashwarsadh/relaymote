@@ -1,5 +1,10 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.60
+
+- Session dots work again. Claude Desktop now keeps its CLI one folder deeper (claude-code/<version>/<build>/claude.exe); Relaymote could not find it, the sidebar refresh aborted, and every session showed a grey dot. Both layouts are found now, and a missing CLI no longer stops the dots, which come from Desktop's own sidebar.
+- A compacted session shows one collapsed "Session compacted" row, as in Desktop, instead of the summary as your message.
+
 ## 0.2.59
 
 - Usage reads again: Claude Desktop renamed its usage button ("Usage, Weekly …") and its "5-hour limit" to "Session limit", so the menu showed "Could not read usage from the desktop". Both wordings are now read, and a test fails if either shape stops parsing.

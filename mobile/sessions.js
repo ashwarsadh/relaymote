@@ -367,6 +367,11 @@ function flatten(row) {
 
   if (t === 'user') {
     const c = row.message && row.message.content;
+    // Desktop shows a compaction summary as one collapsed "Session compacted" row, never as his message.
+    if (row.isCompactSummary) {
+      const text = typeof c === 'string' ? c : Array.isArray(c) ? c.filter(b => b && b.type === 'text').map(b => b.text).join('\n') : '';
+      return { role: 'compact', ts, text: clip(text, SPOKEN_LIMIT) };
+    }
     if (row.origin && row.origin.kind === 'peer') {
       return peerRow(row.origin, ts, typeof c === 'string' ? c : '');
     }
@@ -828,7 +833,7 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
   return { ok: true, q, hits, occurrences, truncated, ms: Date.now() - started };
 }
 
-module.exports = { unwrapForTest: unwrap,
+module.exports = { unwrapForTest: unwrap, flattenForTest: flatten,
   refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasks, transcriptStamp, transcriptPath, slugFor,
   searchTranscripts, searchSession, ackDot, ackVersion,
   STORE, PROJECTS,

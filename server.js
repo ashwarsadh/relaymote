@@ -319,7 +319,9 @@ function readBody(req) {
 function claudeAgents() {
   return new Promise(resolve => {
     const worker = require('./lib/worker');
-    execFile(worker.claudeBin(), ['agents', '--json'], { timeout: 20000, windowsHide: true, maxBuffer: 4 << 20 },
+    // A missing CLI must not take the sidebar dots down with it: they come from the Desktop DOM.
+    let bin; try { bin = worker.claudeBin(); } catch { return resolve([]); }
+    execFile(bin, ['agents', '--json'], { timeout: 20000, windowsHide: true, maxBuffer: 4 << 20 },
       (err, stdout) => {
         if (err) return resolve([]);
         try { resolve(JSON.parse(stdout)); } catch { resolve([]); }

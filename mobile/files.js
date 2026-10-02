@@ -38,7 +38,7 @@ function inside(child, parent) {
 }
 
 // A relative path a session mentions is often relative to ANOTHER project than the session's own
-// folder: a session in "email analyzer" that worked on the repo "developmentaton" says
+// folder: a session in one project that worked on another repo ("projects/other") says
 // "docs/marketing/reddit-post.md", and resolving that against its own cwd gave NOT_FOUND. For the
 // owner only, look for it in the sibling folders of every folder sessions work in, and take it only
 // when exactly one matches -- never a guess between two.

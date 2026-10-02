@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.55
+
+**Fix:** the compression added in 0.2.53 never switched on, so sessions still travelled to the phone at full size. Opening a session now sends about a tenth of the data.
+
 ## 0.2.54
 
 **Read aloud starts sooner.** The first sentence is turned into speech on its own and starts playing while the rest is prepared, so a long message begins in about a second or two instead of up to half a minute. The voice engine stays loaded on the desktop, and the next part (or the next message) is prepared while the current one plays.

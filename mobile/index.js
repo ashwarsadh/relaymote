@@ -121,7 +121,7 @@ function warmRecent(list) {
 function json(res, code, body) {
   const s = JSON.stringify(body);
   const ae = String((res.req && res.req.headers['accept-encoding']) || '');
-  if (s.length > 4096 && /gzip/.test(ae)) {
+  if (s.length > 4096 && /gzip/.test(ae)) {
     const z = zlib.gzipSync(s, { level: 4 });
     res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip',
       'Content-Length': z.length, 'Vary': 'Accept-Encoding', 'Cache-Control': 'no-store' });

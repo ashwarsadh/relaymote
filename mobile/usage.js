@@ -3,11 +3,15 @@ const desktop = require('../lib/desktop');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// The control's aria-label: "Usage: …" until Sep 2026, "Usage, Weekly · …" from Oct 2026.
+const LABEL_RE = /^Usage\s*[:,]/;
+
 const FIND_JS = `(function(){
+  var LRE=new RegExp(${JSON.stringify(LABEL_RE.source)});
   var all=document.querySelectorAll('[aria-label]');
   for(var i=0;i<all.length;i++){
     var e=all[i], l=e.getAttribute('aria-label')||'';
-    if(l.indexOf('Usage:')===0 && e.offsetParent!==null){ window.__relaymoteUsage=e; return l; }
+    if(LRE.test(l) && e.offsetParent!==null){ window.__relaymoteUsage=e; return l; }
   }
   return '';
 })()`;
@@ -39,8 +43,9 @@ function parse(text, label) {
   const num = (re) => { const m = t.match(re); return m ? m : null; };
 
   const ctx = num(/Context window\s*([\d.]+\s*[kKmM]?)\s*\/\s*([\d.]+\s*[kKmM]?)\s*\((\d+)%\)/);
-  const plan = num(/Plan usage limits\s*[·\-]\s*(.+?)\s*5-hour limit/i);
-  const five = num(/5-hour limit\s*(Resets[^%]*?)\s*(\d+)%/i);
+  // Desktop renamed "5-hour limit" to "Session limit" (Oct 2026); accept both.
+  const plan = num(/Plan usage limits\s*[·\-]\s*(.+?)\s*(?:5-hour|Session) limit/i);
+  const five = num(/(?:5-hour|Session) limit\s*(Resets[^%]*?)\s*(\d+)%/i);
   const week = num(/Weekly\s*[·-]\s*all models\s*(Resets[^%]*?)\s*(\d+)%/i);
 
   const lab = String(label || '');
@@ -112,4 +117,4 @@ async function readUsage(sessionId, opts = {}) {
   } finally { conn.close(); }
 }
 
-module.exports = { readUsage, parse };
+module.exports = { readUsage, parse, LABEL_RE, FIND_JS };

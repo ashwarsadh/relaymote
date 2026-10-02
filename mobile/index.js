@@ -905,6 +905,8 @@ async function handle(req, res) {
       : [...new Set(sessions.index().list.map(x => x.cwd).filter(Boolean))].concat([UPLOADS, path.join(os.homedir(), '.claude')]);
     const out = readFile(url.searchParams.get('path'), { roots, cwd: sess && sess.cwd, siblings: !isSubuser(identity),
                                                           home: isSubuser(identity) ? null : os.homedir() });
+    // One line per open, so "a link did not open on the phone" can be answered from evidence.
+    log('file ' + (out.ok ? 'ok' : (out.error || 'fail')) + ': ' + path.basename(String(url.searchParams.get('path') || '')));
     return json(res, out.ok ? 200 : 404, out);
   }
 

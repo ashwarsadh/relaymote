@@ -1,5 +1,10 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.59
+
+- Usage reads again: Claude Desktop renamed its usage button ("Usage, Weekly …") and its "5-hour limit" to "Session limit", so the menu showed "Could not read usage from the desktop". Both wordings are now read, and a test fails if either shape stops parsing.
+- The server logs one line per file opened from a chat link (ok or the reason), for diagnosing links that do not open.
+
 ## 0.2.58
 
 **File links open from other projects.** A link such as `development\payroll\RULES.md` written by a session in a different folder used to show NOT_FOUND. Relaymote now also looks in the folders just above the ones your sessions work in, and opens absolute paths there too (only for you, never for a linked guest).

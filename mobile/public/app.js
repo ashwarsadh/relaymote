@@ -2366,7 +2366,7 @@ function paintUsage(u, forThisSession) {
         `<button id="btn-usage-ctx" class="linkish">read this session’s</button></div>`);
   }
   if (u.fiveHour) {
-    rows.push(`<div class="urow"><span>5-hour limit</span><b>${u.fiveHour.pct}%</b></div>` +
+    rows.push(`<div class="urow"><span>Session limit</span><b>${u.fiveHour.pct}%</b></div>` +
               usageBar(u.fiveHour.pct) +
               (u.fiveHour.resets ? `<div class="unote">${esc(u.fiveHour.resets)}</div>` : ''));
   }

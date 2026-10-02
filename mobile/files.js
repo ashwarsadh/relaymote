@@ -42,9 +42,27 @@ function inside(child, parent) {
 // "docs/marketing/reddit-post.md", and resolving that against its own cwd gave NOT_FOUND. For the
 // owner only, look for it in the sibling folders of every folder sessions work in, and take it only
 // when exactly one matches -- never a guess between two.
+// The folders above every root (two levels, never a bare drive): a link such as
+// "development/payroll/RULES.md" written from a session in one project is relative to their common parent.
+function nearRoots(roots) {
+  const out = new Set();
+  for (const r of roots.filter(Boolean)) {
+    let d = path.resolve(r);
+    for (let k = 0; k < 2; k++) {
+      const up = path.dirname(d);
+      if (up === d || path.dirname(up) === up) break;
+      out.add(up); d = up;
+    }
+  }
+  return [...out];
+}
 function siblingMatches(bare, roots) {
   const parents = [...new Set(roots.filter(Boolean).map(r => path.dirname(path.resolve(r))))];
   const hits = new Set();
+  for (const p of nearRoots(roots)) {
+    const c = path.join(p, bare);
+    try { if (fs.statSync(c).isFile()) hits.add(realish(c)); } catch {}
+  }
   for (const p of parents) {
     let dirs = [];
     try { dirs = fs.readdirSync(p, { withFileTypes: true }).filter(e => e.isDirectory()).slice(0, 300); } catch {}
@@ -83,6 +101,9 @@ function readFile(ref, { roots = [], cwd = null, siblings = false, home = null }
     if (fs.existsSync(c)) { target = c; break; }
     if (!target) target = c;
   }
+  // Owner only: an absolute path in a folder next to or above the ones sessions work in opens too.
+  if (siblings && path.isAbsolute(bare) && (!target || !fs.existsSync(target)) && fs.existsSync(bare)
+      && nearRoots(allowed).some(r => inside(bare, r))) target = bare;
   if (!target) return { ok: false, error: 'OUT_OF_SCOPE',
                         message: 'That path is outside every folder this machine has worked in.' };
   if (siblings && !path.isAbsolute(bare) && !fs.existsSync(target)) {

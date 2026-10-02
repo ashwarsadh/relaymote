@@ -1838,6 +1838,7 @@ async function outboxTick() {
 }
 
 function start() {
+  setTimeout(() => { tts.warm().catch(() => {}); }, 8000);   // read-aloud: start the voice worker before the first tap
   bind('127.0.0.1', 'loopback');
   rebindLoop();
   ensurePoll();

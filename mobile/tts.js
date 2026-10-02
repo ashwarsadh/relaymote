@@ -66,16 +66,82 @@ function prune() {
   } catch {}
 }
 
+// A python process that stays up with edge_tts imported: each request then skips ~0.9 s of start-up.
+// One line of JSON in, one line out. If it dies, the next request falls back to a one-shot run.
+const WORKER_PY = [
+  'import sys, json, asyncio, edge_tts',
+  'async def one(j):',
+  '    await edge_tts.Communicate(open(j["in"], encoding="utf-8").read(), j["voice"]).save(j["out"])',
+  'for line in sys.stdin:',
+  '    try:',
+  '        j = json.loads(line); asyncio.run(one(j)); print(json.dumps({"id": j["id"], "ok": True}), flush=True)',
+  '    except Exception as e:',
+  '        print(json.dumps({"id": (j or {}).get("id") if isinstance(j, dict) else None, "ok": False, "err": str(e)[:200]}), flush=True)',
+].join('\n');
+let worker = null, wSeq = 0;
+const wWait = new Map();
+function getWorker() {
+  if (worker || !edgePy) return worker;
+  try {
+    const c = spawn(edgePy, ['-u', '-c', WORKER_PY], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+    let buf = '';
+    c.stdout.on('data', d => {
+      buf += d;
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        let m; try { m = JSON.parse(line); } catch { continue; }
+        const w = wWait.get(m.id); if (w) { wWait.delete(m.id); w(!!m.ok); }
+      }
+    });
+    const dead = () => { if (worker === c) worker = null; for (const [, w] of wWait) w(null); wWait.clear(); };
+    c.on('exit', dead); c.on('error', dead);
+    c.stdin.on('error', () => {});
+    c.unref(); try { c.stdout.unref(); c.stdin.unref(); } catch {}   // never keeps the daemon (or a test) alive
+    worker = c;
+  } catch { worker = null; }
+  return worker;
+}
+function workerSynth(inFile, outFile) {
+  const c = getWorker();
+  if (!c) return Promise.resolve(null);
+  const id = ++wSeq;
+  return new Promise(res => {
+    const t = setTimeout(() => { wWait.delete(id); res(null); }, 120000);
+    wWait.set(id, (v) => { clearTimeout(t); res(v); });
+    try { c.stdin.write(JSON.stringify({ id, in: inFile, out: outFile, voice: VOICE }) + '\n'); }
+    catch { clearTimeout(t); wWait.delete(id); res(null); }
+  });
+}
+
 async function edgeSynth(inFile, outFile) {
+  if (edgePy) {
+    const w = await workerSynth(inFile, outFile);
+    if (w === true) return true;
+    if (w === false) { try { fs.unlinkSync(outFile); } catch {} return false; }   // the service failed (offline)
+  }
   const cands = edgePy ? [edgePy] : [process.env.RELAYMOTE_TTS_PYTHON, 'python', 'python3', 'py',
     process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'Python', 'Python311', 'python.exe'),
-    'C:\Program Files\Python\Python311\python.exe'].filter(Boolean);
+    'C:\\Program Files\\Python\\Python311\\python.exe'].filter(Boolean);
   for (const py of cands) {
     if (!edgePy) { const chk = await run({ cmd: py, args: ['-c', 'import edge_tts'] }, {}); if (!chk.ok) continue; }
     const r = await run({ cmd: py, args: ['-m', 'edge_tts', '--voice', VOICE, '--file', inFile, '--write-media', outFile] }, {});
     if (r.ok) { edgePy = py; return true; }
     try { fs.unlinkSync(outFile); } catch {}
     return false;                                     // python is fine, the service is not (offline): fall back
+  }
+  return false;
+}
+
+// Called once at start-up: find python + edge_tts and start the worker, so the first tap is fast too.
+async function warm() {
+  if (edgePy) return getWorker() ? true : false;
+  const cands = [process.env.RELAYMOTE_TTS_PYTHON, 'python', 'python3', 'py',
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'Python', 'Python311', 'python.exe'),
+    'C:\\Program Files\\Python\\Python311\\python.exe'].filter(Boolean);
+  for (const py of cands) {
+    const chk = await run({ cmd: py, args: ['-c', 'import edge_tts'] }, {});
+    if (chk.ok) { edgePy = py; return !!getWorker(); }
   }
   return false;
 }
@@ -115,4 +181,4 @@ async function synth(rawText) {
   return job;
 }
 
-module.exports = { synth, fileOf, keyOf, DIR, MAX_CHARS, RATE };
+module.exports = { synth, warm, _workerSynth: (a, b) => workerSynth(a, b), fileOf, keyOf, DIR, MAX_CHARS, RATE };

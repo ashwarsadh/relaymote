@@ -3410,7 +3410,10 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
    Nothing runs when nothing is playing: the retry timer exists only while an interruption is open. */
 const tts = { el: null, mode: 'audio', hash: '', chunks: [], i: 0, rate: 1, userScrollAt: 0, token: 0,
               audio: null, loading: false, userPaused: false, retry: null, retryUntil: 0, seeking: false, savedAt: 0 };
-try { tts.rate = Math.min(3, Math.max(0.5, Number(localStorage.getItem('baton.ttsRate')) || 1)); } catch {}
+// Speeds he can step through (g1011: "add 1.1, 1.2 … can remove 2x"). A saved speed snaps to the nearest one.
+const TTS_RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5];
+function ttsNearestRate(r) { return TTS_RATES.reduce((b, x) => Math.abs(x - r) < Math.abs(b - r) ? x : b, 1); }
+try { tts.rate = ttsNearestRate(Number(localStorage.getItem('baton.ttsRate')) || 1); } catch {}
 
 function ttsText(el) {
   const c = el.cloneNode(true);
@@ -3448,6 +3451,34 @@ function ttsPosForget(hash) { try { const all = ttsPosLoad(); delete all[hash]; 
 function ttsClock(s) { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
 let ttsSilentUrl = null;
+// Time to first audio (g1011): the first sentence is synthesised on its own, so it starts in about a
+// second however long the message is; the rest follows in larger parts, each fetched while the one
+// before it plays. The desktop caches every part, so a prefetch makes the next start instant.
+function ttsSplit(text) {
+  const sents = String(text || '').match(/[^.!?\n]+(?:[.!?]+|\n+|$)\s*/g) || [String(text || '')];
+  const parts = []; let cur = '';
+  const cap = () => (parts.length ? 900 : 200);
+  for (let sn of sents) {
+    while (sn.length > cap()) {
+      let cut = sn.lastIndexOf(', ', cap()); if (cut < 40) cut = sn.lastIndexOf(' ', cap()); if (cut < 40) cut = cap();
+      if (cur) { parts.push(cur.trim()); cur = ''; }
+      parts.push(sn.slice(0, cut + 1).trim()); sn = sn.slice(cut + 1);
+    }
+    if (cur && cur.length + sn.length > cap()) { parts.push(cur.trim()); cur = ''; }
+    cur += sn;
+    if (!parts.length && cur.length >= 60) { parts.push(cur.trim()); cur = ''; }
+  }
+  if (cur.trim()) parts.push(cur.trim());
+  return parts.filter(Boolean).length ? parts.filter(Boolean) : [String(text || '')];
+}
+function ttsPrefetch() {
+  let t = null;
+  if (tts.parts && tts.pi < tts.parts.length - 1) t = tts.parts[tts.pi + 1];
+  else { const n = tts.el && ttsNextMsg(tts.el); if (n) t = ttsSplit(ttsText(n))[0]; }
+  if (!t) return;
+  api('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: t }), timeoutMs: 180000 }).catch(() => {});
+}
+
 // Read-on (g1011): after a message ends, a short beep, then the next newer message, until the latest.
 let ttsBeepUrl = null;
 function ttsBeep() {
@@ -3516,7 +3547,8 @@ function ttsBar() {
     if (a === 'play') return ttsToggle();
     if (a === 'back') return ttsSeekBy(-15);
     if (a === 'fwd') return ttsSeekBy(15);
-    tts.rate = Math.round(Math.min(3, Math.max(0.5, tts.rate + (a === 'faster' ? 0.25 : -0.25))) * 100) / 100;
+    const ri = TTS_RATES.indexOf(ttsNearestRate(tts.rate));
+    tts.rate = TTS_RATES[Math.max(0, Math.min(TTS_RATES.length - 1, ri + (a === 'faster' ? 1 : -1)))];
     try { localStorage.setItem('baton.ttsRate', String(tts.rate)); } catch {}
     if (tts.mode === 'synth') ttsSpeak();      // restart the current chunk at the new speed
     else if (tts.audio) tts.audio.playbackRate = tts.rate;
@@ -3657,6 +3689,7 @@ function ttsAudio() {
   a.addEventListener('ended', () => {
     if (tts.beepNext) { const n = tts.beepNext; tts.beepNext = null; return ttsStart(n, true); }
     if (tts.loading || tts.mode !== 'audio') return;
+    if (tts.parts && tts.pi < tts.parts.length - 1) { ttsPosForget(tts.hash); return ttsStart(tts.el, true, tts.pi + 1); }
     ttsReadOn();
   });
   a.addEventListener('error', () => { if (tts.loading || !tts.el) return; toast('Read aloud stopped: the audio could not be played', true); ttsStop(); });
@@ -3683,15 +3716,18 @@ function ttsSpeak() {
   speechSynthesis.speak(u);
 }
 
-async function ttsStart(msgEl, chained) {
+async function ttsStart(msgEl, chained, part) {
   if (!chained && tts.el === msgEl) return ttsToggle();    // the same button again = pause / play
-  const text = ttsText(msgEl);
+  const full = ttsText(msgEl);
+  const parts = part ? tts.parts : ttsSplit(full);
+  const pi = part || 0, text = parts[pi];
   if (!text) return chained ? (tts.el = msgEl, ttsReadOn()) : undefined;
   if (chained) {                               // keep the audio element playing, so a locked screen carries on
     if (typeof speechSynthesis !== 'undefined') { try { speechSynthesis.cancel(); } catch {} }
     if (tts.el) tts.el.classList.remove('speaking');
   } else ttsStop();
   const my = ++tts.token;
+  tts.parts = parts; tts.pi = pi;
   tts.el = msgEl; tts.hash = ttsHash(text); tts.userScrollAt = chained ? tts.userScrollAt : 0; tts.userPaused = false; tts.loading = true; tts.mode = 'audio';
   const a = ttsAudio();
   if (!chained) { try { a.src = ttsSilent(); const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch {} }   // inside the tap
@@ -3702,7 +3738,7 @@ async function ttsStart(msgEl, chained) {
   catch (e) {
     if (my !== tts.token) return;
     if (typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined') {
-      a.pause(); tts.loading = false; tts.mode = 'synth'; tts.chunks = ttsChunks(text); tts.i = 0;
+      a.pause(); tts.loading = false; tts.mode = 'synth'; tts.chunks = ttsChunks(parts.slice(pi).join(' ')); tts.i = 0;
       toast('The desktop has no speech engine, so this uses the phone voice and stops when the screen locks.');
       return ttsSpeak();
     }
@@ -3724,6 +3760,7 @@ async function ttsStart(msgEl, chained) {
   a.playbackRate = tts.rate;
   const p = a.play(); if (p && p.catch) p.catch(() => { tts.userPaused = true; toast('Tap ▶ to start the audio.'); ttsPaint(); });
   ttsSession(); ttsPaint(); ttsFollow();
+  ttsPrefetch();
 }
 function ttsStop() {
   tts.token++;

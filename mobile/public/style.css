@@ -190,6 +190,8 @@ body{
               .mdtable td:first-child,.ansline span,.ansline b){color:var(--on-accent)}
 .msg.user .sendnow:disabled{color:var(--on-accent-dim); border-color:var(--on-accent-line)}
 .msg.assistant{align-self:flex-start; background:var(--panel); border:1px solid var(--line); border-bottom-left-radius:5px}
+/* The model's thinking, shown in the flow as Desktop shows it: plain prose, quieter than a reply. */
+.msg.thought{align-self:flex-start; background:transparent; border:0; color:var(--dim); padding:2px 4px; max-width:100%}
 
 .msg.system,.msg.attachment{align-self:center; background:transparent; border:1px dashed var(--line); color:var(--dim); font-size:12.5px; max-width:94%}
 .msg.system{cursor:pointer; padding:3px 10px; font-size:12px}   

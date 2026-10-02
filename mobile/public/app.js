@@ -553,17 +553,23 @@ function blocks(messages) {
     // the turn runs; keyOf() changes as that row's tools finish.
     const wk = 'w:' + m.role + ':' + (m.ts || '') + ':' + nth(seenId, m.role + ':' + (m.ts || ''));
     const note = m.role === 'system';
-    const working = m.thinking || (m.tools && m.tools.length) || m.role === 'result' || note;
+    // Thinking is shown in the flow as prose, as Desktop shows it, not folded into "Working": on 03-Oct
+    // two of the three replies he could see on Desktop were thinking blocks, and the phone hid them (g1050).
+    const thought = m.role === 'assistant' && m.thinking ? m.thinking : '';
+    const working = (m.tools && m.tools.length) || m.role === 'result' || note;
     const speaks = m.role === 'assistant' && (m.text || m.ask);
     const theirs = m.role === 'user' || m.role === 'answered' || m.role === 'attachment' || m.role === 'peer' || m.role === 'compact';
 
     if (note && said) flushSaid();
 
+    if (thought) {
+      endTurn();
+      out.push({ type: 'msg', key: 'th:' + k, html: '<div class="msg thought">' + md(thought) + '</div>' });
+    }
     if (working) {
       if (!run) run = { type: 'work', key: wk, steps: [], n: 0 };
-      run.steps.push(note ? messageHtml(m) : workHtml(m));
-      run.n += (m.tools ? m.tools.length : 0) + (m.role === 'result' ? 1 : 0) +
-               (m.thinking ? 1 : 0) + (note ? 1 : 0);
+      run.steps.push(note ? messageHtml(m) : workHtml({ ...m, thinking: '' }));
+      run.n += (m.tools ? m.tools.length : 0) + (m.role === 'result' ? 1 : 0) + (note ? 1 : 0);
       for (const t of (m.tools || [])) { const st = stepText(t); run.last = st.verb + (st.meta ? ' · ' + st.meta : ''); }
     }
     if (speaks) {

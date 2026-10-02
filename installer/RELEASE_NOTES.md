@@ -1,5 +1,10 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.65
+
+- The model's thinking now shows in the chat as quiet prose, the way Claude Desktop shows it. It used to be folded inside the collapsed "Working" group, so replies you could read on Desktop seemed to be missing on the phone.
+- New `scripts/transcript-parity.js <session> <from> <to>`: checks that everything a session said in a time window is in the reading view, once.
+
 ## 0.2.64
 
 - A message sent while a session is working now goes in at its next step, within seconds, the same as typing it in Claude Desktop. Before, it waited for the whole turn to end, which could be 20 minutes or more.

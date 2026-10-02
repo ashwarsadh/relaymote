@@ -37,5 +37,20 @@ check(ob.norm(ob.unescapeTranscript(ob.withoutQueueOps(delivered))).includes(nee
 check(/withoutQueueOps\(readText\(/.test(read('mobile', 'outbox.js')), 'reconcile reads the transcript without queue rows');
 check(/const held = \(state\.outbox/.test(app), 'a held message is drawn once, from the outbox, with its controls');
 
+// One send, one bubble: the just-sent bubble (typed text) and its outbox entry ("@<path>" lines + text)
+// were drawn twice on 02-Oct because their texts differ by the attachment line.
+{
+  const a = app.indexOf('const NL = String.fromCharCode(10);', app.indexOf('function renderLog'));
+  const b = app.indexOf('\n', app.indexOf('const isPending', a));
+  check(a > 0 && b > a, 'renderLog has the pending/outbox matcher');
+  const make = (pend) => new Function('nn', 'state', app.slice(a, b) + '\nreturn isPending;')(
+    (t) => String(t || '').replace(/\s+/g, ' ').trim(), { pending: pend });
+  const isPending = make({ text: 'I see duplicate messages', outboxId: null });
+  check(isPending({ id: 'ob1', text: '@C:\\up\\shot.jpg\nI see duplicate messages' }), 'an attachment send matches its own bubble by text');
+  check(make({ text: '', outboxId: 'ob2' })({ id: 'ob2', text: '@C:\\up\\a.jpg' }), 'an attachment-only send matches by outbox id');
+  check(!isPending({ id: 'ob3', text: 'See above' }), 'a different message is not hidden');
+  check(!make(null)({ id: 'ob1', text: 'x' }), 'no bubble pending: every outbox entry shows');
+}
+
 if (fails) { console.error(fails + ' failed'); process.exit(1); }
 console.log('queue-attachments: all checks passed');

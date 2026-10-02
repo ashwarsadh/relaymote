@@ -850,11 +850,16 @@ function renderLog(messages, force) {
   {
     const nn = (t) => String(t || '').replace(/\s+/g, ' ').trim();
     const inLog = (t) => { const w = nn(t).slice(0, 60); return !!w && messages.some(m => nn(m.text).includes(w)); };
-    const pendText = state.pending ? nn(state.pending.text) : '';
+    // The just-sent bubble and its outbox entry are ONE message. The outbox text carries the "@<path>"
+    // attachment lines and the bubble does not, so match on the outbox id, else on the text without them.
+    const NL = String.fromCharCode(10);
+    const bodyOf = (t) => nn(String(t || '').split(NL).filter(l => !/^@/.test(l)).join(NL));
+    const pend = state.pending;
+    const isPending = (e) => !!pend && (e.id === pend.outboxId || bodyOf(e.text) === nn(pend.text));
     for (const e of (state.outbox || [])) {
       if (e.session !== state.open) continue;
       if (inLog(e.text)) continue;
-      if (pendText && nn(e.text) === pendText) continue;
+      if (isPending(e)) continue;
       const mins = Math.round((e.ageMs || 0) / 60000);
       const bad = e.suspect || e.state === 'failed';
       const sn = !bad && e.held ? heldControls(e.id) : (!bad && e.delivery === 'queued' ? sendNowBtn() : '');

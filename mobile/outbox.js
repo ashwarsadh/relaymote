@@ -93,6 +93,11 @@ function unescapeTranscript(t) {
     .replace(/\\\\/g, '\\');
 }
 
+const NL = String.fromCharCode(10);
+function withoutQueueOps(text) {
+  return String(text).split(NL).filter(l => l.indexOf('"type":"queue-operation"') < 0).join(NL);
+}
+
 function reconcile(readText, now = Date.now(), busy = null) {
   const entries = load();
   if (!entries.length) return { confirmed: [], suspect: [], checked: 0 };
@@ -106,7 +111,9 @@ function reconcile(readText, now = Date.now(), busy = null) {
     checked++;
     let hay = cache.get(e.session);
     if (hay === undefined) {
-      try { hay = norm(unescapeTranscript(readText(e.session) || '')); } catch { hay = ''; }
+      // A queue "enqueue" row is not delivery: a held message sits there until the turn ends, and
+      // confirming on it dropped the message's Send now and × the moment it was queued.
+      try { hay = norm(unescapeTranscript(withoutQueueOps(readText(e.session) || ''))); } catch { hay = ''; }
       cache.set(e.session, hay);
     }
     const needle = needleFor(e.text);
@@ -127,4 +134,4 @@ function reconcile(readText, now = Date.now(), busy = null) {
   return { confirmed, suspect, checked };
 }
 
-module.exports = { add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };
+module.exports = { withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };

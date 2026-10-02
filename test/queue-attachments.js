@@ -23,5 +23,19 @@ const server = read('server.js');
 check(/desktop\.readRunningAll\(/.test(server) && /s\.running = truth\[s\.id\]/.test(server), 'refresh takes running from Desktop\'s session API');
 check(typeof require('../lib/desktop.js').readRunningAll === 'function', 'desktop exports readRunningAll');
 
+// A held message's text is in the transcript at once as a queue "enqueue" row. That is not delivery:
+// confirming on it dropped the message from the outbox and with it Send now and ×.
+const ob = require('../mobile/outbox.js');
+const tail = [
+  JSON.stringify({ type: 'queue-operation', operation: 'enqueue', content: '@C:\\up\\a.jpg\nplease look at this' }),
+  JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'working' }] } }),
+].join('\n');
+const needle = ob.needleFor('@C:\\up\\a.jpg\nplease look at this');
+check(!ob.norm(ob.unescapeTranscript(ob.withoutQueueOps(tail))).includes(needle), 'an enqueue row alone does not confirm delivery');
+const delivered = tail + '\n' + JSON.stringify({ type: 'user', message: { content: '@C:\\up\\a.jpg\nplease look at this' } });
+check(ob.norm(ob.unescapeTranscript(ob.withoutQueueOps(delivered))).includes(needle), 'the delivered user row still confirms it');
+check(/withoutQueueOps\(readText\(/.test(read('mobile', 'outbox.js')), 'reconcile reads the transcript without queue rows');
+check(/const held = \(state\.outbox/.test(app), 'a held message is drawn once, from the outbox, with its controls');
+
 if (fails) { console.error(fails + ' failed'); process.exit(1); }
 console.log('queue-attachments: all checks passed');

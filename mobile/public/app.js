@@ -755,8 +755,12 @@ function reconcileQueued(msgs) {
   if (!msgs || !msgs.some(m => m.queued !== undefined)) return msgs;
   const nn = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 120);
   const arrived = msgs.filter(m => m.role === 'user' && m.queued === undefined);
+  // A held message is drawn from the outbox, where it carries Send now and ×; its queue row would be a
+  // second copy without them.
+  const held = (state.outbox || []).filter(e => e.held && e.session === state.open).map(e => nn(e.text));
   return msgs.filter(m => m.queued === undefined ||
-    !arrived.some(a => nn(a.text) === nn(m.text) && String(a.ts || '') >= String(m.ts || '')));
+    (!held.includes(nn(m.text)) &&
+     !arrived.some(a => nn(a.text) === nn(m.text) && String(a.ts || '') >= String(m.ts || ''))));
 }
 
 function applyTail(tail, startByte, hasMore) {

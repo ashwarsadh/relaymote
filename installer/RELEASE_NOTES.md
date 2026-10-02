@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.62
+
+- A message held for a running session keeps its Send now and × until it is really delivered. It used to count as delivered the moment it was queued, which took both controls away.
+
 ## 0.2.61
 
 - A queued message with attachments now has Send now and ×, like any other message.

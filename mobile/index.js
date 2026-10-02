@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
+const zlib = require('zlib');
 
 const sessions = require('./sessions');
 const desktop = require('../lib/desktop');
@@ -105,8 +106,27 @@ function visibleSessions(identity, all) {
   return isSubuser(identity) ? all.filter(s => identity.sessions.has(s.id)) : all;
 }
 
+// Warm the per-transcript caches of the most recent sessions after the list is served, so opening
+// one does not pay the first full read (backgroundTasks parses incrementally from then on).
+let warmAt = 0;
+function warmRecent(list) {
+  if (Date.now() - warmAt < 60000) return;
+  warmAt = Date.now();
+  const top = (list || []).slice().sort((a, b) => (b.lastActivityAt || 0) - (a.lastActivityAt || 0)).slice(0, 12);
+  let i = 0;
+  const step = () => { const x = top[i++]; if (!x) return; try { const s1 = sessions.get(x.id); if (s1) sessions.backgroundTasks(s1); } catch {} setTimeout(step, 50); };
+  setTimeout(step, 200);
+}
+
 function json(res, code, body) {
   const s = JSON.stringify(body);
+  const ae = String((res.req && res.req.headers['accept-encoding']) || '');
+  if (s.length > 4096 && /gzip/.test(ae)) {
+    const z = zlib.gzipSync(s, { level: 4 });
+    res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip',
+      'Content-Length': z.length, 'Vary': 'Accept-Encoding', 'Cache-Control': 'no-store' });
+    return res.end(z);
+  }
   res.writeHead(code, {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(s),
@@ -850,6 +870,7 @@ async function handle(req, res) {
   if (p === '/api/sessions') {
     await sessions.refresh();
     const all = visibleSessions(identity, sessions.decorate(sessions.index().list, desktop.loadSnapshot()));
+    warmRecent(all);
     const folder = url.searchParams.get('folder');
     const q = (url.searchParams.get('q') || '').toLowerCase();
     const wantArchived = url.searchParams.get('archived') === '1';

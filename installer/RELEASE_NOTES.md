@@ -1,5 +1,11 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.53
+
+**Switching sessions is much faster.** A session you opened recently, or one near the top of the list, now appears at once from its last view while the fresh copy loads behind it. The desktop no longer re-reads the whole conversation file on every open, and it compresses what it sends to the phone (about a tenth of the size).
+
+**Read aloud keeps going.** Tap the speaker on any message: when it ends you hear a short beep and the next newer message starts, and so on until the latest. The message being read stays highlighted. Tap the speaker again to pause.
+
 ## 0.2.52
 
 **Conductor behaviour settings.** Settings › Advanced now has a Conductor behaviour section: when a goal counts as stuck, how soon to ask again, when to give up, how many sessions to wake per pass, and the warm-cache window for nudges, each with a one-line explanation. Fixed: "Chase after" showed blank and could be ignored because it saved an old setting name.

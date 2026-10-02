@@ -1,0 +1,28 @@
+const fs = require('fs'), os = require('os'), path = require('path');
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-bg-'));
+process.env.CLAUDE_CONFIG_DIR = TMP;
+process.env.RELAYMOTE_HOME = path.join(TMP, 'home');
+const sessions = require('../mobile/sessions.js');
+let fails = 0;
+const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (!ok) fails++; };
+const cwd = path.join(TMP, 'proj');
+const dir = path.join(sessions.PROJECTS, sessions.slugFor(cwd));
+fs.mkdirSync(dir, { recursive: true });
+const file = path.join(dir, 'cli1.jsonl');
+const sess = { cliSessionId: 'cli1', cwd };
+const launch = (id) => JSON.stringify({ timestamp: 't', message: { content: [{ type: 'tool_use', id, name: 'Agent', input: { run_in_background: true, description: 'job ' + id } }] } }) + '\n';
+const done = (id) => JSON.stringify({ message: { content: '<task-notification><tool-use-id>' + id + '</tool-use-id><status>completed</status></task-notification>' } }) + '\n';
+fs.writeFileSync(file, launch('toolu_A') + launch('toolu_B'));
+check(sessions.backgroundTasks(sess).length === 2, 'two launched agents are running');
+fs.appendFileSync(file, done('toolu_A'));
+const r = sessions.backgroundTasks(sess);
+check(r.length === 1 && r[0].id === 'toolu_B', 'a finish appended later is picked up by the incremental read');
+fs.appendFileSync(file, launch('toolu_C').slice(0, 40));
+check(sessions.backgroundTasks(sess).length === 1, 'a half-written last line is not parsed yet');
+fs.appendFileSync(file, launch('toolu_C').slice(40));
+check(sessions.backgroundTasks(sess).length === 2, '...and is parsed once complete');
+fs.writeFileSync(file, launch('toolu_Z'));
+check(sessions.backgroundTasks(sess).map(x => x.id).join() === 'toolu_Z', 'a file that shrank (rewritten) is read from the start');
+fs.rmSync(TMP, { recursive: true, force: true });
+if (fails) { console.error(fails + ' failed'); process.exit(1); }
+console.log('background-incremental: 5 checks passed');

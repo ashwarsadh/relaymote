@@ -1185,6 +1185,25 @@ function renderSortChips() {
   }
 }
 
+// Session switch (g1011): the last view of each recently opened or prefetched session is kept in memory,
+// so opening it paints at once from that and the fresh copy replaces it a moment later.
+const chatCache = new Map();
+function cacheChat(id, d) {
+  chatCache.delete(id); chatCache.set(id, { at: Date.now(), d });
+  while (chatCache.size > 12) chatCache.delete(chatCache.keys().next().value);
+}
+let prefetchAt = 0;
+async function prefetchChats(list) {
+  if (Date.now() - prefetchAt < 120000 || document.hidden) return;
+  prefetchAt = Date.now();
+  const top = (list || []).filter(s => s.id !== state.open).slice(0, 4);
+  for (const s of top) {
+    const c = chatCache.get(s.id);
+    if (c && Date.now() - c.at < 60000) continue;
+    try { cacheChat(s.id, await api('/api/session/' + encodeURIComponent(s.id) + '?limit=60', { timeoutMs: 12000 })); } catch {}
+  }
+}
+
 async function loadSessions() {
   const p = new URLSearchParams();
   if (state.folder) p.set('folder', state.folder);
@@ -1194,6 +1213,7 @@ async function loadSessions() {
     const d = await api('/api/sessions?' + p);
     renderSessions(d.sessions);
     noteLinkState(d);
+    setTimeout(() => prefetchChats(sortSessions(d.sessions || [])), 1500);
     if (state.boot && d.build) {
       const moved = state.boot.build !== d.build;
       state.boot.build = d.build; state.boot.buildAgeMs = d.buildAgeMs;
@@ -1419,6 +1439,14 @@ async function openChatInner(id) {
   autosize();
   updateCommandList();
 
+  const cachedView = chatCache.get(id);
+  if (cachedView && cachedView.d && cachedView.d.transcript) {
+    try {
+      const c = cachedView.d;
+      state.oldestByte = c.transcript.startByte; state.hasMore = !!c.transcript.hasMore;
+      renderHeader(c.meta); renderLog(c.transcript.messages, true);
+    } catch {}
+  }
   try {
     let d, lastErr;
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -1428,8 +1456,10 @@ async function openChatInner(id) {
       catch (e) { lastErr = e; if (!isNetErr(e)) break; }
     }
     if (!d) throw lastErr || new Error('no response');
+    cacheChat(id, d);
     if (d.transcript && d.transcript.chips) setChipBadge(d.transcript.chips.length);
     if (state.open !== id) return;
+    if (cachedView) { htmlCache.clear(); lastSig = ''; scrollToBottomNext = logAtBottom; }
     state.oldestByte = d.transcript.startByte;
     state.hasMore = !!d.transcript.hasMore;
     renderHeader(d.meta);
@@ -3418,6 +3448,38 @@ function ttsPosForget(hash) { try { const all = ttsPosLoad(); delete all[hash]; 
 function ttsClock(s) { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
 let ttsSilentUrl = null;
+// Read-on (g1011): after a message ends, a short beep, then the next newer message, until the latest.
+let ttsBeepUrl = null;
+function ttsBeep() {
+  if (ttsBeepUrl) return ttsBeepUrl;
+  const rate = 16000, n = Math.round(rate * 0.18), b = new DataView(new ArrayBuffer(44 + n * 2));
+  const w = (o, s) => { for (let k = 0; k < s.length; k++) b.setUint8(o + k, s.charCodeAt(k)); };
+  w(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true);
+  b.setUint16(22, 1, true); b.setUint32(24, rate, true); b.setUint32(28, rate * 2, true); b.setUint16(32, 2, true);
+  b.setUint16(34, 16, true); w(36, 'data'); b.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const env = Math.min(1, i / 160, (n - i) / 400);
+    b.setInt16(44 + i * 2, Math.round(Math.sin(2 * Math.PI * 880 * i / rate) * 9000 * env), true);
+  }
+  ttsBeepUrl = URL.createObjectURL(new Blob([b.buffer], { type: 'audio/wav' }));
+  return ttsBeepUrl;
+}
+function ttsNextMsg(el) {
+  const all = Array.from(document.querySelectorAll('#log .msg')).filter(m => m.querySelector('.speak'));
+  const i = all.indexOf(el);
+  return i >= 0 ? all[i + 1] || null : null;
+}
+function ttsReadOn() {
+  const next = tts.el && ttsNextMsg(tts.el);
+  if (!next) { ttsPosForget(tts.hash); return ttsStop(); }
+  ttsPosForget(tts.hash);
+  if (tts.mode !== 'audio') return ttsStart(next, true);
+  const a = ttsAudio();
+  tts.beepNext = next; tts.loading = true;
+  try { a.src = ttsBeep(); a.playbackRate = 1; const p = a.play(); if (p && p.catch) p.catch(() => { tts.beepNext = null; ttsStart(next, true); }); }
+  catch { tts.beepNext = null; ttsStart(next, true); }
+}
+
 function ttsSilent() {                         // played inside the tap, so the real audio may start after the fetch
   if (ttsSilentUrl) return ttsSilentUrl;
   const n = 800, b = new DataView(new ArrayBuffer(44 + n));
@@ -3592,7 +3654,11 @@ function ttsAudio() {
     if (tts.userPaused) { ttsPaint(); return; }
     ttsInterrupted();
   });
-  a.addEventListener('ended', () => { if (tts.loading || tts.mode !== 'audio') return; ttsPosForget(tts.hash); ttsStop(); });
+  a.addEventListener('ended', () => {
+    if (tts.beepNext) { const n = tts.beepNext; tts.beepNext = null; return ttsStart(n, true); }
+    if (tts.loading || tts.mode !== 'audio') return;
+    ttsReadOn();
+  });
   a.addEventListener('error', () => { if (tts.loading || !tts.el) return; toast('Read aloud stopped: the audio could not be played', true); ttsStop(); });
   a.addEventListener('ratechange', ttsSession);
   tts.audio = a;
@@ -3607,7 +3673,8 @@ window.addEventListener('pagehide', () => { if (tts.audio && tts.el && tts.mode 
 function ttsSpeak() {
   const my = ++tts.token;                      // a stale utterance's onend must not advance the new one
   speechSynthesis.cancel();
-  if (!tts.el || tts.i >= tts.chunks.length) return ttsStop();
+  if (!tts.el) return ttsStop();
+  if (tts.i >= tts.chunks.length) return ttsReadOn();
   const u = new SpeechSynthesisUtterance(tts.chunks[tts.i]);
   u.rate = tts.rate;
   u.onend = () => { if (my !== tts.token) return; tts.i++; ttsSpeak(); };
@@ -3616,15 +3683,18 @@ function ttsSpeak() {
   speechSynthesis.speak(u);
 }
 
-async function ttsStart(msgEl) {
-  if (tts.el === msgEl) return ttsToggle();    // the same button again = pause / play
+async function ttsStart(msgEl, chained) {
+  if (!chained && tts.el === msgEl) return ttsToggle();    // the same button again = pause / play
   const text = ttsText(msgEl);
-  if (!text) return;
-  ttsStop();
+  if (!text) return chained ? (tts.el = msgEl, ttsReadOn()) : undefined;
+  if (chained) {                               // keep the audio element playing, so a locked screen carries on
+    if (typeof speechSynthesis !== 'undefined') { try { speechSynthesis.cancel(); } catch {} }
+    if (tts.el) tts.el.classList.remove('speaking');
+  } else ttsStop();
   const my = ++tts.token;
-  tts.el = msgEl; tts.hash = ttsHash(text); tts.userScrollAt = 0; tts.userPaused = false; tts.loading = true; tts.mode = 'audio';
+  tts.el = msgEl; tts.hash = ttsHash(text); tts.userScrollAt = chained ? tts.userScrollAt : 0; tts.userPaused = false; tts.loading = true; tts.mode = 'audio';
   const a = ttsAudio();
-  try { a.src = ttsSilent(); const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch {}   // inside the tap
+  if (!chained) { try { a.src = ttsSilent(); const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch {} }   // inside the tap
   ttsSessionInit(); ttsMeta();
   ttsPaint();
   let out;
@@ -3662,7 +3732,7 @@ function ttsStop() {
   if (tts.audio) { try { tts.audio.pause(); tts.audio.removeAttribute('src'); tts.audio.load(); } catch {} }
   if ('mediaSession' in navigator) { try { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; } catch {} }
   if (tts.el) tts.el.classList.remove('speaking');
-  tts.el = null; tts.chunks = []; tts.i = 0; tts.loading = false; tts.userPaused = false; tts.seeking = false; tts.mode = 'audio';
+  tts.el = null; tts.chunks = []; tts.i = 0; tts.loading = false; tts.userPaused = false; tts.seeking = false; tts.mode = 'audio'; tts.beepNext = null;
   ttsPaint();
 }
 if (TTS_OK) {

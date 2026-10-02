@@ -574,25 +574,47 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
   };
 }
 
+// Parsed incrementally: a transcript only grows, so each call reads just the bytes appended since the
+// last one (a full re-read of a long transcript cost 240-630 ms on every session open).
+const bgCache = new Map();   // file -> { size, launched, finished }
 function backgroundTasks(sess) {
   const file = transcriptPath(sess);
   if (!file) return [];
+  let size;
+  try { size = fs.statSync(file).size; } catch { return []; }
+  let c = bgCache.get(file);
+  if (!c || size < c.size) { c = { size: 0, launched: new Map(), finished: new Map() }; bgCache.set(file, c); }
+  if (size > c.size) {
+    let buf;
+    try {
+      const fd = fs.openSync(file, 'r');
+      try { buf = Buffer.alloc(size - c.size); fs.readSync(fd, buf, 0, buf.length, c.size); } finally { fs.closeSync(fd); }
+    } catch { return []; }
+    const lastNl = buf.lastIndexOf(10);
+    if (lastNl >= 0) {
+      scanBackground(buf.slice(0, lastNl + 1).toString('utf8'), c.launched, c.finished);
+      c.size += lastNl + 1;
+    }
+  }
+  if (bgCache.size > 200) bgCache.delete(bgCache.keys().next().value);
+  const out = [];
+  for (const [id, info] of c.launched) {
+    if (c.finished.has(id)) continue;
+    if (info.name !== 'Agent' && info.name !== 'Task') continue;
+    out.push(info);
+  }
+  return out;
+}
 
-  let text;
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return []; }
-
-  const launched = new Map();
-  const finished = new Map();
+function scanBackground(text, launched, finished) {
   const idRx = /<tool-use-id>(toolu_[A-Za-z0-9]+)<\/tool-use-id>/g;
   const statusRx = /<status>(\w+)<\/status>/;
-
   for (const line of text.split('\n')) {
     if (!line.includes('run_in_background') && !line.includes('tool-use-id')) continue;
     const t = line.trim();
     if (!t) continue;
     let row;
     try { row = JSON.parse(t); } catch { continue; }
-
     const content = row.message && row.message.content;
     if (Array.isArray(content)) {
       for (const b of content) {
@@ -614,14 +636,6 @@ function backgroundTasks(sess) {
       while ((m = idRx.exec(t))) finished.set(m[1], st);
     }
   }
-
-  const out = [];
-  for (const [id, info] of launched) {
-    if (finished.has(id)) continue;
-    if (info.name !== 'Agent' && info.name !== 'Task') continue;
-    out.push(info);
-  }
-  return out;
 }
 
 function pendingChips(sess, allSessions, { maxBytes = 2 * 1024 * 1024 } = {}) {

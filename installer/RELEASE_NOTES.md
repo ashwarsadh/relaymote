@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.78
+
+- Fixed the background service's memory leak, which reached 1–2.5 GB and slowed everything down as it was swapped out. To list a session's running background agents, it read each long transcript whole, and a few short ids it kept from it held the entire file (up to hundreds of MB each) in memory. It now reads in pieces and copies what it keeps.
+
 ## 0.2.77
 
 - For diagnosis: if the background service's retained memory goes past 300 MB, it writes one memory snapshot to the state folder by itself.

@@ -581,6 +581,9 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
 
 // Parsed incrementally: a transcript only grows, so each call reads just the bytes appended since the
 // last one (a full re-read of a long transcript cost 240-630 ms on every session open).
+const BG_CHUNK = 16 * 1048576;
+// Strings kept past a scan are COPIED: a regex match or slice is a view that keeps its whole source alive.
+const own = (s) => s == null ? s : Buffer.from(String(s), 'utf8').toString('utf8');
 const bgCache = new Map();   // file -> { size, launched, finished }
 function backgroundTasks(sess) {
   const file = transcriptPath(sess);
@@ -589,17 +592,26 @@ function backgroundTasks(sess) {
   try { size = fs.statSync(file).size; } catch { return []; }
   let c = bgCache.get(file);
   if (!c || size < c.size) { c = { size: 0, launched: new Map(), finished: new Map() }; bgCache.set(file, c); }
+  // g1132: read in line-aligned chunks. The first look at a session used to read the WHOLE transcript
+  // (up to 272 MB) into one string, and every id kept from it pinned that string: 1-2 GB retained.
   if (size > c.size) {
-    let buf;
     try {
       const fd = fs.openSync(file, 'r');
-      try { buf = Buffer.alloc(size - c.size); fs.readSync(fd, buf, 0, buf.length, c.size); } finally { fs.closeSync(fd); }
+      try {
+        while (c.size < size) {
+          const want = Math.min(BG_CHUNK, size - c.size);
+          const buf = Buffer.alloc(want);
+          const got = fs.readSync(fd, buf, 0, want, c.size);
+          const lastNl = buf.subarray(0, got).lastIndexOf(10);
+          if (lastNl < 0) {
+            if (got < BG_CHUNK) break;              // a half-written last line: next time
+            c.size += got; continue;                // one line longer than a chunk: it is never a launch row we need
+          }
+          scanBackground(buf.toString('utf8', 0, lastNl + 1), c.launched, c.finished);
+          c.size += lastNl + 1;
+        }
+      } finally { fs.closeSync(fd); }
     } catch { return []; }
-    const lastNl = buf.lastIndexOf(10);
-    if (lastNl >= 0) {
-      scanBackground(buf.slice(0, lastNl + 1).toString('utf8'), c.launched, c.finished);
-      c.size += lastNl + 1;
-    }
   }
   if (bgCache.size > 200) bgCache.delete(bgCache.keys().next().value);
   const out = [];
@@ -626,11 +638,11 @@ function scanBackground(text, launched, finished) {
         if (!b || b.type !== 'tool_use' || !b.id) continue;
         const inp = b.input || {};
         if (!inp.run_in_background) continue;
-        launched.set(b.id, {
-          id: b.id,
-          name: b.name,
-          description: String(inp.description || inp.command || inp.prompt || b.name).slice(0, 120),
-          startedAt: row.timestamp || null,
+        launched.set(own(b.id), {
+          id: own(b.id),
+          name: own(b.name),
+          description: own(String(inp.description || inp.command || inp.prompt || b.name).slice(0, 120)),
+          startedAt: own(row.timestamp || null),
         });
       }
     }
@@ -638,9 +650,10 @@ function scanBackground(text, launched, finished) {
       const st = (t.match(statusRx) || [])[1] || 'completed';
       let m;
       idRx.lastIndex = 0;
-      while ((m = idRx.exec(t))) finished.set(m[1], st);
+      while ((m = idRx.exec(t))) finished.set(own(m[1]), own(st));
     }
   }
+  /x/.exec('x'); // RegExp.input/lastMatch would otherwise keep this chunk alive until the next match anywhere
 }
 
 function pendingChips(sess, allSessions, { maxBytes = 2 * 1024 * 1024 } = {}) {

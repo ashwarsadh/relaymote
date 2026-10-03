@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.76
+
+- For diagnosis: creating `heap-snapshot.request` in the state folder makes the background service write a memory snapshot there within 30 seconds. You can open it in Chrome DevTools.
+
 ## 0.2.75
 
 - When a model or effort change fails, the picker now goes back to the old value along with the header. Before, it stayed on the value that had failed for up to 20 seconds.

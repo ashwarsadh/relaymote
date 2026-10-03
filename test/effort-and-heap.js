@@ -55,5 +55,7 @@ check(/writableLength/.test(sse) && /clients\.delete\(c\)/.test(sse) && /destroy
 const srv = read('server.js');
 check(/--expose-gc/.test(srv) && /after full gc/.test(srv), 'the heartbeat logs what survives a full collection');
 
+check(/heap-snapshot.request/.test(srv) && /writeHeapSnapshot/.test(srv), 'a heap snapshot can be asked for without restarting the daemon');
+
 if (fails) { console.error(fails + ' failed'); process.exit(1); }
 console.log('effort-and-heap: all checks passed');

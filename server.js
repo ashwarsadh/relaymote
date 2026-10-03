@@ -767,6 +767,19 @@ function heartbeat() {
   }
   orch.log(`heartbeat: uptime ${Math.round(process.uptime())}s rss ${MB(m.rss)}MB heap ${MB(m.heapUsed)}/${MB(m.heapTotal)}MB${after}`);
 }
+// On demand: `heap-snapshot.request` in the state dir makes the daemon write a V8 heap snapshot next to
+// it (open it in Chrome DevTools > Memory). Diagnosis only; it blocks the daemon while it writes.
+setInterval(() => {
+  const dir = registry.STATE_DIR;
+  const reqFile = path.join(dir, 'heap-snapshot.request');
+  if (!fs.existsSync(reqFile)) return;
+  try { fs.unlinkSync(reqFile); } catch { return; }
+  const t = Date.now();
+  try {
+    const out = require('v8').writeHeapSnapshot(path.join(dir, `heap-${new Date().toISOString().replace(/[:.]/g, '-')}.heapsnapshot`));
+    orch.log(`heap snapshot written: ${out} (${Date.now() - t}ms)`);
+  } catch (e) { orch.log('heap snapshot failed: ' + e.message); }
+}, 30 * 1000).unref();
 setTimeout(heartbeat, 60 * 1000).unref();
 setInterval(heartbeat, 10 * 60 * 1000).unref();
 

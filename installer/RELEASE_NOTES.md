@@ -1,5 +1,10 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.68
+
+- A delivered message no longer comes back as "delivered, waiting for a reply". If it held a line starting with "@" partway through (a pasted mention, for example), Relaymote could not match it in the session and, after 15 minutes, showed it again at the bottom with Send again. Only leading "@<file path>" lines count as attachments now.
+- Nothing is ever re-sent on its own. Send again works only when tapped, and it first checks that the message has not already arrived, using the same corrected match.
+
 ## 0.2.67
 
 - Text you type while a session is working stays in the box. A render could empty it as soon as what you had typed so far (even one letter) appeared anywhere in the conversation.

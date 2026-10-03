@@ -864,10 +864,15 @@ function renderLog(messages, force) {
 
   {
     const nn = (t) => String(t || '').replace(/\s+/g, ' ').trim();
-    const inLog = (t) => { const w = nn(t).slice(0, 60); return !!w && messages.some(m => nn(m.text).includes(w)); };
+    const NL = String.fromCharCode(10);
+    // Same rule as the server's needle (outbox.js): skip only LEADING "@<path>" attachment lines; any
+    // other "@" line, such as a pasted mention, is his text (g1085).
+    const spoken = (t) => { const L = String(t || '').split(NL); let i = 0;
+      while (i < L.length && (!L[i].trim() || /^@(?:[A-Za-z]:[\\/]|[\\/~]|\.{1,2}[\\/])/.test(L[i].trim()))) i++;
+      return L.slice(i).join(NL); };
+    const inLog = (t) => { const w = nn(spoken(t)).slice(0, 60); return !!w && messages.some(m => nn(m.text).includes(w)); };
     // The just-sent bubble and its outbox entry are ONE message. The outbox text carries the "@<path>"
     // attachment lines and the bubble does not, so match on the outbox id, else on the text without them.
-    const NL = String.fromCharCode(10);
     const bodyOf = (t) => nn(String(t || '').split(NL).filter(l => !/^@/.test(l)).join(NL));
     const pend = state.pending;
     const isPending = (e) => !!pend && (e.id === pend.outboxId || bodyOf(e.text) === nn(pend.text));

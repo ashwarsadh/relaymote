@@ -28,10 +28,17 @@ function norm(t) {
   return String(t || '').replace(/\s+/g, ' ').trim();
 }
 
+// An attachment rides as a LEADING "@<path>" line. Only those are skipped: any other "@" line is his
+// text. Skipping every "@" line (g1085) joined the lines around a pasted chat mention ("@Name
+// card ..1234: …") into a needle that never occurs in the transcript, so a delivered message went
+// "waiting for a reply" after 15 min, and its Send again pre-check said it had not landed.
+const ATTACH_LINE = /^@(?:[A-Za-z]:[\\/]|[\\/~]|\.{1,2}[\\/])/;
 function needleFor(text) {
   const NL = String.fromCharCode(10), CR = String.fromCharCode(13);
   const lines = String(text || '').split(CR).join('').split(NL);
-  const spoken = lines.filter(l => l.trim() && l.trim().charAt(0) !== '@');
+  let i = 0;
+  while (i < lines.length && (!lines[i].trim() || ATTACH_LINE.test(lines[i].trim()))) i++;
+  const spoken = lines.slice(i).filter(l => l.trim());
   const base = spoken.length ? spoken.join(' ') : lines.join(' ');
   return norm(base).slice(0, 60);
 }

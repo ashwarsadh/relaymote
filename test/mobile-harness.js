@@ -140,7 +140,7 @@ async function fakeDesktop(sessions = {}) {
   const sess = (id) => { const s = sessions[id]; if (!s) throw new Error('Session not found: ' + id); return s; };
   const LocalSessions = {
     async getSession(id) { calls.push(['getSession', id]); const s = sessions[id]; return s ? { model: s.model, effort: s.effort, ultracode: !!s.ultracode, isRunning: !!s.isRunning } : null; },
-    async getEffort(id) { return sess(id).effort; },
+    // No getEffort: the real Desktop dropped it, and a fake that kept it hid g1133 (every change "failed").
     async setEffort(id, level) {
       calls.push(['setEffort', id, level]);
       if (!['low', 'medium', 'high', 'xhigh', 'max'].includes(level)) throw new Error('invalid effort ' + level);

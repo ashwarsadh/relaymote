@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.73
+
+- The real cause of the false "effort not found": Claude Desktop no longer offers the call the app used to read an effort back, so every effort change was reported as failed although Desktop had applied it. The app now reads the effort from the session itself. Effort changes from the phone confirm in about half a second.
+
 ## 0.2.72
 
 - Changing effort from the phone takes effect at once and stays put. The picker no longer jumps back, no "effort not found" appears after a change that worked, and the header shows the new effort straight away. The change is read back from Claude Desktop before the phone says it is done; a change that really failed says why and leaves the old effort showing. "Extra" is sent as Desktop's own value, so it now sticks too.

@@ -754,6 +754,7 @@ process.on('exit', code => {
 let fullGc = null;
 try { require('v8').setFlagsFromString('--expose-gc'); fullGc = require('vm').runInNewContext('gc'); } catch {}
 const MB = (n) => Math.round(n / 1048576);
+let autoSnapped = false;
 function heartbeat() {
   const m = process.memoryUsage();
   let after = '';
@@ -764,6 +765,12 @@ function heartbeat() {
     let big = 0;
     try { const sp = require('v8').getHeapSpaceStatistics().find(s => s.space_name === 'large_object_space'); big = sp ? sp.space_used_size : 0; } catch {}
     after = ` -> after full gc ${MB(a.heapUsed)}/${MB(a.heapTotal)}MB (large objects ${MB(big)}MB, ${Date.now() - t}ms)`;
+    // g1132: ~1 GB of large objects appears once, minutes after some starts and not others, and has
+    // not been reproduced on demand. Catch it in the act: one snapshot per process, automatically.
+    if (big > 300 * 1048576 && !autoSnapped) {
+      autoSnapped = true;
+      try { fs.writeFileSync(path.join(registry.STATE_DIR, 'heap-snapshot.request'), 'auto ' + MB(big) + 'MB'); } catch {}
+    }
   }
   orch.log(`heartbeat: uptime ${Math.round(process.uptime())}s rss ${MB(m.rss)}MB heap ${MB(m.heapUsed)}/${MB(m.heapTotal)}MB${after}`);
 }

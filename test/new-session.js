@@ -46,7 +46,10 @@ check(!ns.resolveModel('gpt-9', ids).ok, 'an unknown model is refused');
 
   const app = fs.readFileSync(path.join(root, 'mobile', 'public', 'app.js'), 'utf8');
   const cs = app.slice(app.indexOf('async function createSession'), app.indexOf('async function loadMore'));
-  check(!/uiJobs\.set/.test(cs) && /openChat\(d\.sessionId\)/.test(cs) && /Started in /.test(cs), 'the phone confirms where and on what it started, and opens it');
+  check(!/uiJobs\.set/.test(cs) && /openChat\(sid\)/.test(cs) && /Started in /.test(cs), 'the phone confirms where and on what it started, and opens it');
+  check(cs.indexOf("api('/api/session/'") > 0 && cs.indexOf("api('/api/session/'") < cs.indexOf('openChat(sid)'), 'it opens the session only once the server can serve it (never "no such session")');
+  const sessRoute = idx.slice(idx.indexOf("if (p.startsWith('/api/session/'))"), idx.indexOf("if (p.startsWith('/api/session/'))") + 600);
+  check(/refresh\(\{ force: true \}\)/.test(sessRoute), 'the session view rescans once before answering "no such session"');
 
   const gw = fs.readFileSync(path.join(root, 'lib', 'gui-worker.js'), 'utf8');
   const pr = gw.slice(gw.indexOf('const pickRadioJs'), gw.indexOf('const readTriggerJs'));

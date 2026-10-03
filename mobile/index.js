@@ -1316,6 +1316,9 @@ async function handle(req, res) {
   if (p.startsWith('/api/session/')) {
     const id = decodeURIComponent(p.slice('/api/session/'.length));
     await sessions.refresh();
+    // A session started seconds ago is not in a cache that is still inside its TTL: rescan once
+    // (~15 ms) before saying it does not exist (g1131).
+    if (!sessions.get(id)) { try { await sessions.refresh({ force: true }); } catch {} }
     const sess = sessions.get(id);
     if (!sess) return json(res, 404, { ok: false, error: 'no such session' });
     const dec = sessions.decorate([sess], desktop.loadSnapshot())[0];
@@ -1656,9 +1659,10 @@ async function handle(req, res) {
       let out;
       try { out = await newSession(job); } catch (e) { out = { ok: false, error: 'EXCEPTION', message: e.message }; }
       if (out && out.ok && out.sessionId) {
-        // FORCED rescans: a plain refresh() returns the cache inside its TTL, so the new id was not seen
-        // for ~8 s (measured on 0.2.69: 8 s per create, 3 of 5 still unindexed). A forced one is ~15 ms.
-        for (let i = 0; i < 40 && !sessions.get(out.sessionId); i++) {
+        // Desktop's start() returns in ~0.2 s, but writes the session's record to disk 6-10 s later
+        // (measured 0.2.70), and only then can the index see it. So: a short look with FORCED rescans
+        // (a plain refresh() serves its cache), then answer; the phone opens it once it is listed.
+        for (let i = 0; i < 6 && !sessions.get(out.sessionId); i++) {
           try { await sessions.refresh({ force: true }); } catch {}
           if (!sessions.get(out.sessionId)) await new Promise(r => setTimeout(r, 250));
         }

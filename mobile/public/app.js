@@ -3199,10 +3199,18 @@ async function createSession() {
     btn.disabled = false; btn.textContent = 'Create';
     try { localStorage.setItem('baton.newPick', JSON.stringify({ cwd: state.newFolder, model: state.newModel, effort: state.newEffort })); } catch {}
     const short = (m) => String(m || '').replace(/^claude-/, '').replace(/-(\d+)-(\d+).*$/, ' $1.$2');
-    toast('Started in ' + (d.folder || folder) + ' · ' + short(d.model) + (d.effort ? ' · ' + d.effort : ''));
+    toast('Started in ' + (d.folder || folder) + ' · ' + short(d.model) + (d.effort ? ' · ' + d.effort : '') +
+          (d.indexed ? '' : ' — opening…'));
     hideSheet($('newsheet'));
-    await loadSessions();
-    if (d.sessionId) openChat(d.sessionId);
+    // Desktop lists a new session a few seconds after it starts; open it as soon as it is listed,
+    // never before (opening early read "Could not load this conversation (no such session)").
+    const sid = d.sessionId;
+    for (let i = 0; sid && i < 30; i++) {
+      const listed = d.indexed || await api('/api/session/' + encodeURIComponent(sid) + '?limit=1', { timeoutMs: 8000 }).then(() => true, () => false);
+      if (listed) { loadSessions(); openChat(sid); return; }
+      await new Promise(r => setTimeout(r, 700));
+    }
+    if (sid) { loadSessions(); toast('Started — it will show in the list shortly.'); }
   } catch (e) {
     toast('Not created: ' + e.message, true);
     btn.disabled = false; btn.textContent = 'Create';

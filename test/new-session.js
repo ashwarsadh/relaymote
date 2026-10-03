@@ -39,7 +39,8 @@ check(!ns.resolveModel('gpt-9', ids).ok, 'an unknown model is refused');
   const idx = fs.readFileSync(path.join(root, 'mobile', 'index.js'), 'utf8');
   const route = idx.slice(idx.indexOf("if (p === '/api/new')"), idx.indexOf("if (p === '/api/permission/answer')"));
   check(!/uiJob\(/.test(route) && /out = await newSession\(job\)/.test(route), 'the route answers directly, not through the UI queue and a job id');
-  check(/sessions\.get\(out\.sessionId\)/.test(route), 'it says created only once the session is in the index (no "no such session")');
+  check(/sessions\.get\(out\.sessionId\)/.test(route) && /refresh\(\{ force: true \}\)/.test(route),
+        'it says created only once the session is in the index, found by forced rescans (no "no such session", no 8 s wait)');
   check(/error: o\.message \|\| o\.error/.test(route), 'a failure carries the reason as a sentence in error');
   check(/statSync\(f\.cwd\)\.isDirectory\(\)/.test(idx), 'the folder list offers only folders that exist');
 

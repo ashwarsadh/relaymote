@@ -1656,9 +1656,11 @@ async function handle(req, res) {
       let out;
       try { out = await newSession(job); } catch (e) { out = { ok: false, error: 'EXCEPTION', message: e.message }; }
       if (out && out.ok && out.sessionId) {
-        for (let i = 0; i < 20 && !sessions.get(out.sessionId); i++) {
-          try { await sessions.refresh(); } catch {}
-          if (!sessions.get(out.sessionId)) await new Promise(r => setTimeout(r, 400));
+        // FORCED rescans: a plain refresh() returns the cache inside its TTL, so the new id was not seen
+        // for ~8 s (measured on 0.2.69: 8 s per create, 3 of 5 still unindexed). A forced one is ~15 ms.
+        for (let i = 0; i < 40 && !sessions.get(out.sessionId); i++) {
+          try { await sessions.refresh({ force: true }); } catch {}
+          if (!sessions.get(out.sessionId)) await new Promise(r => setTimeout(r, 250));
         }
         out.indexed = !!sessions.get(out.sessionId);
         log(`new ${out.sessionId} in ${out.cwd} model=${out.model} effort=${out.effort} perm=${out.permissionMode} ${out.ms}ms indexed=${out.indexed}`);

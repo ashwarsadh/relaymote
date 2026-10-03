@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.70
+
+- New session confirms in about a second rather than about eight: Relaymote rescans for the new session at once, instead of waiting out its session-list cache.
+
 ## 0.2.69
 
 - New session works for any folder and any model. It now starts the session with one call to Claude Desktop, rather than clicking through Desktop's New-session screen. That is why only folders in Desktop's recent list could be used and Sonnet was refused (its menu text carried a shortcut digit, "Sonnet 5.53").

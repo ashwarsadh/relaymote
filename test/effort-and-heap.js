@@ -42,6 +42,12 @@ const sync = app.slice(app.indexOf('if (d && d.sync)'), app.indexOf('if (d && d.
 check(/state\.meta\[field\] = m\[field\]/.test(sync) && /renderHeader\(m\)/.test(sync), 'the phone updates header and picker from the confirmed answer at once');
 check(/set to /.test(sync) && !/not found/.test(sync), 'a success says "set to", never an error');
 
+const segFn = app.slice(app.indexOf('function seg('), app.indexOf('function seg(') + 900);
+check(!/toast\(v \+ ' set'\)/.test(segFn), 'no blanket success toast after a pick (it covered a true failure with "set")');
+const pk = app.slice(app.indexOf('const pick = (endpoint'), app.indexOf('const pick = (endpoint') + 3000);
+check(/toast\(op \+ ' failed: ' \+ e\.message, true\);\s*m\[field\] = was; renderHeader\(m\); openSheet\(\)/.test(pk),
+      'a genuine failure toasts the reason and puts the picker and header back');
+
 // g1132
 const sse = idx.slice(idx.indexOf('function sseSend'), idx.indexOf('function sseSend') + 700);
 check(/writableLength/.test(sse) && /clients\.delete\(c\)/.test(sse) && /destroy\(\)/.test(sse), 'a stream that stopped reading is dropped, not buffered without end');

@@ -2378,8 +2378,9 @@ function seg(container, values, current, onPick) {
     b.onclick = async () => {
       [...container.children].forEach(c => { c.disabled = true; });
       try {
+        // No toast here: onPick reports its own outcome. A blanket "<v> set" also fired after a pick
+        // that had FAILED and toasted why, covering the true error with a false success (g1133).
         await onPick(v);
-        toast(v + ' set');
         setTimeout(() => { loadSessions(); reloadOpenChat(true); }, 1500);
       }
       catch (e) {

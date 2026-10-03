@@ -77,7 +77,7 @@ const S = (o = {}) => ({ newSession: { model: 'sonnet', effort: 'medium' }, tier
     const srv = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
     ok(/forceModel: body\.model \|\| ns\.model \|\| undefined, forceEffort: body\.effort \|\| ns\.effort \|\| undefined/.test(srv), 'relaymote_spawn workers start on the default when none is given');
     const nsSrc = fs.readFileSync(path.join(root, 'mobile', 'newsession.js'), 'utf8');
-    ok(nsSrc.indexOf("'pick-model'") < nsSrc.indexOf("'send-prompt'") && nsSrc.indexOf("'pick-effort'") < nsSrc.indexOf("'send-prompt'"), 'a GUI-started session picks model and effort before the first prompt');
+    ok(/args\.model = m\.id/.test(nsSrc) && /args\.effort = wantEffort/.test(nsSrc) && nsSrc.indexOf('args.effort') < nsSrc.indexOf('.start('), 'a new session is started WITH its model and effort, in the same call as the first prompt');
     const cw = fs.readFileSync(path.join(root, 'lib', 'chipwatch.js'), 'utf8');
     ok(/if \(!require\('\.\/tier-policy'\)\.defaults\(\)\.model\)/.test(cw), 'chipwatch no longer overwrites the default with its own model');
     const ui = fs.readFileSync(path.join(root, 'mobile', 'public', 'settings-ui.js'), 'utf8');

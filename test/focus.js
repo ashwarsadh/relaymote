@@ -35,8 +35,11 @@ function fakeApp({ at, rendered, routeWorks }) {
      'the guard around every UI call uses the full restore');
   const goal = fs.readFileSync(path.join(root, 'lib', 'goal.js'), 'utf8');
   ok(/finally \{\s*if \(!givenBack && original\) await desktop\.restoreActive/.test(goal), 'relaymote_goal gives the user back their session even when it throws');
-  for (const f of ['lib/hygiene.js', 'lib/resume.js', 'mobile/answer.js', 'mobile/newsession.js'])
+  for (const f of ['lib/hygiene.js', 'lib/resume.js', 'mobile/answer.js'])
     ok(/restoreActive\(conn, CID, original\)/.test(fs.readFileSync(path.join(root, f), 'utf8')), `${f} restores the session the user was on`);
+  // New session no longer moves the Desktop view at all: it is one LocalSessions.start call (g1131).
+  { const ns = fs.readFileSync(path.join(root, 'mobile', 'newsession.js'), 'utf8');
+    ok(/LocalSessions/.test(ns) && /\.start\(/.test(ns) && !/CLICK_NEW|navTo\(|selectFolder\(/.test(ns), 'mobile/newsession.js starts through the bridge and never drives the view'); }
   ok(/startTask: \(opts = \{\}\) => require\('\.\/tier-policy'\)\.withStarterTier\(opts\.sessionId, \(\) => gated\('startTask'/.test(src), 'a chip start runs inside the guarded UI lane (restored afterwards)');
 
   // Behaviour, with the dependencies inside restoreActive reached through the module's own bindings.

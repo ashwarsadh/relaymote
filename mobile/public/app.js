@@ -2052,6 +2052,9 @@ function renderFolderList() {
   const f = ($('new-filter').value || '').toLowerCase();
   const list = (state.folderList || []).filter(x =>
     !f || x.name.toLowerCase().includes(f) || (x.cwd || '').toLowerCase().includes(f));
+  // The picked folder stays at the top, so a remembered pick is visible without scrolling.
+  const at = list.findIndex(x => x.cwd === state.newFolder);
+  if (at > 0) list.unshift(list.splice(at, 1)[0]);
   $('new-folders').innerHTML = list.map(x =>
     `<div class="fold${state.newFolder === x.cwd ? ' on' : ''}" data-cwd="${esc(x.cwd)}">` +
     `<span>${esc(x.name)}</span>` +
@@ -2070,9 +2073,15 @@ async function openNew() {
   const bootModels = (state.boot && state.boot.models) || [];
   state.newModel = (sd && bootModels.find(x => x === sd.model)) || pickByFamily(bootModels, (sd && sd.model) || 'opus') || 'opus';
   state.newEffort = (sd && sd.effort) || 'medium';
+  // Fewer taps (g1131): the last folder, model and effort he started with come back pre-picked.
+  let last = null;
+  try { last = JSON.parse(localStorage.getItem('baton.newPick') || 'null'); } catch {}
+  if (last && last.model && bootModels.includes(last.model)) state.newModel = last.model;
+  if (last && last.effort) state.newEffort = last.effort;
   renderNewSegs();
   try {
     state.folderList = (await api('/api/folders')).folders;
+    if (last && last.cwd && state.folderList.some(x => x.cwd === last.cwd)) state.newFolder = last.cwd;
     renderFolderList();
   } catch (e) { $('new-folders').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
@@ -3180,26 +3189,22 @@ async function createSession() {
   if (!prompt) return toast('Type a first message', true);
   const btn = $('btn-create');
   btn.disabled = true; btn.textContent = 'Creating…';
+  // One request, answered with the created session (g1131): no job id to lose, no wait in the UI queue.
   try {
+    const folder = (state.folderList.find(x => x.cwd === state.newFolder) || {}).name;
     const d = await api('/api/new', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cwd: state.newFolder, prompt, model: state.newModel, effort: state.newEffort,
-        group: (state.folderList.find(x => x.cwd === state.newFolder) || {}).name,
-      }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, timeoutMs: 45000,
+      body: JSON.stringify({ cwd: state.newFolder, prompt, model: state.newModel, effort: state.newEffort, group: folder }),
     });
-    uiJobs.set(d.jobId, {
-      label: 'Create', done: 'Session created',
-      revert: () => { btn.disabled = false; btn.textContent = 'Create'; },
-      after: async (r) => {
-        btn.disabled = false; btn.textContent = 'Create';
-        hideSheet($('newsheet'));
-        await loadSessions();
-        if (r.sessionId) openChat(r.sessionId);
-      },
-    });
+    btn.disabled = false; btn.textContent = 'Create';
+    try { localStorage.setItem('baton.newPick', JSON.stringify({ cwd: state.newFolder, model: state.newModel, effort: state.newEffort })); } catch {}
+    const short = (m) => String(m || '').replace(/^claude-/, '').replace(/-(\d+)-(\d+).*$/, ' $1.$2');
+    toast('Started in ' + (d.folder || folder) + ' · ' + short(d.model) + (d.effort ? ' · ' + d.effort : ''));
+    hideSheet($('newsheet'));
+    await loadSessions();
+    if (d.sessionId) openChat(d.sessionId);
   } catch (e) {
-    toast('Create failed: ' + e.message, true);
+    toast('Not created: ' + e.message, true);
     btn.disabled = false; btn.textContent = 'Create';
   }
 }

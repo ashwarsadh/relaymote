@@ -1,5 +1,13 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.69
+
+- New session works for any folder and any model. It now starts the session with one call to Claude Desktop, rather than clicking through Desktop's New-session screen. That is why only folders in Desktop's recent list could be used and Sonnet was refused (its menu text carried a shortcut digit, "Sonnet 5.53").
+- A create takes about a second. The session starts in the folder, model and effort you picked, with bypass permissions, and Relaymote reads back what Desktop recorded. You get "Started in <folder> · <model> · <effort>" and the session opens.
+- A create that cannot be done says why in a sentence (folder missing, model not offered) and starts nothing. The folder list shows only folders that still exist.
+- The sheet remembers your last folder, model and effort.
+- Switching a session's model from the menu no longer refuses models because of the shortcut digit.
+
 ## 0.2.68
 
 - A delivered message no longer comes back as "delivered, waiting for a reply". If it held a line starting with "@" partway through (a pasted mention, for example), Relaymote could not match it in the session and, after 15 minutes, showed it again at the bottom with Send again. Only leading "@<file path>" lines count as attachments now.

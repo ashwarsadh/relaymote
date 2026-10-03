@@ -552,8 +552,10 @@ const ui = (fn) => desktop.serializeUi(fn);
 let cdpAt = 0, cdpVal = false;
 const MODELS_FILE = path.join(require('../lib/config').STATE, 'models.json');
 let modelsVal = null, modelsAt = 0, modelsRefreshing = false;
+let modelIdsVal = {};   // picker label -> model id ("Sonnet 5.5" -> "claude-sonnet-5-5"), for New session
 try {
   const j = JSON.parse(fs.readFileSync(MODELS_FILE, 'utf8'));
+  if (j.ids && typeof j.ids === 'object') modelIdsVal = j.ids;
   // A list saved before 0.2.39 can carry the picker's badge glyph ("Sonnet 5.5\uE08F").
   if (Array.isArray(j.models) && j.models.length) { modelsVal = j.models.map(desktop.cleanLabel).filter(Boolean); modelsAt = j.at || 0; }
 } catch {}
@@ -565,8 +567,9 @@ function refreshModelsSoon(ttl) {
     .then(r => {
       if (r && r.ok && r.models && r.models.length) {
         modelsVal = r.models.map(m => m.name);
+        modelIdsVal = Object.fromEntries(r.models.filter(m => m.id).map(m => [m.name, m.id]));
         modelsAt = Date.now();
-        try { fs.writeFileSync(MODELS_FILE, JSON.stringify({ at: modelsAt, models: modelsVal }, null, 1)); } catch {}
+        try { fs.writeFileSync(MODELS_FILE, JSON.stringify({ at: modelsAt, models: modelsVal, ids: modelIdsVal }, null, 1)); } catch {}
       }
     })
     .catch(() => {})
@@ -1332,7 +1335,8 @@ async function handle(req, res) {
   if (p === '/api/folders') {
     await sessions.refresh();
     const all = sessions.decorate(sessions.index().list, desktop.loadSnapshot());
-    const fs_ = sessions.folders(all);
+    // Only folders that exist on the PC are offered: a removed worktree can never be started in (g1131).
+    const fs_ = sessions.folders(all).filter(f => { try { return !!f.cwd && fs.statSync(f.cwd).isDirectory(); } catch { return false; } });
     const byBase = new Map();
     for (const f of fs_) byBase.set(f.name, (byBase.get(f.name) || 0) + 1);
     return json(res, 200, {
@@ -1644,9 +1648,28 @@ async function handle(req, res) {
       const ns = config.get().newSession || {};
       const extra = String(ns.instructions || '').trim();
       const job = { ...body, model: body.model || ns.model || undefined, effort: body.effort || ns.effort || undefined,
-                    prompt: extra && body.prompt ? body.prompt + '\n\n' + extra : body.prompt };
-      return uiJob(res, 'new', () => newSession(job),
-                   (out) => ({ sessionId: out && out.sessionId }));
+                    prompt: extra && body.prompt ? body.prompt + '\n\n' + extra : body.prompt, modelIds: modelIdsVal };
+      // Not behind the UI queue: the create is one bridge call, no clicks (g1131). "Created" is said
+      // only once the session is in this server's own index, so opening it never reads "no such session".
+      // Answered directly, not through a job id + stream event: a create takes about a second, and a
+      // stream event that beat the POST's reply was matched to nothing, leaving "Creating…" up.
+      let out;
+      try { out = await newSession(job); } catch (e) { out = { ok: false, error: 'EXCEPTION', message: e.message }; }
+      if (out && out.ok && out.sessionId) {
+        for (let i = 0; i < 20 && !sessions.get(out.sessionId); i++) {
+          try { await sessions.refresh(); } catch {}
+          if (!sessions.get(out.sessionId)) await new Promise(r => setTimeout(r, 400));
+        }
+        out.indexed = !!sessions.get(out.sessionId);
+        log(`new ${out.sessionId} in ${out.cwd} model=${out.model} effort=${out.effort} perm=${out.permissionMode} ${out.ms}ms indexed=${out.indexed}`);
+      } else log(`new failed: ${(out && (out.error + ': ' + out.message)) || 'no result'}`);
+      if (!out || !out.ok) {
+        // The client shows `error`, so it carries the sentence; the code moves to `code`. (On 03-Oct it
+        // showed a bare JSON blob with "error":"" because the reason sat in `message`.)
+        const o = out || {};
+        return json(res, 400, { ...o, ok: false, code: o.error || 'NO_RESULT', error: o.message || o.error || 'The session could not be created.' });
+      }
+      return json(res, 200, out);
     }
     if (p === '/api/permission/answer') {
       return uiJobWith(res, 'permission-answer',

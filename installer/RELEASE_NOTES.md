@@ -1,5 +1,10 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.67
+
+- Text you type while a session is working stays in the box. A render could empty it as soon as what you had typed so far (even one letter) appeared anywhere in the conversation.
+- What you sent and what you are typing are now kept apart. Your draft is saved per session, survives a refresh, a reconnect and the turn ending, and is cleared only when you send. A failed send comes back into the box only if the box is empty.
+
 ## 0.2.66
 
 - The model's thinking is no longer shown anywhere in a session view, neither as grey text in the conversation nor inside "Working". Desktop does not show it, and 0.2.65 should not have.

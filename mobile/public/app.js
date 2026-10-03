@@ -297,6 +297,21 @@ function loadDraft(id) {
   try { return id ? (localStorage.getItem(draftKey(id)) || '') : ''; } catch { return ''; }
 }
 function clearDraft(id) { try { localStorage.removeItem(draftKey(id)); } catch {} }
+// What was SENT and not yet seen delivered is kept apart from the draft (what is in the box). They
+// shared one key until g1078: a render retired "the draft" when its text appeared in any message, and
+// the draft was whatever he was typing, so "A" or "the" mid-word matched and the box emptied while a
+// turn streamed. The draft is now cleared only by a send; this record only by delivery or failure.
+const unsentKey = (id) => 'baton.unsent.' + id;
+function markUnsent(id, text) { try { if (id && text) localStorage.setItem(unsentKey(id), text); } catch {} }
+function loadUnsent(id) { try { return id ? (localStorage.getItem(unsentKey(id)) || '') : ''; } catch { return ''; } }
+function clearUnsent(id) { try { localStorage.removeItem(unsentKey(id)); } catch {} }
+// A failed send goes back in the box, unless he has typed something new there since.
+function restoreFailed(id, text) {
+  if (!text) return;
+  clearUnsent(id);
+  if (state.open === id && !$('input').value.trim()) { $('input').value = text; autosize(); saveDraft(id, text); }
+  else if (state.open !== id && !loadDraft(id).trim()) saveDraft(id, text);
+}
 
 const CLAMP_AT = 620;
 function hash(s) {
@@ -1619,19 +1634,16 @@ function connectStream(watch) {
         state.pending.outboxId = r.outboxId || null;
       }
       if (r.delivery === 'queued') sendNowBlocked.delete(r.id || state.open);
-      if (r.confirmed) clearDraft(r.id || state.open);
+      if (r.confirmed) clearUnsent(r.id || state.open);
       else {
-        if (r.text) saveDraft(r.id || state.open, r.text);
+        if (r.text) markUnsent(r.id || state.open, r.text);
         checkOutbox();
       }
       renderLog(state.messages, true);
       return;
     }
     state.pending = null;
-    if (r.text) {
-      saveDraft(r.id || state.open, r.text);
-      if (!$('input').value) { $('input').value = r.text; autosize(); }
-    }
+    if (r.text) restoreFailed(r.id || state.open, r.text);
     renderLog(state.messages, true);
     toast(sendError(r.error), true);
 
@@ -2260,7 +2272,7 @@ async function send(target) {
   state.sending = true;
   $('btn-send').disabled = true;
   $('input').value = ''; autosize();
-  saveDraft(id, text);
+  clearDraft(id); markUnsent(id, text);
   state.attachments = []; renderAttachments();
   state.liveSuggestion = null;
   renderSuggestion(state.meta);
@@ -2279,7 +2291,7 @@ async function send(target) {
     renderLog(state.messages, true);
   } catch (e) {
     state.pending = null;
-    if (!$('input').value) { $('input').value = text; autosize(); }
+    restoreFailed(id, text);
     state.attachments = atts.map(p => ({ name: p.split(/[\\/]/).pop(), path: p }));
     renderAttachments();
     renderLog(state.messages, true);
@@ -2287,21 +2299,22 @@ async function send(target) {
   } finally { state.sending = false; $('btn-send').disabled = false; }
 }
 
+// Retires the SENT record once his message shows in the conversation. Never touches the box or the
+// draft: what he is typing now is not what he sent (g1078).
 function retireSpentDraft(messages) {
   const id = state.open;
-  const draft = id && loadDraft(id);
-  if (!draft) return false;
+  const sent = id && loadUnsent(id);
+  if (!sent) return false;
   const n = (t) => String(t || '').replace(/\s+/g, ' ').trim();
-  const want = n(draft).slice(0, 60);
-  if (!want || !(messages || []).some(m => n(m.text).includes(want))) return false;
-  clearDraft(id);
-  if (n($('input').value) === n(draft)) { $('input').value = ''; autosize(); }
+  const want = n(sent).slice(0, 60);
+  if (!want || !(messages || []).some(m => m.role === 'user' && n(m.text).includes(want))) return false;
+  clearUnsent(id);
   return true;
 }
 
 async function sendTo(id, text, atts) {
   if (!text) return;
-  saveDraft(id, text);
+  markUnsent(id, text);
   try {
     const r = await api('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, text, attachments: atts || [] }) });
@@ -2309,8 +2322,9 @@ async function sendTo(id, text, atts) {
     toast('Sending to ' + ((state.rawSessions || []).find(x => x.id === id) || {}).title || 'that session');
     // Sending does not move him (g780, 29-Sep: "after sending msg my screen moved"): at the bottom the
     // render follows to his bubble anyway; higher up, what he was reading stays where it is.
+    clearDraft(id);
     if (state.open === id) { $('input').value = ''; autosize(); renderLog(state.messages, true); }
-  } catch (e) { toast(sendError(e.message), true); }
+  } catch (e) { restoreFailed(id, text); toast(sendError(e.message), true); }
 }
 
 function sendError(code) {

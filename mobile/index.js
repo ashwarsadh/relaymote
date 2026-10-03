@@ -248,9 +248,29 @@ const clients = new Set();
 let pollTimer = null;
 let lastListKey = '';
 
+// g1132: a stream whose reader stopped reading (a phone browser put in the background keeps the
+// socket open) buffers every write in THIS process: transcript payloads went into memory with no end,
+// and the heap grew ~14 MB/min to 2.5 GB. A client that has fallen this far behind is dropped; its
+// EventSource reconnects on its own and resyncs from scratch.
+const SSE_MAX_QUEUED = 4 * 1048576;
+let sseDropped = 0;
 function sseSend(c, event, data) {
+  if (c.dropped) return;
+  const queued = (c.res && c.res.writableLength) || 0;
+  if (queued > SSE_MAX_QUEUED) {
+    c.dropped = true; sseDropped++;
+    log(`sse: dropped a client that stopped reading (${Math.round(queued / 1048576)} MB unsent)`);
+    clients.delete(c);
+    try { c.res.destroy(); } catch {}
+    return;
+  }
   try { c.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch {}
 }
+setInterval(() => {
+  let q = 0; for (const c of clients) q += (c.res && c.res.writableLength) || 0;
+  const m = process.memoryUsage();
+  log(`sse: ${clients.size} client(s), ${Math.round(q / 1024)} KB unsent, ${sseDropped} dropped so far; heap ${Math.round(m.heapUsed / 1048576)} MB`);
+}, 10 * 60000).unref();
 
 const clientIdOf = (req) => String((req && req.headers && req.headers['x-baton-client']) || '').slice(0, 64) || null;
 
@@ -536,10 +556,23 @@ const maybeStopPoll = ensurePoll;
 const EFFORT_ALIAS = { xhigh: 'extra' };
 const normEffort = (e) => (e ? (EFFORT_ALIAS[e] || e) : null);
 
+// g1133: Desktop takes an effort change at once but writes it to the session file this index reads
+// seconds later, so the header kept the OLD effort and the picker snapped back to it when its hold
+// ran out. A change confirmed by Desktop's own getSession is laid over the file until the file agrees
+// (or 10 minutes pass).
+const effortOverlay = new Map();   // sessionId -> { effort (phone label), at }
+function effortFor(s) {
+  const o = effortOverlay.get(s.id);
+  const file = normEffort(s.effort);
+  if (!o) return file;
+  if (file === o.effort || Date.now() - o.at > 10 * 60000) { effortOverlay.delete(s.id); return file; }
+  return o.effort;
+}
+
 function slimSession(s) {
   return {
     id: s.id, title: s.title, cwd: s.cwd, folder: s.cwd ? path.basename(s.cwd) : null,
-    model: s.model, effort: normEffort(s.effort), dot: s.dot, group: s.group,
+    model: s.model, effort: effortFor(s), dot: s.dot, group: s.group,
     suggestion: s.suggestion || null,
     running: s.running, awaiting: s.awaiting, unread: s.unread, active: s.active,
     live: s.live, archived: s.archived, at: s.lastActivityAt, turns: s.turns,
@@ -1580,7 +1613,18 @@ async function handle(req, res) {
     }
     if (p === '/api/effort') {
       require('../lib/tier-policy').recordUser(body.id, { effort: body.effort });
-      return uiJob(res, 'effort', () => desktop.setEffort(body.id, body.effort), tierEcho);
+      // g1133: Desktop's bridge, answered directly with the effort Desktop now reports. The slider
+      // path navigated Desktop to the session (the flicker) and could miss the control ("effort not
+      // found"); it is kept only for ultracode, which is a flag, not an effort.
+      let out;
+      try { out = await desktop.setEffortBridge(body.id, body.effort); }
+      catch (e) { out = { ok: false, bridged: true, error: 'EXCEPTION', message: e.message }; }
+      if (out && out.bridged === false) return uiJob(res, 'effort', () => desktop.setEffort(body.id, body.effort), tierEcho);
+      if (out && out.ok) effortOverlay.set(body.id, { effort: out.effort, at: Date.now() });
+      log(`effort ${body.id} -> ${body.effort}: ${out && out.ok ? 'now ' + out.effort : 'FAILED ' + (out && (out.error + ' ' + (out.message || '')))}`);
+      return json(res, out && out.ok ? 200 : 400, out && out.ok
+        ? { ok: true, sync: true, id: body.id, effort: out.effort, was: out.was, unchanged: out.unchanged, confirmed: true }
+        : { ok: false, sync: true, id: body.id, code: out && out.error, error: (out && out.message) || 'Desktop did not take the change.', was: out && out.was });
     }
     if (p === '/api/fast') {
       return uiJobWith(res, 'fast', async () => {

@@ -48,6 +48,15 @@ check(!/href="(?:javascript|data):/i.test(md('javascript:alert(1) data:text/html
 }
 check(hrefs(md('run `https://a.io/x`')).length === 1, 'a URL inside a code span is linked too');
 check(/class="fileref"/.test(md('see src/app.js:12')), 'file paths are still file links');
+{
+  // g1019: a RELATIVE backslash path in prose was not linked (only its backticked form was).
+  const BS = String.fromCharCode(92);
+  const rel = ['projects', 'notes', 'analysis', 'RULES.md'].join(BS);
+  const h = md('See ' + rel + ' for the rules.');
+  const m = /<a class="fileref" data-p="([^"]*)"/.exec(h);
+  check(!!m && m[1] === rel, 'a bare relative backslash path in prose is one file link, whole', h);
+  check(!/fileref/.test(md('either and/or works, see 3/4 of it')), 'ordinary prose with slashes is not linked');
+}
 check(md('hello world') === 'hello world', 'plain text is unchanged');
 {
   // The control: md() without the URL pass leaves the URL as text and turns its path into a file link.

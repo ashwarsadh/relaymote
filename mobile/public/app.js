@@ -281,7 +281,9 @@ const URL_RX = /\bhttps?:\/\/(?:(?!&quot;|&lt;|&gt;)[^\s<>`"'])+/gi;
 // extension (optionally :line). Spaces are allowed, since a code span marks where the path starts and ends.
 const CODE_PATH_RX = /^(?:[A-Za-z]:[\\/]|\.{0,2}[\\/])?(?:[^\\/\n`<>|*?]+[\\/])+[^\\/\s`<>|*?]+\.\w{1,8}(?::\d+(?::\d+)?)?$/;
 // A bare drive path's folders may hold spaces (D:\Documents of X\y\plan.md); its last segment may not.
-const FILE_RX = /(?:[A-Za-z]:\\(?:[^\n"'<>|`&\\:,;]+\\)+[^\s"'<>|`&\\]+\.\w{1,8}|[A-Za-z]:\\[^\s"'<>|`&]+|(?:\.{0,2}[\/])?(?:[\w.@~-]+[\/])+[\w.@~-]+\.\w{1,8})(?::\d+)?/g;
+// A RELATIVE path may use either separator: "projects\notes\analysis\RULES.md" in prose was not
+// linked at all, only its backticked form was (g1019).
+const FILE_RX = /(?:[A-Za-z]:\\(?:[^\n"'<>|`&\\:,;]+\\)+[^\s"'<>|`&\\]+\.\w{1,8}|[A-Za-z]:\\[^\s"'<>|`&]+|(?:\.{0,2}[\\/])?(?:[\w.@~-]+[\\/])+[\w.@~-]+\.\w{1,8})(?::\d+)?/g;
 
 const uiJobs = new Map();
 
@@ -2537,6 +2539,16 @@ function openSheet() {
     try {
       const d = await api(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: m.id, [field]: v }) });
+      // g1133: effort answers at once with what Desktop now holds; the server keeps showing that value
+      // until Desktop's file catches up, so nothing snaps back.
+      if (d && d.sync) {
+        m[field] = d[field] || v;
+        if (tierOverride && tierOverride.id === m.id) tierOverride[field] = m[field];
+        if (state.meta && state.meta.id === m.id) state.meta[field] = m[field];
+        renderHeader(m); openSheet();
+        toast(d.unchanged ? op + ' already ' + m[field] : op + ' set to ' + m[field]);
+        return;
+      }
       if (d && d.jobId) uiJobs.set(d.jobId, {
         label: op,
         done: (r) => r.pending

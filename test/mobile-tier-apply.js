@@ -27,6 +27,8 @@ const { check, wait } = H;
   const ev = d.stream(CLIENT);
   await wait(800);
   const post = (p, body) => d.req(p, { method: 'POST', body, headers: { 'X-Baton-Client': CLIENT } });
+  // An effort change answers in the same request since g1133 (sync); a model change still sends a job.
+  const answer = async (p) => p.json && p.json.sync ? p.json : result(p.json.jobId);
   const result = async (jobId) => { const e = await d.waitFor(ev, x => x.event === 'uiresult' && x.data.jobId === jobId, 20000); return e && e.data; };
   const tier = async () => (await d.req('/api/tier?id=' + encodeURIComponent(SID))).json;
 
@@ -36,7 +38,7 @@ const { check, wait } = H;
   console.log('\n--- 1. effort labels ---');
   for (const [label, want] of [['extra', 'xhigh'], ['ultracode', 'ultracode'], ['max', 'max'], ['high', 'high']]) {
     const p = await post('/api/effort', { id: SID, effort: label });
-    const r = await result(p.json.jobId);
+    const r = await answer(p);
     const t = await tier();
     const landed = label === 'ultracode' ? t.ultracode === true : (t.effort === want && !t.ultracode);
     check(r && r.ok && landed, `effort "${label}" -> the session reports ${label === 'ultracode' ? 'ultracode:true' : want}`, { ok: r && r.ok, effort: t.effort, ultracode: t.ultracode, label: t.effortLabel });
@@ -45,7 +47,7 @@ const { check, wait } = H;
   {
     const before = fake.calls.length;
     const p = await post('/api/effort', { id: SID, effort: 'turbo' });
-    const r = await result(p.json.jobId);
+    const r = await answer(p);
     check(r && !r.ok && /not an effort level/.test(r.error || ''), 'a nonsense effort is refused with the app\'s own words', r && r.error);
     check(!fake.calls.slice(before).some(c => c[0] === 'setEffort' || c[0] === 'applyFlagSettings'), '...and nothing was sent to the session');
   }

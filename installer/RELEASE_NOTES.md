@@ -1,5 +1,11 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.72
+
+- Changing effort from the phone takes effect at once and stays put. The picker no longer jumps back, no "effort not found" appears after a change that worked, and the header shows the new effort straight away. The change is read back from Claude Desktop before the phone says it is done; a change that really failed says why and leaves the old effort showing. "Extra" is sent as Desktop's own value, so it now sticks too.
+- A relative file path written with backslashes in a message (for example `folder\sub\NOTES.md`) is now a tappable link, like the forward-slash and absolute forms.
+- Memory: a phone connection that stops reading is dropped (it reconnects by itself) instead of buffering without end, and the background service collects unused memory every ten minutes. Its log now shows how much memory survives each collection.
+
 ## 0.2.71
 
 - New session answers as soon as Claude Desktop has started it (well under a second for the start itself), then opens the session once Desktop has listed it, a few seconds later. It no longer holds the Create button for that wait, and it never opens too early ("no such session").

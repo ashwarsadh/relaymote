@@ -747,10 +747,28 @@ process.on('exit', code => {
   } catch {}
 });
 
-setInterval(() => {
+// g1132: "heap 1.2 GB" alone cannot tell a leak from garbage V8 has not bothered to collect yet; it
+// grew in 300 MB steps while RSS stayed near 100 MB. Each heartbeat now runs a full collection and
+// logs what SURVIVES it: retained memory that still climbs is a leak, a figure that falls back is not.
+// The collection also bounds the heap, which is what kept the daemon paged out and a poll at 52 s.
+let fullGc = null;
+try { require('v8').setFlagsFromString('--expose-gc'); fullGc = require('vm').runInNewContext('gc'); } catch {}
+const MB = (n) => Math.round(n / 1048576);
+function heartbeat() {
   const m = process.memoryUsage();
-  orch.log(`heartbeat: uptime ${Math.round(process.uptime())}s rss ${Math.round(m.rss / 1048576)}MB heap ${Math.round(m.heapUsed / 1048576)}/${Math.round(m.heapTotal / 1048576)}MB`);
-}, 10 * 60 * 1000).unref();
+  let after = '';
+  if (fullGc) {
+    const t = Date.now();
+    try { fullGc(); } catch {}
+    const a = process.memoryUsage();
+    let big = 0;
+    try { const sp = require('v8').getHeapSpaceStatistics().find(s => s.space_name === 'large_object_space'); big = sp ? sp.space_used_size : 0; } catch {}
+    after = ` -> after full gc ${MB(a.heapUsed)}/${MB(a.heapTotal)}MB (large objects ${MB(big)}MB, ${Date.now() - t}ms)`;
+  }
+  orch.log(`heartbeat: uptime ${Math.round(process.uptime())}s rss ${MB(m.rss)}MB heap ${MB(m.heapUsed)}/${MB(m.heapTotal)}MB${after}`);
+}
+setTimeout(heartbeat, 60 * 1000).unref();
+setInterval(heartbeat, 10 * 60 * 1000).unref();
 
 process.on('uncaughtException', e => {
   if (e && e.code === 'EADDRINUSE') { orch.log('EADDRINUSE — exiting cleanly'); process.exit(0); }

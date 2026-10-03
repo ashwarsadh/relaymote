@@ -45,8 +45,9 @@ check(/set to /.test(sync) && !/not found/.test(sync), 'a success says "set to",
 const segFn = app.slice(app.indexOf('function seg('), app.indexOf('function seg(') + 900);
 check(!/toast\(v \+ ' set'\)/.test(segFn), 'no blanket success toast after a pick (it covered a true failure with "set")');
 const pk = app.slice(app.indexOf('const pick = (endpoint'), app.indexOf('const pick = (endpoint') + 3000);
-check(/toast\(op \+ ' failed: ' \+ e\.message, true\);\s*m\[field\] = was; renderHeader\(m\); openSheet\(\)/.test(pk),
-      'a genuine failure toasts the reason and puts the picker and header back');
+check(/toast\(op \+ ' failed: ' \+ e\.message, true\);\s*undo\(\);/.test(pk), 'a genuine failure toasts the reason and undoes the change');
+check(/const undo = [\s\S]{0,120}tierOverride\[field\] = was/.test(pk),
+      '...including the 20 s override the sheet prefers, so the PICKER goes back too, not only the header');
 
 // g1132
 const sse = idx.slice(idx.indexOf('function sseSend'), idx.indexOf('function sseSend') + 700);

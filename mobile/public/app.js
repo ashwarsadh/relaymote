@@ -2537,6 +2537,13 @@ function openSheet() {
       }
       _tierSeq++;
     }
+    // A failure puts back the value AND the pending override: the sheet prefers the override for 20 s,
+    // so reverting the value alone left the picker on the change that had failed (g1133).
+    const undo = () => {
+      m[field] = was;
+      if (tierOverride && tierOverride.id === m.id) tierOverride[field] = was;
+      renderHeader(m); openSheet();
+    };
     try {
       const d = await api(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: m.id, [field]: v }) });
@@ -2557,11 +2564,11 @@ function openSheet() {
           : (r.unchanged ? op + ' already ' + String(v) : op + ' set'),
         after: () => { setTimeout(() => renderTier(m), 600); },
         onFail: (r) => { toast(op + ' not changed: ' + (r.note || r.error || 'unknown'), true); return true; },
-        revert: () => { m[field] = was; renderHeader(m); openSheet(); },
+        revert: () => { undo(); },
       });
     } catch (e) {
       toast(op + ' failed: ' + e.message, true);
-      m[field] = was; renderHeader(m); openSheet();
+      undo();
     }
   };
   const ov = (tierOverride && tierOverride.id === m.id && Date.now() < tierOverride.until) ? tierOverride : null;

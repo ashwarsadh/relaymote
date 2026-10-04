@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.80
+
+- Typing / now lists every command and skill in a scrolling list. It used to show only the first eight, which hid /goal and most skills until you typed more letters.
+
 ## 0.2.79
 
 - Typing / opens the list of commands and skills again. If the first attempt to load the list failed (for example while the PC was restarting), the list stayed empty until the page was reloaded. Now the phone keeps the last list it loaded and shows it straight away, tries again on the next /, and says so when the list cannot be loaded. The list also refreshes every few minutes, so newly added skills appear.

@@ -17,7 +17,8 @@ function world() {
   box.classList = { add: c => box.cls.add(c), remove: c => box.cls.delete(c) };
   const input = { value: '' };
   const env = { up: true, calls: 0 };
-  const LIST = [{ name: 'goal', kind: 'built-in' }, { name: 'conductor', kind: 'skill' }, { name: 'compact', kind: 'built-in' }];
+  const LIST = [{ name: 'goal', kind: 'built-in' }, { name: 'conductor', kind: 'skill' }, { name: 'compact', kind: 'built-in' }]
+    .concat(Array.from({ length: 24 }, (_, i) => ({ name: 'a-skill-' + String(i).padStart(2, '0'), kind: 'skill' })));
   const api = async (p) => { env.calls++; if (!env.up) throw new Error('Failed to fetch'); return { ok: true, commands: LIST }; };
   const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
   const $ = id => (id === 'cmdlist' ? box : input);
@@ -38,6 +39,8 @@ const tick = () => new Promise(r => setTimeout(r, 0));
   w.env.up = true;
   await w.fns.updateCommandList();
   check(shown(w) && /\/goal/.test(w.box.innerHTML) && /\/conductor/.test(w.box.innerHTML), 'once the PC answers, the next "/" opens the list with /goal and the skills', w.box.innerHTML.slice(0, 80));
+
+  check((w.box.innerHTML.match(/class="cmd"/g) || []).length === 27, 'a bare "/" lists ALL 27 commands (it showed only the first 8, hiding /goal)');
 
   // 2. A list fetched once is kept on the device: a later outage still shows it.
   const w2 = world();

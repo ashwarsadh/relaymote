@@ -3410,7 +3410,7 @@ async function updateCommandList() {
     return;
   }
   const q = m[1].toLowerCase();
-  const hits = all.filter(c => c.name.toLowerCase().startsWith(q)).slice(0, 8);
+  const hits = all.filter(c => c.name.toLowerCase().startsWith(q));   // all of them: the box scrolls (only 8 hid /goal and most skills behind "/")
   if (!hits.length) { box.classList.add('hidden'); return; }
   box.innerHTML = hits.map(c =>
     `<button class="cmd" data-name="${esc(c.name)}"><b>/${esc(c.name)}</b>` +

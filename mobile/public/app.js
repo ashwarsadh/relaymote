@@ -3368,11 +3368,34 @@ async function watchForUpdates() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
 }
 
-let commandList = null;
+// g1162: one failed /api/commands (a daemon restart, a slow server) used to cache an EMPTY list for the
+// life of the page, so "/" never opened the list again until a reload. A failure is never cached now:
+// the last good list is kept on the device and served meanwhile, and the next keystroke tries again.
+let commandList = null, commandsAt = 0;
+const COMMANDS_TTL = 5 * 60000;
+function savedCommands() {
+  try { const c = JSON.parse(localStorage.getItem('baton.commands') || 'null'); return Array.isArray(c) && c.length ? c : null; } catch { return null; }
+}
+let commandsFetch = null;
 async function ensureCommands() {
-  if (commandList) return commandList;
-  try { commandList = (await api('/api/commands')).commands; } catch { commandList = []; }
-  return commandList;
+  if (commandList && commandList.length && Date.now() - commandsAt < COMMANDS_TTL) return commandList;
+  const have = commandList || savedCommands();
+  if (have) {                                   // show what we have now; refresh behind it
+    if (!commandsFetch) commandsFetch = fetchCommands().finally(() => { commandsFetch = null; });
+    return have;
+  }
+  return fetchCommands();
+}
+async function fetchCommands() {
+  try {
+    const got = (await api('/api/commands', { timeoutMs: 8000 })).commands;
+    if (Array.isArray(got) && got.length) {
+      commandList = got; commandsAt = Date.now();
+      try { localStorage.setItem('baton.commands', JSON.stringify(got)); } catch {}
+      return commandList;
+    }
+  } catch {}
+  return commandList || savedCommands() || [];
 }
 
 async function updateCommandList() {
@@ -3381,6 +3404,11 @@ async function updateCommandList() {
   const m = /^\/([\w:-]*)$/.exec(v);
   if (!m) { box.classList.add('hidden'); return; }
   const all = await ensureCommands();
+  if (!all.length) {
+    box.innerHTML = '<div class="cmd"><b>Commands could not be loaded</b><span>The PC may be restarting. Type / again in a moment.</span></div>';
+    box.classList.remove('hidden');
+    return;
+  }
   const q = m[1].toLowerCase();
   const hits = all.filter(c => c.name.toLowerCase().startsWith(q)).slice(0, 8);
   if (!hits.length) { box.classList.add('hidden'); return; }
@@ -3401,6 +3429,8 @@ $('cmdlist').addEventListener('click', (e) => {
   $('input').focus();
   autosize();
 });
+
+setTimeout(() => { ensureCommands().catch(() => {}); }, 3000);   // the first "/" should not wait on the network
 
 window.__relaymoteT = { nav: performance.timeOrigin };
 const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now()); } catch {} };

@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.79
+
+- Typing / opens the list of commands and skills again. If the first attempt to load the list failed (for example while the PC was restarting), the list stayed empty until the page was reloaded. Now the phone keeps the last list it loaded and shows it straight away, tries again on the next /, and says so when the list cannot be loaded. The list also refreshes every few minutes, so newly added skills appear.
+
 ## 0.2.78
 
 - Fixed the background service's memory leak, which reached 1–2.5 GB and slowed everything down as it was swapped out. To list a session's running background agents, it read each long transcript whole, and a few short ids it kept from it held the entire file (up to hundreds of MB each) in memory. It now reads in pieces and copies what it keeps.

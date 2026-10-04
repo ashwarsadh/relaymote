@@ -284,7 +284,14 @@ pre.code{
 
 #main:has(#question:not(.hidden)) .send-btn,
 #main:has(#permission:not(.hidden)) .send-btn{background:var(--panel-2); color:var(--dim)}
-.attachments{display:flex; flex-wrap:wrap; gap:6px; padding:0 2px 8px}
+/* g1169: never more than a header line and ONE sideways-scrolling row, however many files */
+.attachments{display:flex; flex-direction:column; gap:4px; padding:0 2px 8px; min-width:0}
+.att-head{display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--dim); padding:0 2px}
+.att-clear{background:none; border:none; color:var(--accent); font:inherit; font-size:12px; cursor:pointer; min-height:32px; padding:0 4px}
+.att-strip{display:flex; flex-wrap:nowrap; gap:6px; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch; scrollbar-width:thin; padding-bottom:2px}
+.att-strip .att{flex:0 0 auto; max-width:min(calc(62vw / var(--z,1)), 230px)}
+.att-name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
 .att{font-size:12px; background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:5px 8px; color:var(--dim); display:flex; gap:6px; align-items:center}
 .att button{
   background:none; border:none; color:var(--dim); cursor:pointer; font-size:16px;

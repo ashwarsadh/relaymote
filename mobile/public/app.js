@@ -2176,11 +2176,32 @@ function renderChips(running, chips, uiRunning, pending) {
   }
 }
 
+// g1169: one chip per full-width row meant 15 attachments pushed the textbox and Send off the screen.
+// The chips now sit in ONE row that scrolls sideways, under a "N files · Clear all" line; each chip
+// keeps its own ×. The composer therefore never grows by more than two short rows.
 function renderAttachments() {
   const wrap = $('attachments');
   wrap.innerHTML = '';
-  const uploads = state.uploads || [];
-  wrap.classList.toggle('hidden', !state.attachments.length && !uploads.length);
+  const uploads = (state.uploads || []).filter(u => !u.cleared);
+  const total = state.attachments.length + uploads.length;
+  wrap.classList.toggle('hidden', !total);
+  if (total > 1) {
+    const going = uploads.filter(u => !u.failed).length, failed = uploads.filter(u => u.failed).length;
+    const head = document.createElement('div');
+    head.className = 'att-head';
+    head.innerHTML = '<span>' + total + ' files' + (going ? ' · ' + going + ' uploading' : '') + (failed ? ' · ' + failed + ' failed' : '') +
+      '</span><button type="button" class="att-clear">Clear all</button>';
+    head.querySelector('button').onclick = () => {
+      state.attachments = [];
+      state.uploads = uploads.filter(u => !u.failed);    // in flight: finish quietly and are dropped, not attached
+      state.uploads.forEach(u => { u.cleared = true; });
+      renderAttachments();
+    };
+    wrap.appendChild(head);
+  }
+  const strip = document.createElement('div');
+  strip.className = 'att-strip';
+  wrap.appendChild(strip);
   uploads.forEach(u => {
     const el = document.createElement('span');
     el.className = 'att uploading' + (u.failed ? ' failed' : '');
@@ -2192,14 +2213,15 @@ function renderAttachments() {
       el.onclick = (e) => { if (e.target.tagName === 'BUTTON') return; uploadOne(u.file, u); };
       el.querySelector('button').onclick = () => { const i = state.uploads.indexOf(u); if (i >= 0) state.uploads.splice(i, 1); renderAttachments(); };
     }
-    wrap.appendChild(el);
+    strip.appendChild(el);
   });
-  state.attachments.forEach((a, i) => {
+  state.attachments.forEach((a) => {
     const el = document.createElement('span');
     el.className = 'att';
-    el.innerHTML = `📎 ${esc(a.name)} <button aria-label="Remove">×</button>`;
-    el.querySelector('button').onclick = () => { state.attachments.splice(i, 1); renderAttachments(); };
-    wrap.appendChild(el);
+    el.title = a.name;
+    el.innerHTML = `<span class="att-name">📎 ${esc(a.name)}</span> <button aria-label="Remove ${esc(a.name)}">×</button>`;
+    el.querySelector('button').onclick = () => { const i = state.attachments.indexOf(a); if (i >= 0) state.attachments.splice(i, 1); renderAttachments(); };
+    strip.appendChild(el);
   });
 }
 
@@ -2234,7 +2256,7 @@ function uploadOne(f, rec) {
       let d = null;
       try { d = JSON.parse(x.responseText); } catch {}
       if (x.status >= 200 && x.status < 300 && d && d.path) {
-        state.attachments.push({ name: f.name, path: d.path });
+        if (!rec.cleared) state.attachments.push({ name: f.name, path: d.path });   // "Clear all" while it was in flight
         done();
         resolve(true);
       } else { fail(); resolve(false); }

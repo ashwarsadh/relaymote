@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.81
+
+- Attaching many files no longer pushes the message box off the screen. The files now sit in one row you can scroll sideways, under a line that reads "N files · Clear all". Each file can still be removed on its own, and long file names are shortened. A message with 30 attached files was tested and arrived with all 30.
+
 ## 0.2.80
 
 - Typing / now lists every command and skill in a scrolling list. It used to show only the first eight, which hid /goal and most skills until you typed more letters.

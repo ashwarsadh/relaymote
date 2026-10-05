@@ -912,6 +912,7 @@ function renderLog(messages, force) {
     html += `<div class="msg user pending${sn2 ? ' act' : ''}">${body}<span class="tick">${tick}</span></div>`;
   }
   log.innerHTML = html || '<div class="empty">No messages yet.</div>';
+  if (tts.el) ttsRelink();
   log.querySelectorAll('.ob-retry').forEach(b => {
     b.onclick = async (ev) => {
       ev.stopPropagation();
@@ -3529,7 +3530,7 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
    Position is saved per message, so a call, a lock or a reload resumes instead of restarting.
    While it plays, the message scrolls with it, unless you scroll yourself (paused for a few seconds).
    Nothing runs when nothing is playing: the retry timer exists only while an interruption is open. */
-const tts = { el: null, mode: 'audio', hash: '', chunks: [], i: 0, rate: 1, userScrollAt: 0, token: 0,
+const tts = { beeps: [], full: '', idx: -1, el: null, mode: 'audio', hash: '', chunks: [], i: 0, rate: 1, userScrollAt: 0, token: 0,
               audio: null, loading: false, userPaused: false, retry: null, retryUntil: 0, seeking: false, savedAt: 0 };
 // Speeds he can step through (g1011: "add 1.1, 1.2 … can remove 2x"). A saved speed snaps to the nearest one.
 const TTS_RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8];
@@ -3601,23 +3602,52 @@ function ttsPrefetch() {
 }
 
 // Read-on (g1011): after a message ends, a short beep, then the next newer message, until the latest.
-let ttsBeepUrl = null;
-function ttsBeep() {
-  if (ttsBeepUrl) return ttsBeepUrl;
-  const rate = 16000, n = Math.round(rate * 0.18), b = new DataView(new ArrayBuffer(44 + n * 2));
+// g1252: his OWN message gets a different cue (two low notes) from a reply (one high note), so he can
+// tell by ear whose words come next.
+const ttsBeepUrl = {};
+const TTS_TONES = { reply: [[880, 0.18]], user: [[523, 0.09], [0, 0.06], [392, 0.12]] };
+function ttsBeep(kind) {
+  kind = kind === 'user' ? 'user' : 'reply';
+  if (ttsBeepUrl[kind]) return ttsBeepUrl[kind];
+  const rate = 16000, segs = TTS_TONES[kind], n = segs.reduce((t, g) => t + Math.round(rate * g[1]), 0);
+  const b = new DataView(new ArrayBuffer(44 + n * 2));
   const w = (o, s) => { for (let k = 0; k < s.length; k++) b.setUint8(o + k, s.charCodeAt(k)); };
   w(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true);
   b.setUint16(22, 1, true); b.setUint32(24, rate, true); b.setUint32(28, rate * 2, true); b.setUint16(32, 2, true);
   b.setUint16(34, 16, true); w(36, 'data'); b.setUint32(40, n * 2, true);
-  for (let i = 0; i < n; i++) {
-    const env = Math.min(1, i / 160, (n - i) / 400);
-    b.setInt16(44 + i * 2, Math.round(Math.sin(2 * Math.PI * 880 * i / rate) * 9000 * env), true);
+  let o = 0;
+  for (const [hz, sec] of segs) {
+    const m = Math.round(rate * sec);
+    for (let i = 0; i < m; i++) {
+      const env = Math.min(1, i / 160, (m - i) / 400);
+      b.setInt16(44 + (o + i) * 2, hz ? Math.round(Math.sin(2 * Math.PI * hz * i / rate) * 9000 * env) : 0, true);
+    }
+    o += m;
   }
-  ttsBeepUrl = URL.createObjectURL(new Blob([b.buffer], { type: 'audio/wav' }));
-  return ttsBeepUrl;
+  ttsBeepUrl[kind] = URL.createObjectURL(new Blob([b.buffer], { type: 'audio/wav' }));
+  return ttsBeepUrl[kind];
+}
+const ttsSpeakable = () => Array.from(document.querySelectorAll('#log .msg')).filter(m => m.querySelector('.speak'));
+// g1252: every update of the chat rebuilds #log, so the bubble being read is replaced by a copy and the
+// old one is no longer in the page. Looking for "the one after it" by position then found nothing, and
+// read-on stopped after ONE message exactly when more replies were arriving. Find the copy by its text
+// (or, for a reply still being written, by how it began), nearest its old position.
+function ttsRelink() {
+  if (!tts.el || tts.el.isConnected || !tts.full) return tts.el;
+  const all = ttsSpeakable(), head = tts.full.slice(0, 120);
+  let best = null, dist = Infinity;
+  all.forEach((m, i) => {
+    const t = ttsText(m);
+    if (t !== tts.full && !(head.length >= 20 && t.startsWith(head))) return;
+    const d = Math.abs(i - tts.idx);
+    if (d < dist) { best = m; dist = d; }
+  });
+  if (best) { tts.el = best; tts.idx = all.indexOf(best); best.classList.add('speaking'); }
+  return tts.el;
 }
 function ttsNextMsg(el) {
-  const all = Array.from(document.querySelectorAll('#log .msg')).filter(m => m.querySelector('.speak'));
+  if (el === tts.el) el = ttsRelink();
+  const all = ttsSpeakable();
   const i = all.indexOf(el);
   return i >= 0 ? all[i + 1] || null : null;
 }
@@ -3628,7 +3658,9 @@ function ttsReadOn() {
   if (tts.mode !== 'audio') return ttsStart(next, true);
   const a = ttsAudio();
   tts.beepNext = next; tts.loading = true;
-  try { a.src = ttsBeep(); a.playbackRate = 1; const p = a.play(); if (p && p.catch) p.catch(() => { tts.beepNext = null; ttsStart(next, true); }); }
+  const kind = next.classList.contains('user') ? 'user' : 'reply';
+  tts.beeps.push(kind); if (tts.beeps.length > 20) tts.beeps.shift();
+  try { a.src = ttsBeep(kind); a.playbackRate = 1; const p = a.play(); if (p && p.catch) p.catch(() => { tts.beepNext = null; ttsStart(next, true); }); }
   catch { tts.beepNext = null; ttsStart(next, true); }
 }
 
@@ -3810,7 +3842,7 @@ function ttsAudio() {
   a.addEventListener('ended', () => {
     if (tts.beepNext) { const n = tts.beepNext; tts.beepNext = null; return ttsStart(n, true); }
     if (tts.loading || tts.mode !== 'audio') return;
-    if (tts.parts && tts.pi < tts.parts.length - 1) { ttsPosForget(tts.hash); return ttsStart(tts.el, true, tts.pi + 1); }
+    if (tts.parts && tts.pi < tts.parts.length - 1) { ttsPosForget(tts.hash); return ttsStart(ttsRelink(), true, tts.pi + 1); }
     ttsReadOn();
   });
   a.addEventListener('error', () => { if (tts.loading || !tts.el) return; toast('Read aloud stopped: the audio could not be played', true); ttsStop(); });
@@ -3849,7 +3881,7 @@ async function ttsStart(msgEl, chained, part) {
   } else ttsStop();
   const my = ++tts.token;
   tts.parts = parts; tts.pi = pi;
-  tts.el = msgEl; tts.hash = ttsHash(text); tts.userScrollAt = chained ? tts.userScrollAt : 0; tts.userPaused = false; tts.loading = true; tts.mode = 'audio';
+  tts.el = msgEl; tts.full = full; tts.idx = ttsSpeakable().indexOf(msgEl); tts.hash = ttsHash(text); tts.userScrollAt = chained ? tts.userScrollAt : 0; tts.userPaused = false; tts.loading = true; tts.mode = 'audio';
   const a = ttsAudio();
   if (!chained) { try { a.src = ttsSilent(); const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch {} }   // inside the tap
   ttsSessionInit(); ttsMeta();

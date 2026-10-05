@@ -1,5 +1,10 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.82
+
+- Read aloud keeps going: when several replies arrive back to back, each one is played in turn after a beep, instead of stopping after the first. Updating the chat used to lose track of the message being read.
+- Your own messages get their own cue (two low notes) before they are read; a reply gets the single high beep, so you can tell by ear whose words come next.
+
 ## 0.2.81
 
 - Attaching many files no longer pushes the message box off the screen. The files now sit in one row you can scroll sideways, under a line that reads "N files · Clear all". Each file can still be removed on its own, and long file names are shortened. A message with 30 attached files was tested and arrived with all 30.

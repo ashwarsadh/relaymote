@@ -818,7 +818,7 @@ function renderLog(messages, force) {
   if (state.open && state._suggLive !== undefined && isLive() !== state._suggLive) renderSuggestion(state.meta);
   renderLive();
   const sig = messages.map(keyOf).join('|');
-  if (!force && sig === lastSig) return;
+  if (!force && sig === lastSig) { ttsWake(); return; }
 
   const log = $('log');
   if (!force) {
@@ -912,7 +912,7 @@ function renderLog(messages, force) {
     html += `<div class="msg user pending${sn2 ? ' act' : ''}">${body}<span class="tick">${tick}</span></div>`;
   }
   log.innerHTML = html || '<div class="empty">No messages yet.</div>';
-  if (tts.el) ttsRelink();
+  if (tts.el) { ttsRelink(); ttsWake(); }
   log.querySelectorAll('.ob-retry').forEach(b => {
     b.onclick = async (ev) => {
       ev.stopPropagation();
@@ -3530,7 +3530,7 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
    Position is saved per message, so a call, a lock or a reload resumes instead of restarting.
    While it plays, the message scrolls with it, unless you scroll yourself (paused for a few seconds).
    Nothing runs when nothing is playing: the retry timer exists only while an interruption is open. */
-const tts = { beeps: [], full: '', idx: -1, el: null, mode: 'audio', hash: '', chunks: [], i: 0, rate: 1, userScrollAt: 0, token: 0,
+const tts = { beeps: [], full: '', waiting: false, idx: -1, el: null, mode: 'audio', hash: '', chunks: [], i: 0, rate: 1, userScrollAt: 0, token: 0,
               audio: null, loading: false, userPaused: false, retry: null, retryUntil: 0, seeking: false, savedAt: 0 };
 // Speeds he can step through (g1011: "add 1.1, 1.2 … can remove 2x"). A saved speed snaps to the nearest one.
 const TTS_RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8];
@@ -3638,7 +3638,8 @@ function ttsRelink() {
   let best = null, dist = Infinity;
   all.forEach((m, i) => {
     const t = ttsText(m);
-    if (t !== tts.full && !(head.length >= 20 && t.startsWith(head))) return;
+    // A short reply that then grew is matched only at its own place: "Done." begins many replies.
+    if (t !== tts.full && !(t.startsWith(head) && (head.length >= 20 || i === tts.idx))) return;
     const d = Math.abs(i - tts.idx);
     if (d < dist) { best = m; dist = d; }
   });
@@ -3651,18 +3652,37 @@ function ttsNextMsg(el) {
   const i = all.indexOf(el);
   return i >= 0 ? all[i + 1] || null : null;
 }
-function ttsReadOn() {
-  const next = tts.el && ttsNextMsg(tts.el);
-  if (!next) { ttsPosForget(tts.hash); return ttsStop(); }
-  ttsPosForget(tts.hash);
-  if (tts.mode !== 'audio') return ttsStart(next, true);
-  const a = ttsAudio();
-  tts.beepNext = next; tts.loading = true;
-  const kind = next.classList.contains('user') ? 'user' : 'reply';
-  tts.beeps.push(kind); if (tts.beeps.length > 20) tts.beeps.shift();
-  try { a.src = ttsBeep(kind); a.playbackRate = 1; const p = a.play(); if (p && p.catch) p.catch(() => { tts.beepNext = null; ttsStart(next, true); }); }
-  catch { tts.beepNext = null; ttsStart(next, true); }
+// The replies of one turn share ONE bubble, so "the next reply" is often more text in the bubble just
+// read, not a new bubble (g1252). What was added to it is read first, then the next bubble; while the
+// session is still working and nothing new has come, read-on WAITS for it instead of stopping.
+function ttsGrowth() {
+  const el = ttsRelink();
+  if (!el || !el.isConnected || !tts.full) return '';
+  const cur = ttsText(el);
+  if (cur.length <= tts.full.length + 1) return '';
+  if (!cur.startsWith(tts.full) && !cur.startsWith(tts.full.slice(0, 120))) return '';
+  return cur.slice(tts.full.length).trim();
 }
+function ttsReadOn() {
+  tts.waiting = false;
+  const tail = ttsGrowth();
+  const next = tail ? tts.el : tts.el && ttsNextMsg(tts.el);
+  ttsPosForget(tts.hash);
+  if (!next) {
+    if (tts.el && typeof isLive === 'function' && isLive()) { tts.waiting = true; tts.loading = false; return ttsPaint(); }
+    return ttsStop();
+  }
+  if (tts.mode !== 'audio') return ttsStart(next, true, 0, tail || null);
+  const a = ttsAudio();
+  tts.beepNext = { el: next, tail: tail || null }; tts.loading = true;
+  const kind = !tail && next.classList.contains('user') ? 'user' : 'reply';
+  tts.beeps.push(kind); if (tts.beeps.length > 20) tts.beeps.shift();
+  const go = () => { tts.beepNext = null; ttsStart(next, true, 0, tail || null); };
+  try { a.src = ttsBeep(kind); a.playbackRate = 1; const p = a.play(); if (p && p.catch) p.catch(go); }
+  catch { go(); }
+}
+// Called on every chat update while read-on waits: something new, or the turn ended.
+function ttsWake() { if (tts.waiting && (!isLive() || ttsGrowth() || ttsNextMsg(tts.el))) ttsReadOn(); }
 
 function ttsSilent() {                         // played inside the tap, so the real audio may start after the fetch
   if (ttsSilentUrl) return ttsSilentUrl;
@@ -3738,6 +3758,7 @@ function ttsPaint() {
   const pb = bar.querySelector('.ttsplay');
   pb.textContent = playing ? '⏸' : '▶';
   pb.title = tts.loading ? 'Preparing the audio…' : tts.retry ? 'Interrupted: will resume, or tap ▶' : '';
+  if (tts.waiting) { pb.textContent = '⏳'; pb.title = 'Waiting for the next message (tap to stop)'; }
   bar.classList.toggle('loading', tts.loading);
   bar.classList.toggle('synth', synth);
   bar.classList.toggle('hidden', !tts.el);
@@ -3808,7 +3829,7 @@ function ttsPlay() {
   const p = a.play(); if (p && p.catch) p.catch(() => {});
 }
 function ttsToggle() {
-  if (tts.mode === 'synth') return ttsStop();
+  if (tts.mode === 'synth' || tts.waiting) return ttsStop();
   const a = tts.audio;
   if (!a || tts.loading) return;
   if (a.paused) ttsPlay();
@@ -3840,7 +3861,7 @@ function ttsAudio() {
     ttsInterrupted();
   });
   a.addEventListener('ended', () => {
-    if (tts.beepNext) { const n = tts.beepNext; tts.beepNext = null; return ttsStart(n, true); }
+    if (tts.beepNext) { const n = tts.beepNext; tts.beepNext = null; return ttsStart(n.el, true, 0, n.tail); }
     if (tts.loading || tts.mode !== 'audio') return;
     if (tts.parts && tts.pi < tts.parts.length - 1) { ttsPosForget(tts.hash); return ttsStart(ttsRelink(), true, tts.pi + 1); }
     ttsReadOn();
@@ -3869,19 +3890,19 @@ function ttsSpeak() {
   speechSynthesis.speak(u);
 }
 
-async function ttsStart(msgEl, chained, part) {
+async function ttsStart(msgEl, chained, part, tail) {
   if (!chained && tts.el === msgEl) return ttsToggle();    // the same button again = pause / play
-  const full = ttsText(msgEl);
+  const whole = ttsText(msgEl), full = tail || whole;
   const parts = part ? tts.parts : ttsSplit(full);
   const pi = part || 0, text = parts[pi];
-  if (!text) return chained ? (tts.el = msgEl, ttsReadOn()) : undefined;
+  if (!text) return chained ? (tts.el = msgEl, tts.full = whole, ttsReadOn()) : undefined;
   if (chained) {                               // keep the audio element playing, so a locked screen carries on
     if (typeof speechSynthesis !== 'undefined') { try { speechSynthesis.cancel(); } catch {} }
     if (tts.el) tts.el.classList.remove('speaking');
   } else ttsStop();
   const my = ++tts.token;
   tts.parts = parts; tts.pi = pi;
-  tts.el = msgEl; tts.full = full; tts.idx = ttsSpeakable().indexOf(msgEl); tts.hash = ttsHash(text); tts.userScrollAt = chained ? tts.userScrollAt : 0; tts.userPaused = false; tts.loading = true; tts.mode = 'audio';
+  tts.el = msgEl; tts.full = whole; tts.waiting = false; tts.idx = ttsSpeakable().indexOf(msgEl); tts.hash = ttsHash(text); tts.userScrollAt = chained ? tts.userScrollAt : 0; tts.userPaused = false; tts.loading = true; tts.mode = 'audio';
   const a = ttsAudio();
   if (!chained) { try { a.src = ttsSilent(); const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch {} }   // inside the tap
   ttsSessionInit(); ttsMeta();
@@ -3922,7 +3943,7 @@ function ttsStop() {
   if (tts.audio) { try { tts.audio.pause(); tts.audio.removeAttribute('src'); tts.audio.load(); } catch {} }
   if ('mediaSession' in navigator) { try { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; } catch {} }
   if (tts.el) tts.el.classList.remove('speaking');
-  tts.el = null; tts.chunks = []; tts.i = 0; tts.loading = false; tts.userPaused = false; tts.seeking = false; tts.mode = 'audio'; tts.beepNext = null;
+  tts.el = null; tts.chunks = []; tts.i = 0; tts.loading = false; tts.userPaused = false; tts.seeking = false; tts.mode = 'audio'; tts.beepNext = null; tts.waiting = false;
   ttsPaint();
 }
 if (TTS_OK) {

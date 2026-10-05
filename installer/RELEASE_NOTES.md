@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.83
+
+- Read aloud also reads replies that are added to the message being read (one turn's replies share a bubble), and when it reaches the end while the session is still working it waits for the next reply instead of stopping. The play button shows an hourglass while it waits; tap it to stop.
+
 ## 0.2.82
 
 - Read aloud keeps going: when several replies arrive back to back, each one is played in turn after a beep, instead of stopping after the first. Updating the chat used to lose track of the message being read.

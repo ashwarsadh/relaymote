@@ -462,6 +462,16 @@ function flatten(row) {
   if (t === 'attachment' && row.attachment) {
     const a = row.attachment;
     if (a.type === 'queued_command' && a.origin && a.origin.kind === 'peer') return peerRow(a.origin, ts, a.prompt);
+    // g1384: his message sent while the session was busy is handed to the running turn, and the
+    // transcript records it ONLY as this row, never as a user message. It was dropped here, so his
+    // message vanished from the chat once delivered (39 of them in one long chat).
+    if (a.type === 'queued_command' && a.origin && a.origin.kind === 'human') {
+      const p = a.prompt;
+      const text = typeof p === 'string' ? p : Array.isArray(p) ? p.filter(b => b && b.type === 'text').map(b => b.text).join('\n') : '';
+      if (!text.trim()) return null;
+      const u = unwrap(text);
+      return u.injected ? null : { role: 'user', ts, text: clip(u.text, SPOKEN_LIMIT), midTurn: true };
+    }
     if (!USER_ATTACHMENTS.has(a.type)) return null;
     return { role: 'attachment', ts, kind: a.type, text: clip(a.path || a.name || a.filename || a.type, 300) };
   }

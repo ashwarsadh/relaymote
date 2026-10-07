@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.85
+
+- Read aloud scrolls steadily through a long reply again. A long reply is read in parts, and the screen followed each part as if it were the whole reply, so it ran to the bottom during one part and jumped back when the next began. It now follows the position in the whole reply.
+
 ## 0.2.84
 
 - A message you send while the session is busy no longer disappears from the chat. It is handed to the running turn, and Claude Code records it in a different form from a normal message, which Relaymote skipped; it now shows in its place in the conversation.

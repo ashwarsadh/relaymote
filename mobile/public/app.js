@@ -3744,6 +3744,21 @@ function ttsFrac() {
   const a = tts.audio;
   return a && a.duration > 0 ? Math.min(1, a.currentTime / a.duration) : 0;
 }
+// Where in the WHOLE message the voice is (g1409). ttsFrac() is progress through the current part
+// only; the screen followed it as if it were the whole message, so every part swept the bubble from
+// top to bottom: it ran to the end during part 1 and jumped back when part 2 began. Each part now
+// covers only its own share of the text, by characters. A tail being read (text added to the bubble
+// after it was started) is the END of the bubble, so it is placed there.
+function ttsMsgFrac() {
+  const f = ttsFrac(), parts = tts.parts;
+  if (tts.mode === 'synth' || !parts || parts.length < 1) return f;
+  const lens = parts.map(p => p.length), spoken = lens.reduce((a, b) => a + b, 0);
+  const whole = Math.max(spoken, (tts.full || '').length);
+  if (!whole) return f;
+  let at = whole - spoken;
+  for (let k = 0; k < tts.pi && k < lens.length; k++) at += lens[k];
+  return Math.min(1, (at + f * (lens[tts.pi] || 0)) / whole);
+}
 function ttsPaint() {
   const bar = ttsBar();
   const a = tts.audio, synth = tts.mode === 'synth';
@@ -3771,7 +3786,7 @@ function ttsFollow() {
   const log = $('log');
   // Rect-based: a message's offsetParent is #main, not the scrolling #log.
   const y = log.scrollTop + (el.getBoundingClientRect().top - log.getBoundingClientRect().top) +
-            ttsFrac() * el.offsetHeight - log.clientHeight / 3;
+            ttsMsgFrac() * el.offsetHeight - log.clientHeight / 3;
   log.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
 }
 

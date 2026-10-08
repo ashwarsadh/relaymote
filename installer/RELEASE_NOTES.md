@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.86
+
+- Relaymote no longer tries to turn on Claude's debugger while Claude Desktop shows its Sign In screen (for example after you switch accounts). It used to click through the menus there and fail; now it waits, and turns the debugger on within a minute of you signing in.
+
 ## 0.2.85
 
 - Read aloud scrolls steadily through a long reply again. A long reply is read in parts, and the screen followed each part as if it were the whole reply, so it ran to the bottom during one part and jumped back when the next began. It now follows the position in the whole reply.

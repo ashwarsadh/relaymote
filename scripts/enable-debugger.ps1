@@ -1,4 +1,4 @@
-param([switch]$Force, [int]$Port = 9229, [int]$Countdown = 3, [switch]$DryRun, [int]$SnoozeMs = 5000, [int]$MaxSnoozeMs = 60000)
+param([switch]$Force, [int]$Port = 9229, [int]$Countdown = 3, [switch]$DryRun, [int]$SnoozeMs = 5000, [int]$MaxSnoozeMs = 60000, [int64]$ProbeSignIn = 0)
 # enable-debugger.ps1 - switch on Claude Desktop's main-process debugger for Relaymote (Windows).
 #
 # Clicks Menu > Developer > Enable Main Process Debugger in the Claude Desktop window through UI
@@ -87,6 +87,15 @@ function InputKind($p0) {
 }
 function Say($m, $c) { if ($script:bar) { try { $script:bar.Say($m, $c) } catch {} } }
 
+# The Sign In screen's own buttons, read through UI Automation (reading, never clicking).
+function SignInScreen($hwnd) {
+  try {
+    $r = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$hwnd)
+    $conds = @('Continue with Google', 'Continue with email', 'Continue with Email', 'Continue with SSO') | ForEach-Object {
+      New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $_) }
+    return [bool]$r.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.OrCondition($conds)))
+  } catch { return $false }
+}
 function Finish([int]$code, [string]$msg) {
   Log $msg
   if ($script:cur0) {
@@ -113,6 +122,8 @@ function Finish([int]$code, [string]$msg) {
   exit $code
 }
 
+# -ProbeSignIn <window handle>: only answer "is this the Sign In screen" (exit 10 yes, 0 no). Test seam.
+if ($ProbeSignIn) { if (SignInScreen $ProbeSignIn) { Log 'sign-in screen'; exit 10 } else { Log 'not the sign-in screen'; exit 0 } }
 if ((IsUp) -and (-not $Force) -and (-not $DryRun)) { Log 'debugger already on'; exit 0 }
 $cs = [N]::ConnState()
 if ($cs -eq 4) { Finish 8 'the Windows session is disconnected (Remote Desktop closed), and Windows does not deliver clicks to it' }
@@ -128,6 +139,10 @@ try {
   $signedIn = [bool]($cfg.'oauth:tokenCacheV2' -or $cfg.'oauth:tokenCache')
 } catch {}
 if (-not $signedIn) { Finish 10 'Claude Desktop is not signed in yet' }
+# g1518: after an account switch the token cache above still holds the OLD account's token while the
+# window shows Sign In ("Continue with Google / Continue with email"), so that test passed and the menus
+# were clicked on the login screen. Look at what the window actually shows; nothing is clicked here.
+if (SignInScreen $h) { Finish 10 'Claude Desktop is showing its Sign In screen' }
 try { $age = ((Get-Date) - $cl.StartTime).TotalSeconds; if ($age -lt 20) { Start-Sleep -Milliseconds ([int]((20 - $age) * 1000)) } } catch {}
 
 # The on-screen countdown, top centre of the screen Claude Desktop is on (not over its text box). It never takes focus

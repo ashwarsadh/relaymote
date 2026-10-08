@@ -378,6 +378,11 @@ pre.code{
 
 .msg.pending .tick .heldnote{font-size:10.5px; color:inherit}
 
+.msg.pending.failed{border:2px solid var(--err)}
+.msg.pending.failed .tick .pend-retry, .msg.pending.failed .tick .pend-edit{min-height:32px; padding:0 12px;
+  border:1px solid var(--on-accent-line); border-radius:8px; background:transparent; color:inherit; font:inherit}
+.msg.pending.failed .tick .pend-retry{font-weight:600}
+
 .msg.pending .tick .ob-cancel{margin-left:auto; min-width:36px; min-height:32px; text-decoration:none;
   border:1px solid var(--on-accent-line); border-radius:8px; padding:0 8px; text-align:center}
 

@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.88
+
+- A message that fails to send no longer disappears. If the phone gets no answer from the PC (a dropped connection) or the PC accepts it and then fails, the message stays in the chat marked "not sent", with the reason, a Retry button and an Edit button. Its text is also kept as the draft, so reloading the app does not lose it.
+
 ## 0.2.87
 
 - Haiku 5.5 keeps its effort level. Relaymote assumed no Haiku model has an effort setting (true of Haiku 4.5), so it dropped the effort when starting a Haiku 5.5 session and hid the effort picker. Only Haiku 4.x is treated that way now.

@@ -860,7 +860,7 @@ function renderLog(messages, force) {
     const norm = (t) => String(t || '').replace(/\s+/g, ' ').trim();
     const want = norm(p.text).slice(0, 60);
     const seen = want ? messages.some(m => norm(m.text).includes(want)) : false;
-    if (seen || Date.now() - p.at > (p.text ? 90000 : 30000)) state.pending = null;
+    if (seen || (p.status !== 'failed' && Date.now() - p.at > (p.text ? 90000 : 30000))) state.pending = null;
   }
   retireSpentDraft(messages);
 
@@ -906,13 +906,18 @@ function renderLog(messages, force) {
       : names.length ? '<div class="muted">attached: ' + names.join(', ') + '</div>'
       : '<div class="muted">(empty)</div>';
     const sn2 = p2.status === 'queued' ? (p2.held && p2.outboxId ? heldControls(p2.outboxId) : sendNowBtn()) : '';
-    const tick = p2.status === 'sent' ? 'sent ✓'
+    const failed = p2.status === 'failed';
+    const tick = failed ? 'not sent — ' + esc(p2.error || 'no answer from the PC') +
+                   ' <button class="pend-retry">Retry</button> <button class="pend-edit">Edit</button>'
+               : p2.status === 'sent' ? 'sent ✓'
                : p2.status === 'queued' ? 'queued — goes in at its next step' + waitedNote(Date.now() - (p2.at || Date.now())) + sn2 + (p2.held ? '' : heldNote(p2.at))
                : 'sending…';
-    html += `<div class="msg user pending${sn2 ? ' act' : ''}">${body}<span class="tick">${tick}</span></div>`;
+    html += `<div class="msg user pending${sn2 || failed ? ' act' : ''}${failed ? ' failed' : ''}">${body}<span class="tick">${tick}</span></div>`;
   }
   log.innerHTML = html || '<div class="empty">No messages yet.</div>';
   if (tts.el) { ttsRelink(); ttsWake(); }
+  log.querySelectorAll('.pend-retry').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); retryFailedSend(); }; });
+  log.querySelectorAll('.pend-edit').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); editFailedSend(); }; });
   log.querySelectorAll('.ob-retry').forEach(b => {
     b.onclick = async (ev) => {
       ev.stopPropagation();
@@ -1650,10 +1655,9 @@ function connectStream(watch) {
       renderLog(state.messages, true);
       return;
     }
-    state.pending = null;
-    if (r.text) restoreFailed(r.id || state.open, r.text);
-    renderLog(state.messages, true);
-    toast(sendError(r.error), true);
+    // Accepted by the PC, then failed there: the same "not sent" bubble with Retry, never a vanished one.
+    const p0 = state.pending;
+    failSend(r.id || (p0 && p0.sid) || state.open, r.text || (p0 && p0.text) || '', (p0 && p0.atts) || [], { message: r.error });
 
     if (String(r.error || '').includes('blocked-by-dialog')) {
       state.resendAfterAnswer = { id: r.id || state.open, text: r.text || $('input').value || '' };
@@ -2329,13 +2333,47 @@ async function send(target) {
     }
     renderLog(state.messages, true);
   } catch (e) {
-    state.pending = null;
-    restoreFailed(id, text);
-    state.attachments = atts.map(p => ({ name: p.split(/[\\/]/).pop(), path: p }));
-    renderAttachments();
-    renderLog(state.messages, true);
-    toast(sendError(e.message), true);
+    failSend(id, text, atts, e);
   } finally { state.sending = false; $('btn-send').disabled = false; }
+}
+
+// g1518b: "I sent a msg there but it times out and vanish". A send that failed (25 s with no answer:
+// the phone lost its connection) used to remove his bubble and only quietly refill an EMPTY box, so the
+// message was simply gone. It now stays in the chat as "not sent", with Retry and Edit; the text is also
+// kept as the chat's draft, so a reload does not lose it either.
+function failSend(id, text, atts, e) {
+  clearUnsent(id);
+  if (text && !loadDraft(id).trim()) saveDraft(id, text);
+  const m = String((e && e.message) || '');
+  const why = /timed out|abort|Failed to fetch|NetworkError|Load failed/i.test(m)
+    ? 'the phone got no answer from the PC (connection dropped?)' : sendError(m);
+  state.pending = { sid: id, text, atts: atts || [], status: 'failed', error: why, at: Date.now() };
+  renderLog(state.messages, true);
+  toast('Not sent: ' + why + '. Tap Retry on the message.', true);
+}
+async function retryFailedSend() {
+  const p = state.pending;
+  if (!p || p.status !== 'failed' || state.sending) return;
+  state.sending = true;
+  p.status = 'sending'; p.at = Date.now(); markUnsent(p.sid, p.text);
+  renderLog(state.messages, true);
+  try {
+    const r = await api('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: p.sid, text: p.text, attachments: p.atts || [] }) });
+    if (state.pending === p) { if (r && r.jobId) p.jobId = r.jobId; p.status = 'sent'; }
+    if (loadDraft(p.sid).trim() === String(p.text || '').trim()) { clearDraft(p.sid); if (state.open === p.sid) { $('input').value = ''; autosize(); } }
+    renderLog(state.messages, true);
+  } catch (e) { failSend(p.sid, p.text, p.atts, e); }
+  finally { state.sending = false; }
+}
+function editFailedSend() {
+  const p = state.pending;
+  if (!p || p.status !== 'failed') return;
+  state.pending = null;
+  if (state.open === p.sid) { $('input').value = p.text || ''; autosize(); saveDraft(p.sid, p.text || ''); }
+  state.attachments = (p.atts || []).map(x => ({ name: String(x).split(/[\\/]/).pop(), path: x }));
+  renderAttachments();
+  renderLog(state.messages, true);
 }
 
 // Retires the SENT record once his message shows in the conversation. Never touches the box or the

@@ -64,7 +64,8 @@ async function newSession(opts = {}) {
   }
   const m = resolveModel(model, modelIds || savedModelIds());
   if (!m.ok) return { ...m, message: m.message + ' Nothing was created.' };
-  const wantEffort = effort && !/haiku/i.test(m.id || '') ? String(effort).toLowerCase() : undefined;
+  // Haiku 4.x has no effort setting; Haiku 5.5 does (Desktop records and keeps it, measured g1518).
+  const wantEffort = effort && !/haiku[- ]?4/i.test(m.id || '') ? String(effort).toLowerCase() : undefined;
   if (dryRun) {
     return { ok: true, dryRun: true, cwd, model: m.id, effort: wantEffort || null,
              note: 'Folder and model checked. No session was created.' };

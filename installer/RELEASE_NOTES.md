@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.87
+
+- Haiku 5.5 keeps its effort level. Relaymote assumed no Haiku model has an effort setting (true of Haiku 4.5), so it dropped the effort when starting a Haiku 5.5 session and hid the effort picker. Only Haiku 4.x is treated that way now.
+
 ## 0.2.86
 
 - Relaymote no longer tries to turn on Claude's debugger while Claude Desktop shows its Sign In screen (for example after you switch accounts). It used to click through the menus there and fail; now it waits, and turns the debugger on within a minute of you signing in.

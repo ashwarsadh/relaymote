@@ -2031,11 +2031,11 @@ $('question').addEventListener('input', (e) => {
   state.qother[+box.dataset.q] = box.value;
 });
 
-const MODEL_HAS_EFFORT = (m) => !/^haiku/i.test(String(m || ''));
+const MODEL_HAS_EFFORT = (m) => !/^(claude-)?haiku[- ]?4/i.test(String(m || ''));   // Haiku 5.5 has effort (g1518)
 
 function renderNewSegs() {
   seg($('new-model'), state.boot.models, state.newModel, async (v) => { state.newModel = v; renderNewSegs(); });
-  const canEffort = MODEL_HAS_EFFORT(modelFamily(state.newModel));
+  const canEffort = MODEL_HAS_EFFORT(modelId(state.newModel));
   seg($('new-effort'), state.boot.efforts, canEffort ? state.newEffort : null,
       async (v) => { state.newEffort = v; renderNewSegs(); });
   const box = $('new-effort');
@@ -2599,7 +2599,7 @@ function openSheet() {
   const effortShown = (ov && ov.effort) || m.effort;
   seg($('seg-model'), state.boot.models, pickByFamily(state.boot.models, modelShown),
       pick('/api/model', 'model', 'Model'));
-  const canEffort = MODEL_HAS_EFFORT(modelFamily(modelShown));
+  const canEffort = MODEL_HAS_EFFORT(modelId(modelShown));
   seg($('seg-effort'), state.boot.efforts, canEffort ? effortShown : null,
       pick('/api/effort', 'effort', 'Effort'));
   [...$('seg-effort').children].forEach(c => { c.disabled = !canEffort; });

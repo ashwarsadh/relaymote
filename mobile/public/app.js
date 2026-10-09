@@ -75,9 +75,10 @@ const apiOnce = async (path, opts) => {
   if (!r.ok) {
     if (r.status === 401 || r.status === 403) { reauth(); throw new Error('signin-required'); }
     let msg = null;
-    if ((r.headers.get('content-type') || '').includes('json')) { try { const j = await r.json(); msg = j.error || j.message || null; } catch {} }
+    let code = null;
+    if ((r.headers.get('content-type') || '').includes('json')) { try { const j = await r.json(); code = j.error || null; msg = j.message || j.error || null; } catch {} }
     if (!msg && isPcDownStatus(r.status)) throw connErr('pc-down', r.status);
-    throw Object.assign(new Error(msg || ('Relaymote on your PC hit an error (code ' + r.status + '). Try again; if it repeats, restart Relaymote on the PC.')), { status: r.status });
+    throw Object.assign(new Error(msg || ('Relaymote on your PC hit an error (code ' + r.status + '). Try again; if it repeats, restart Relaymote on the PC.')), { status: r.status, code });
   }
   const ct = r.headers.get('content-type') || '';
   if (!ct.includes('json')) { reauth(); throw new Error('signin-required'); }
@@ -1332,6 +1333,7 @@ function noteLinkState(d) {
   state.boot.cdp = d.cdp;
   if (d.desktop) state.boot.desktop = d.desktop;
   renderDeskState();
+  if (window.relaymoteDeskState) window.relaymoteDeskState(d.cdp, d.desktop);
   paintConnDot();
   state.snapshotAt = d.snapshotAt || null;
   renderBlocker(d.blocker);
@@ -1357,6 +1359,9 @@ function renderDeskState() {
   const n = obItems.length;
   // While the phone cannot reach the PC, the PC's last-known state is stale: hide that banner (settings-ui).
   document.body.classList.toggle('pc-unreachable', !!c);
+  const coming = !c && d && /^(restarting|starting|link-off)$/.test(d.state);
+  if (coming && !state.deskPoll) state.deskPoll = setInterval(() => { if (!document.hidden) loadSessions(); }, 8000);
+  if (!coming && state.deskPoll) { clearInterval(state.deskPoll); state.deskPoll = null; }
   if (!c && !d) { el.classList.add('hidden'); el.innerHTML = ''; return; }
   el.classList.remove('hidden');
   el.dataset.state = c ? 'phone-' + c.kind : d.state;
@@ -2477,6 +2482,9 @@ async function obPost(it) {
     return true;
   } catch (e) {
     if (e.message === 'signin-required') { it.state = 'waiting'; it.error = 'this phone needs pairing again'; obSave(); return false; }
+    if (e.code === 'DESKTOP_RESTARTING') {   // not the message's fault: wait for Claude, do not count a failure (g1638)
+      it.state = 'waiting'; it.error = 'Claude is restarting on the PC'; it.next = Date.now() + 10000; obSave(); obRepaint(it.sid); loadSessions(); return false;
+    }
     obFailed(it, e.conn ? CONN_TITLE[e.kind].replace(/^Your/, 'your') : sendError(e.message), !!e.conn);
     if (e.conn) noteConnFail(e);
     return !e.conn;

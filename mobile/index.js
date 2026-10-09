@@ -627,6 +627,9 @@ async function cdpCached(ttl = 4000) {
 }
 
 function deskNow() { deskState.note({ cdp: cdpVal }); return deskState.get(); }
+// g1638: "shud restart if app opened". Opening the app (bootstrap / list) or sending while the link is down
+// reopens Claude Desktop in this Windows session (desktop-state.js wake: single-flight, 90 s apart).
+function wakeDesktop(why) { if (cdpVal === false) deskState.wake({ why, log }).catch(() => {}); }
 
 // g1588: the phone keeps its own outbox and re-sends until the PC says the message reached Claude. A
 // re-send of the same message (same cmid: the answer to the first try was lost on the way back) must
@@ -922,6 +925,7 @@ async function handle(req, res) {
   if ((p === '/api/accounts' || p.startsWith('/api/accounts/')) && !isOwner(identity)) return json(res, 403, { ok: false, error: 'OWNER_ONLY' });
 
   if (p === '/api/bootstrap') {
+    await cdpCached(); wakeDesktop('app opened');
     noteClientBuild(res._agoClient, url.searchParams.get('build'));
     await sessions.refresh();
     const all = visibleSessions(identity, sessions.decorate(sessions.index().list, desktop.loadSnapshot()));
@@ -951,6 +955,7 @@ async function handle(req, res) {
   if (p === '/api/build') return json(res, 200, { ok: true, ...clientBuildReport() });
 
   if (p === '/api/sessions') {
+    await cdpCached(); wakeDesktop('app open');
     await sessions.refresh();
     const all = visibleSessions(identity, sessions.decorate(sessions.index().list, desktop.loadSnapshot()));
     warmRecent(all);
@@ -1630,6 +1635,13 @@ async function handle(req, res) {
       return json(res, out.ok ? 200 : (out.error === 'NO_TEXT' ? 400 : 501), out);
     }
     if (p === '/api/send') {
+      // Desktop down: start it and tell the phone to hold the message (its outbox retries), instead of a send
+      // that is certain to fail and count against the message.
+      if (!(await cdpCached())) {
+        const w = await deskState.wake({ why: 'message sent', log }).catch(() => null);
+        const st = deskState.get();
+        if (w && (w.launched || w.already || st.state === 'restarting')) return json(res, 503, { ok: false, error: 'DESKTOP_RESTARTING', message: 'Claude is restarting on the PC; this message goes as soon as it is back.' });
+      }
       const cmid = typeof body.cmid === 'string' && /^[\w-]{6,64}$/.test(body.cmid) ? body.cmid : null;
       const seen = cmid && cmidStore().get(cmid);
       if (seen && !seen.done && sendJobs.has(seen.jobId)) return json(res, 202, { ok: true, queued: true, jobId: seen.jobId, again: true });

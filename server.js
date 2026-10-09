@@ -14,6 +14,8 @@ const uiqueue = require('./lib/uiqueue');
 const resume = require('./lib/resume');
 const heal = require('./lib/heal');
 const deskState = require('./lib/desktop-state');
+// g1638: once Relaymote has reopened Desktop, switch its link on as soon as it is up, not on the next minute.
+deskState.onLaunched = () => { debuggerNext = 0; for (const ms of [20000, 35000, 50000, 70000]) setTimeout(() => serialise(debuggerTick), ms).unref(); };
 const goal = require('./lib/goal');
 const awaits = require('./lib/await');
 const config = require('./lib/config');
@@ -138,7 +140,7 @@ async function debuggerTick() {
   if (pid === undefined) return;
   deskState.tick({ running: !!pid, busy: config.get().followClaude === true || follow.state().stopping, log: orch.log });
   if (!pid || Date.now() < debuggerNext) return;
-  if (pid !== debuggerPid) { debuggerPid = pid; debuggerTries = 0; }
+  if (pid !== debuggerPid) { debuggerPid = pid; debuggerTries = 0; debuggerNext = 0; }
   if (debuggerTries >= 3) return;
   const r = await heal.enableDebugger().catch(e => ({ ok: false, code: -3, message: e.message }));
   deskState.note({ debugger: { code: r.code, message: r.message, at: Date.now() }, cdp: r.ok ? true : false });

@@ -1,3 +1,8 @@
+## 0.2.91
+
+- If Claude Desktop has closed, opening the Relaymote app (or sending a message) now opens it again on the PC, in your own Windows session and only once at a time. The app shows "Restarting Claude…" and reconnects by itself; a message sent meanwhile waits and goes when Claude is back.
+- The Claude Code command-line tool (also named claude.exe) no longer counts as Claude Desktop, which had made a closed Desktop look running.
+
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
 ## 0.2.90

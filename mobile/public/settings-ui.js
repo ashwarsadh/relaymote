@@ -214,13 +214,16 @@
     return h;
   }
 
+  // g1638: the chat screen polls faster while Claude is coming back; it hands each fresh state to this bar
+  // so the bar never lags a minute behind ("Restarting Claude…" then gone the moment the link is back).
+  window.relaymoteDeskState = function (cdp, d) { if (!desk) return; desk.cdp = !!cdp; if (d) desk.desktop = d; banner(); };
   function banner() {
     var b = $('relaymote-desk-banner');
     var show = desk && desk.ok && !desk.cdp && S;
     if (!show) { if (b) b.remove(); return; }
     // g1587: name the real fault (signed out, developer option off, not running …), not just "not connected".
     var d = desk.desktop && desk.desktop.state !== 'ok' ? desk.desktop : null;
-    var html = (d ? esc(d.title) + '.' : 'Claude Desktop is not connected — sending and resuming are paused.') +
+    var html = (d ? esc(d.title) + (/[.…]$/.test(d.title) ? '' : '.') : 'Claude Desktop is not connected — sending and resuming are paused.') +
       ' <a href="#" id="relaymote-desk-fix">' + (d && d.auto ? 'Details' : 'What to do') + '</a>';
     if (b) { if (b.dataset.k !== html) { b.dataset.k = html; b.innerHTML = html; } }
     else { document.body.insertAdjacentHTML('afterbegin', '<div id="relaymote-desk-banner" class="set-banner" role="status"></div>'); b = $('relaymote-desk-banner'); b.dataset.k = html; b.innerHTML = html; }

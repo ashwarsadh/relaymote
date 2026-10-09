@@ -35,7 +35,7 @@ delete process.env.RELAYMOTE_SIM_DESKTOP;
 
 // tick() never opens Claude in a test, and opens it only after two minutes gone, at most 3 times an hour.
 const src = fs.readFileSync(path.join(__dirname, '..', 'lib', 'desktop-state.js'), 'utf8');
-check(/RELAYMOTE_NO_LAUNCH === '1' \|\| process\.env\.RELAYMOTE_NO_SEND === '1'/.test(src) && /2 \* 60000/.test(src) && /launches\.length >= 3/.test(src), 'auto-open: never in tests, after 2 min gone, at most 3 an hour');
+check(/RELAYMOTE_NO_LAUNCH === '1' \|\| process\.env\.RELAYMOTE_NO_SEND === '1'/.test(src) && /2 \* 60000/.test(src) && /recent\.length >= 3/.test(src), 'auto-open: never in tests, after 2 min gone, at most 3 an hour');
 const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 check(/deskState\.tick\(\{ running: !!pid/.test(server) && /deskState\.note\(\{ debugger:/.test(server), 'the server feeds every debugger outcome into the state');
 const mob = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
@@ -53,6 +53,39 @@ check(/if \(!msg && isPcDownStatus\(r\.status\)\) throw connErr\('pc-down', r\.s
 check(!/toast\('List failed: ' \+ e\.message/.test(app), 'no more "List failed: 530" toast; it goes to the banner');
 check(/This phone needs pairing/.test(app) && /pairingPage\(\)/.test(mob), 'no valid pairing: the pairing screen, which he can complete himself');
 
-fs.rmSync(tmp, { recursive: true, force: true });
-if (fails) { console.error(fails + ' failed'); process.exit(1); }
-console.log('desktop-state: all checks passed');
+// g1638: "so claude exited relaymote didnt restart it of i used the app". Opening the app or sending
+// reopens Desktop — once, in Relaymote's own session — and the CLI's claude.exe never counts as Desktop.
+(async () => {
+  check(/-notmatch "\\\\\\\\claude-code\\\\\\\\"/.test(src) && /\$_\.SessionId -eq \$me/.test(src) && /AnthropicClaude/.test(src),
+        'the probe counts only the Desktop app (not the Claude Code CLI, also claude.exe) and only in Relaymote\'s own session');
+  check(c({ cdp: false, running: false, exe: 'x', launchedAt: Date.now() - 30000 }) === 'restarting'
+        && c({ cdp: false, running: true, debugger: { code: 1 }, devMode: true, launchedAt: Date.now() - 30000 }) === 'restarting',
+        'just reopened: "Restarting Claude…" until the link is back');
+  check(c({ cdp: false, running: true, debugger: { code: 10 }, launchedAt: Date.now() - 30000 }) === 'signed-out', 'reopened onto the Sign In screen still says: log in');
+  check(ds.TEXT.restarting.title === 'Restarting Claude…', 'the words are "Restarting Claude…"');
+
+  delete process.env.RELAYMOTE_NO_LAUNCH;
+  ds._s.exe = 'C:/fake/AnthropicClaude/claude.exe';
+  let launched = 0, desk = { session: 3, main: [], count: 0, explorer: true };
+  ds._seams(() => desk, () => { launched++; });
+  const rs = await Promise.all([ds.wake({ why: 'app opened' }), ds.wake({ why: 'app opened' }), ds.wake({ why: 'message sent' })]);
+  check(launched === 1 && rs.every(r => r.ok), 'three opens at once: Desktop is started ONCE', { launched, rs });
+  check(ds.get().state === 'restarting', 'and the phone is told "Restarting Claude…"', ds.get().state);
+  ds._s.lastWakeProbe = 0;
+  await ds.wake({ why: 'app opened' });
+  check(launched === 1, 'a second open within 90 s does not start it again');
+  ds._s.launchedAt = Date.now() - 100000; ds._s.lastWakeProbe = 0; desk = { session: 3, main: [4242], count: 5, explorer: true };
+  const up = await ds.wake({ why: 'app opened' });
+  check(launched === 1 && up.running, 'Desktop already running in this session: nothing is started');
+  ds._s.lastWakeProbe = 0; desk = { session: 0, main: [], count: 0, explorer: false };
+  const s0 = await ds.wake({ why: 'app opened' });
+  check(launched === 1 && s0.error === 'no-desktop-session', 'Relaymote in a session with no desktop (session 0 / a service): it refuses, never opens Claude where nobody sees it');
+  const mob2 = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
+  check(/if \(p === '\/api\/bootstrap'\) \{\n    await cdpCached\(\); wakeDesktop\('app opened'\);/.test(mob2) && /error: 'DESKTOP_RESTARTING'/.test(mob2), 'opening the app and sending both wake it; a send meanwhile is held, not failed');
+  check(app.includes("if (e.code === 'DESKTOP_RESTARTING')") && app.includes('state.deskPoll = setInterval('), 'the phone keeps the message waiting and re-checks every 8 s, so it reconnects by itself');
+  ds._seams(null, null);
+
+  fs.rmSync(tmp, { recursive: true, force: true });
+  if (fails) { console.error(fails + ' failed'); process.exit(1); }
+  console.log('desktop-state: all checks passed');
+})();

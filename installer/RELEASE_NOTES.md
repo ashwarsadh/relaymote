@@ -1,5 +1,9 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.90
+
+- Long files upload. A phone upload that took more than 20 seconds (a long call recording on a phone link) was cut off by the server every time. Uploads now have no time cap while bytes are moving (one is abandoned only after 90 seconds with no progress), are written straight to disk, and may be up to 95 MB (was 25 MB), just under Cloudflare's 100 MB limit per upload.
+
 ## 0.2.89
 
 - The phone keeps an outbox. Every message you send is saved on the phone first and stays there, in order, until your PC confirms it reached Claude. A message typed while the PC is unreachable is never replaced by the next one and survives closing the app; it is sent by itself when the PC is back, and is never typed twice.

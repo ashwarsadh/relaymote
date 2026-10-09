@@ -42,7 +42,11 @@ const SECRET_FILE = process.env.RELAYMOTE_MOBILE_SECRET || path.join(config.MOBI
 const PORT = Number(process.env.RELAYMOTE_MOBILE_PORT || config.get().appPort);
 // Read once: an update restarts the daemon, so this is the version the phone should be running.
 const APP_VERSION = (() => { try { return require('../package.json').version; } catch { return null; } })();
-const MAX_UPLOAD = 25 * 1024 * 1024;
+// g1630: a phone-call recording failed every time (the 20 s route deadline below cut the upload off
+// mid-transfer). Uploads now stream to disk with no route deadline; the cap stays under Cloudflare's 100 MB
+// per request, so the tunnel never refuses one the app accepted.
+const MAX_UPLOAD = 95 * 1024 * 1024;
+const UPLOAD_DEADLINE_MS = 30 * 60000;
 const ROUTE_DEADLINE_MS = Number(process.env.RELAYMOTE_MOBILE_DEADLINE_MS || 20000);
 
 const log = (m) => { try { orch.log('[mobile] ' + m); } catch { console.log('[mobile] ' + m); } };
@@ -1585,13 +1589,29 @@ async function handle(req, res) {
 
   if (p === '/api/upload') {
     const name = String(req.headers['x-filename'] || 'upload.bin').replace(/[^\w.\-]/g, '_').slice(0, 120);
-    let buf;
-    try { buf = await readBody(req, MAX_UPLOAD); } catch (e) { return json(res, 413, { ok: false, error: e.message }); }
     fs.mkdirSync(UPLOADS, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const file = path.join(UPLOADS, `${stamp}_${name}`);
-    fs.writeFileSync(file, buf);
-    return json(res, 200, { ok: true, path: file, bytes: buf.length });
+    const part = file + '.part';
+    const r = await new Promise((resolve) => {
+      const out = fs.createWriteStream(part);
+      let n = 0, settled = false;
+      const end = (v) => { if (!settled) { settled = true; resolve(v); } };
+      req.on('data', c => { n += c.length; if (n > MAX_UPLOAD) { req.unpipe(out); out.destroy(); end({ err: 'too-large' }); req.resume(); } });
+      req.on('aborted', () => { out.destroy(); end({ err: 'aborted' }); });
+      req.on('error', () => { out.destroy(); end({ err: 'aborted' }); });
+      out.on('error', e => end({ err: e.message }));
+      out.on('finish', () => end({ n }));
+      req.pipe(out);
+    });
+    if (r.err) {
+      try { fs.unlinkSync(part); } catch {}
+      if (r.err !== 'aborted') log(`upload ${name} refused: ${r.err}`);
+      if (r.err === 'too-large') return json(res, 413, { ok: false, error: `That file is over ${MAX_UPLOAD / 1048576} MB, the most one upload can carry.` });
+      return json(res, 400, { ok: false, error: 'the upload stopped before the whole file arrived' });
+    }
+    fs.renameSync(part, file);
+    return json(res, 200, { ok: true, path: file, bytes: r.n });
   }
 
   let body = {};
@@ -1849,11 +1869,13 @@ const bound = new Map();
 function bind(address, label) {
   if (bound.has(address)) return;
   const s = http.createServer((req, res) => {
+    // An upload's time is the phone's transfer time, not server work: it gets its own long deadline (g1630).
+    const ms = req.url && req.url.startsWith('/api/upload') ? UPLOAD_DEADLINE_MS : ROUTE_DEADLINE_MS;
     const deadline = req.url && req.url.startsWith('/api/stream') ? null : setTimeout(() => {
       if (res.headersSent || res.writableEnded) return;
-      log(`deadline hit: ${req.method} ${req.url && req.url.split('?')[0]} exceeded ${ROUTE_DEADLINE_MS}ms`);
-      try { json(res, 503, { ok: false, error: `the server took longer than ${ROUTE_DEADLINE_MS / 1000}s` }); } catch {}
-    }, ROUTE_DEADLINE_MS);
+      log(`deadline hit: ${req.method} ${req.url && req.url.split('?')[0]} exceeded ${ms}ms`);
+      try { json(res, 503, { ok: false, error: `the server took longer than ${ms / 1000}s` }); } catch {}
+    }, ms);
     if (deadline && deadline.unref) deadline.unref();
     const done = () => { if (deadline) clearTimeout(deadline); };
     res.on('finish', done); res.on('close', done);
@@ -1867,6 +1889,7 @@ function bind(address, label) {
   });
   s.listen(PORT, address, () => log(`listening on http://${address}:${PORT}  (${label})`));
   s.keepAliveTimeout = 65000;
+  s.requestTimeout = UPLOAD_DEADLINE_MS;   // Node's default (5 min) would cut a long upload on a slow phone link
   bound.set(address, s);
 }
 

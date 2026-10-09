@@ -2321,13 +2321,18 @@ function uploadOne(f, rec) {
     if (!rec.resolve) rec.resolve = resolveOuter; else resolveOuter(undefined);
     const resolve = (v) => { if (v === false && rec.attempt < 3 && !rec.failed) return; rec.resolve(v); };
     const x = new XMLHttpRequest();
-    x.timeout = 60000;
+    // g1630: no cap on the whole transfer (a 60 s one cut off long recordings on a phone link); it is
+    // abandoned only when it STALLS — no bytes moving for 90 s.
+    x.timeout = 0;
+    let lastMove = Date.now();
+    const stall = setInterval(() => { if (Date.now() - lastMove > 90000) { clearInterval(stall); x.abort(); fail(); resolve(false); } }, 5000);
+    x.addEventListener('loadend', () => clearInterval(stall));
     x.open('POST', '/api/upload');
     x.setRequestHeader('X-Filename', f.name);
     x.setRequestHeader('Content-Type', 'application/octet-stream');
     x.withCredentials = true;
     x.upload.onprogress = (e) => {
-      rec.loaded = e.loaded; rec.total = e.total || rec.total;
+      rec.loaded = e.loaded; rec.total = e.total || rec.total; lastMove = Date.now();
       renderAttachments();
     };
     x.onload = () => {
@@ -2348,7 +2353,7 @@ function uploadOne(f, rec) {
 async function uploadFiles(files) {
   const jobs = [];
   for (const f of files) {
-    if (f.size > 25 * 1024 * 1024) { toast(`${f.name} is over 25 MB`, true); continue; }
+    if (f.size > 95 * 1024 * 1024) { toast(`${f.name} is over 95 MB, the most one upload can carry — share it by Google Drive instead`, true); continue; }
     jobs.push(uploadOne(f));
   }
   return Promise.all(jobs);

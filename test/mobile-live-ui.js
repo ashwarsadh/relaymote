@@ -63,7 +63,7 @@ const { check: chk, src } = H;
     chk(/state\.uploads/.test(a), 'in-flight uploads are tracked');
     chk(/while \(state\.uploads\.length && Date\.now\(\) < deadline\)/.test(a), 'send() waits for them instead of reading an empty attachment list');
     chk(/upload\.onprogress/.test(a), 'upload progress is reported (XHR, since fetch cannot)');
-    chk(/x\.timeout = 60000/.test(a), 'uploads have a hard timeout');
+    chk(a.includes('x.timeout = 0;') && a.includes('Date.now() - lastMove > 90000'), 'an upload is abandoned only when it stalls (90 s without bytes), never by a total cap (g1630)');
     chk(/rec\.attempt < 3/.test(a), 'a failed upload is retried automatically');
     chk(/tap to retry/.test(a), 'a permanently failed upload stays on screen, tappable');
     chk(/failedUps\.length/.test(a), 'send() refuses while a failed upload is attached');

@@ -56,19 +56,18 @@ check(box.value === 'first' && d.loadDraft('local_a') === 'first', 'a failed sen
 const open = app.slice(app.indexOf('    const cur = $(\'input\').value;\n    const draft = loadDraft(id);'), app.indexOf('  autosize();\n  updateCommandList();'));
 check(/else \$\('input'\)\.value = draft;/.test(open), 'opening a session (refresh, reconnect) puts the saved draft back in the box');
 check(!/clearDraft\(/.test(retire) && !/\$\('input'\)\.value = ''/.test(retire), 'the render-time retire never touches the box or the draft');
-// send() itself; a FAILED send is handled by failSend(), which keeps the text (g1518b, below)
-const sendFn = app.slice(app.indexOf('async function send('), app.indexOf('function failSend('));
-check(!/saveDraft\(id, text\)/.test(sendFn), 'a send no longer writes the sent text into the draft');
+// send() itself: the text goes into the phone's outbox (g1588), never back into the draft
+const sendFn = app.slice(app.indexOf('async function send('), app.indexOf("/* ---- The phone's outbox"));
+const has = (hay, needle) => hay.includes(needle);
+check(!has(sendFn, 'saveDraft(id, text)'), 'a send no longer writes the sent text into the draft');
 
-// g1518b: "it times out and vanish". A failed send stays in the chat as "not sent" with Retry and Edit,
-// is never retired by the 90 s timer, and its text is kept as the draft only if the box had none.
-const failFn = app.slice(app.indexOf('function failSend('), app.indexOf('function retireSpentDraft'));
-check(/catch \(e\) \{\s*failSend\(id, text, atts, e\);/.test(sendFn), 'a failed send goes to failSend, not to a removed bubble');
-check(/status: 'failed'/.test(failFn) && /if \(text && !loadDraft\(id\)\.trim\(\)\) saveDraft\(id, text\)/.test(failFn), 'the failed message stays as a "not sent" bubble, and its text is kept if the box is empty');
-check(/p\.status !== 'failed' && Date\.now\(\) - p\.at >/.test(app), 'a failed bubble is not cleared by the timer that retires sent ones');
+// g1518b -> g1588: a send that fails is never removed. It stays in the outbox, shown with its reason and
+// Send now / Edit / Discard, and is retried by itself (test/phone-outbox.js runs that code).
+check(has(sendFn, 'obAdd(id, text, atts);') && has(sendFn, 'clearDraft(id);'), 'the message moves from the box into the outbox in one step');
+check(has(app, "'waiting to send — ' + esc(it.error)") && has(app, "b('obx-now', 'Send now')") && has(app, "b('obx-edit', 'Edit')"), 'a message that could not be sent shows why, with Send now and Edit');
+check(has(app, 'function obEdit(') && has(app, "it.text + '\\n\\n' + cur"), 'Edit puts it back in the box without overwriting what he typed since');
 const onResult = app.slice(app.indexOf("es.addEventListener('sendresult'"), app.indexOf("es.addEventListener('alert'"));
-check(/failSend\(/.test(onResult) && !/state\.pending = null;/.test(onResult), 'a send the PC accepted and then failed also stays as "not sent" (it was removed)');
-check(/class="pend-retry">Retry<\/button>/.test(app) && /function retryFailedSend\(/.test(failFn) && /function editFailedSend\(/.test(failFn), 'it offers Retry and Edit');
+check(has(onResult, "lost.state = 'stuck'"), 'a send the PC accepted and then failed also stays, as "not sent"');
 
 if (fails) { console.error(fails + ' failed'); process.exit(1); }
 console.log('composer-draft: all checks passed');

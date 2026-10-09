@@ -67,7 +67,8 @@ const { check: chk, src } = H;
     chk(/rec\.attempt < 3/.test(a), 'a failed upload is retried automatically');
     chk(/tap to retry/.test(a), 'a permanently failed upload stays on screen, tappable');
     chk(/failedUps\.length/.test(a), 'send() refuses while a failed upload is attached');
-    chk(/timed out\|\^50\[234\]\$/.test(a), 'a timed-out read is retried on a fresh connection');
+    chk(a.includes("if (m === 'signin-required' || !(e && e.conn)) throw e;") && a.includes("throw connErr(e && e.name === 'AbortError' ? 'timeout' : 'net')"),
+        'a timed-out read is retried on a fresh connection (g1588: e.conn marks every cannot-reach-the-PC failure)');
   }
 
   console.log('\n--- a message is sent whole or not at all ---');
@@ -112,7 +113,8 @@ const { check: chk, src } = H;
   console.log('\n--- a transient 502 must not reach the user ---');
   {
     const a = src('mobile/public/app.js');
-    chk(/\^50\[234\]\$/.test(a), 'reads retry on 502/503/504');
+    chk(a.includes('(n >= 502 && n <= 504)') && a.includes("if (!msg && isPcDownStatus(r.status)) throw connErr('pc-down', r.status);"),
+        'reads retry on 502/503/504 (said in plain words now, g1588)');
     chk(/if \(method !== 'GET'\) return apiOnce/.test(a), 'a non-GET is passed straight through -- never retried');
     chk(/700 \* attempt/.test(a), 'retries back off rather than hammering');
   }

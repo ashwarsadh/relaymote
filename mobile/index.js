@@ -9,6 +9,7 @@ const zlib = require('zlib');
 const sessions = require('./sessions');
 const desktop = require('../lib/desktop');
 const outbox = require('./outbox');
+const deskState = require('../lib/desktop-state');
 const routines = require('./routines');
 const registry = require('../lib/registry');
 const orch = require('../lib/orchestrator');
@@ -621,6 +622,24 @@ async function cdpCached(ttl = 4000) {
   return cdpVal;
 }
 
+function deskNow() { deskState.note({ cdp: cdpVal }); return deskState.get(); }
+
+// g1588: the phone keeps its own outbox and re-sends until the PC says the message reached Claude. A
+// re-send of the same message (same cmid: the answer to the first try was lost on the way back) must
+// never type it twice: it joins the job still running, or gets the finished result back.
+const CMIDS_FILE = path.join(config.STATE, 'send-cmids.json');
+let cmids = null;
+function cmidStore() {
+  if (!cmids) { try { cmids = new Map(Object.entries(JSON.parse(fs.readFileSync(CMIDS_FILE, 'utf8')) || {})); } catch { cmids = new Map(); } }
+  return cmids;
+}
+function cmidSave() {
+  const m = cmidStore(), cut = Date.now() - 7 * 864e5;
+  for (const [k, v] of m) if (v.at < cut) m.delete(k);
+  while (m.size > 500) m.delete(m.keys().next().value);
+  try { fs.writeFileSync(CMIDS_FILE, JSON.stringify(Object.fromEntries(m))); } catch (e) { log('send-cmids save: ' + e.message); }
+}
+
 const TRANSIENT_SEND = new Set(['nav-lost', 'blocked', 'no-editor', 'not-found']);
 
 const sendJobs = new Map();
@@ -670,6 +689,12 @@ const uiJob = (res, op, fn, echo) => uiJobWith(res, op, () => ui(fn), echo);
 
 function finishSend(job, out) {
   sendJobs.delete(job.id);
+  if (job.cmid) {
+    cmidStore().set(job.cmid, { jobId: job.id, at: job.at, done: true, ok: !!(out && out.ok),
+      result: { jobId: job.id, id: job.session, ok: !!(out && out.ok), error: out && out.ok ? null : String((out && (out.result || out.error)) || 'no response from the desktop app'),
+                delivery: (out && out.delivery) || null, confirmed: !!(out && out.confirmed), outboxId: (out && out.outboxId) || null } });
+    cmidSave();
+  }
   setTimeout(() => { outboxTick().catch(() => {}); }, 4000);
   setTimeout(() => { outboxTick().catch(() => {}); }, 15000);
   const ok = !!(out && out.ok);
@@ -677,7 +702,7 @@ function finishSend(job, out) {
   if (!ok) log(`send ${job.id} failed: ${reason}`);
   for (const c of recipients(job.origin || null)) {
     sseSend(c, 'sendresult', {
-      jobId: job.id, id: job.session, ok,
+      jobId: job.id, id: job.session, ok, cmid: job.cmid || null,
       error: ok ? null : String(reason),
       attempts: out && out.attempts,
       delivery: (out && out.delivery) || null,
@@ -695,6 +720,16 @@ async function doSend(id, text, attachments) {
     body = attachments.map(a => '@' + a).join('\n') + (body ? '\n' + body : '');
   }
   if (!body.trim()) return { ok: false, error: 'EMPTY' };
+  // Test seam (demo instances only): "deliver" by writing his message into the demo transcript and a
+  // log, so the phone's outbox can be shown end to end with no Claude Desktop behind it.
+  if (process.env.RELAYMOTE_FAKE_SEND === '1') {
+    const s = sessions.index().list.find(x => x.id === id);
+    const tp = s && sessions.transcriptPath(s);
+    const at = new Date().toISOString();
+    if (tp) fs.appendFileSync(tp, JSON.stringify({ type: 'user', timestamp: at, uuid: crypto.randomUUID(), message: { role: 'user', content: body } }) + '\n');
+    fs.appendFileSync(path.join(config.STATE, 'fake-sends.jsonl'), JSON.stringify({ at, session: id, text: body }) + '\n');
+    return { ok: true, confirmed: true, delivery: 'sent' };
+  }
 
   const slip = outbox.add({ session: id, text: body });
 
@@ -819,6 +854,11 @@ async function handle(req, res) {
   if (!open && !identity) {
     if (p === '/') {
       const viaTunnel = !!(req.headers['cf-ray'] || req.headers['cf-access-jwt-assertion']);
+      // g1588: a phone that is not paired gets a screen it can pair itself from, not one grey sentence.
+      if (!viaTunnel) {
+        res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        return res.end(require('./pairing-page').pairingPage());
+      }
       const msg = viaTunnel
         ? 'Signed in with Cloudflare Access, but the assertion could not be verified. ' +
           'Check RELAYMOTE_ACCESS_AUD and RELAYMOTE_ACCESS_TEAM, then reload.'
@@ -893,6 +933,7 @@ async function handle(req, res) {
       },
       summary: isSubuser(identity) ? undefined : orch.summary(),
       cdp: await cdpCached(),
+      desktop: deskNow(),
       vapid: push.publicKey(),
       models: modelsCached(),
       efforts: Object.keys(desktop.EFFORT_VALUES || { low: 1, medium: 1, high: 1, xhigh: 1 }),
@@ -920,6 +961,7 @@ async function handle(req, res) {
     return json(res, 200, {
       ok: true, total: out.length,
       cdp: await cdpCached(),
+      desktop: deskNow(),
       snapshotAt: snap.at || null,
       build: assetVersion(),
       buildAgeMs: assetVer.since ? Date.now() - assetVer.since : null,
@@ -1183,6 +1225,11 @@ async function handle(req, res) {
     }
     return json(res, 200, { ok: true, settings: config.get(), defaults: config.DEFAULTS, dataDir: config.DATA, version: require('../package.json').version });
   }
+  if (p === '/api/send/status') {
+    const v = cmidStore().get(url.searchParams.get('cmid') || '');
+    if (!v) return json(res, 200, { ok: true, known: false });
+    return json(res, 200, { ok: true, known: true, done: !!v.done, running: !v.done && sendJobs.has(v.jobId), jobId: v.jobId, result: v.result || null });
+  }
   if (p === '/api/pair') {
     const list = pair.links(TOKEN);
     for (const l of list) l.qr = await pair.qrSvg(l.url);
@@ -1190,7 +1237,8 @@ async function handle(req, res) {
   }
   if (p === '/api/desktop') {
     const cdp = await require('../lib/heal').checkCdp();
-    return json(res, 200, { ok: true, platform: process.platform, cdp: !!cdp.healthy, cdpPort: config.get().cdpPort,
+    cdpVal = !!cdp.healthy; cdpAt = Date.now();
+    return json(res, 200, { ok: true, platform: process.platform, cdp: !!cdp.healthy, cdpPort: config.get().cdpPort, desktop: deskNow(),
       desktopData: fs.existsSync(path.join(config.APPDATA, 'Claude')), devMode: devModeOn(), canAutoEnable: process.platform === 'win32' });
   }
   if (p === '/api/desktop/dev-mode' && req.method === 'POST') {
@@ -1562,10 +1610,15 @@ async function handle(req, res) {
       return json(res, out.ok ? 200 : (out.error === 'NO_TEXT' ? 400 : 501), out);
     }
     if (p === '/api/send') {
+      const cmid = typeof body.cmid === 'string' && /^[\w-]{6,64}$/.test(body.cmid) ? body.cmid : null;
+      const seen = cmid && cmidStore().get(cmid);
+      if (seen && !seen.done && sendJobs.has(seen.jobId)) return json(res, 202, { ok: true, queued: true, jobId: seen.jobId, again: true });
+      if (seen && seen.done && seen.ok) return json(res, 200, { ok: true, already: true, jobId: seen.jobId, result: seen.result });
       const jobId = crypto.randomBytes(6).toString('hex');
       const job = { id: jobId, session: body.id, text: String(body.text || ''), at: Date.now(),
-                    origin: res._agoClient || null };
+                    origin: res._agoClient || null, cmid };
       sendJobs.set(jobId, job);
+      if (cmid) { cmidStore().set(cmid, { jobId, at: job.at, done: false }); cmidSave(); }
       doSend(body.id, body.text, body.attachments)
         .then(out => finishSend(job, out))
         .catch(e => finishSend(job, { ok: false, error: e.message }));

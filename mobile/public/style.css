@@ -1137,3 +1137,13 @@ html[data-density="compact"] .bcard-acts{margin-top:6px; gap:6px}
 .find-n{color:var(--dim); font-size:13px; white-space:nowrap; padding:0 4px}
 mark.hit{background:rgba(245,197,66,.35); color:inherit; border-radius:2px}
 mark.hit.cur{background:#f5a524; color:#000}
+
+/* g1587/g1588: the banner that names what is wrong, and the phone's outbox bubbles */
+.deskstate{border-color:var(--err); background:color-mix(in srgb,var(--err) 10%,transparent)}
+.deskstate .bk-head{color:var(--err)}
+.deskstate[data-state="starting"], .deskstate[data-state="link-off"], .deskstate[data-state="phone-timeout"]{border-color:var(--wait); background:color-mix(in srgb,var(--wait) 12%,transparent)}
+.deskstate[data-state="starting"] .bk-head, .deskstate[data-state="link-off"] .bk-head, .deskstate[data-state="phone-timeout"] .bk-head{color:var(--wait)}
+.deskstate .bk-wait{margin-top:5px; font-weight:600; opacity:1}
+.msg.pending.ob .tick .linkish{min-height:30px; padding:0 10px; margin:3px 0 0 4px; border:1px solid var(--on-accent-line); border-radius:8px;
+  background:transparent; color:inherit; font:inherit; text-decoration:none}
+.pc-unreachable #relaymote-desk-banner{display:none}

@@ -3,15 +3,37 @@
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
+// g1588: the app opens with the PC unreachable, so the messages waiting in its outbox are shown (and
+// sent the moment it is back) instead of a dead page. The page and its own scripts are kept from the
+// last good load; the network always wins when it answers, and nothing under /api/ is ever cached.
+const SHELL = 'relaymote-shell-v1';
+const SHELL_FILES = /^\/(app\.js|style\.css|manifest\.webmanifest|(icon|badge)(-\d+)?\.(svg|png))$/;
 self.addEventListener('fetch', (event) => {
-  if (event.request.mode !== 'navigate') return;
-  event.respondWith(
-    fetch(event.request).catch(() => new Response(
-      '<!doctype html><meta charset="utf-8"><title>Relaymote</title>' +
-      '<body style="font:16px system-ui;background:#12110f;color:#e8e6e3;padding:28px">' +
-      '<b>Cannot reach Relaymote</b>' +
-      '<p style="color:#9b9691">The desktop is not reachable from here right now.</p>',
-      { headers: { 'Content-Type': 'text/html; charset=utf-8' } })));
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  const nav = req.mode === 'navigate';
+  if (!nav && !SHELL_FILES.test(url.pathname)) return;
+  event.respondWith((async () => {
+    const key = nav ? '/' : url.pathname;
+    try {
+      const r = await fetch(req);
+      if (r.ok && (!nav || url.pathname === '/')) { const c = await caches.open(SHELL); c.put(key, r.clone()).catch(() => {}); }
+      return r;
+    } catch (e) {
+      const hit = await caches.open(SHELL).then(c => c.match(key)).catch(() => null);
+      if (hit) return hit;
+      if (!nav) throw e;
+      return new Response(
+        '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relaymote</title>' +
+        '<body style="font:16px system-ui;background:#12110f;color:#e8e6e3;padding:28px">' +
+        '<b>Your PC can\'t be reached</b>' +
+        '<p style="color:#9b9691">Your phone may be offline, or the PC is off or asleep. Messages you already typed are kept on this phone. Try again in a moment.</p>' +
+        '<button onclick="location.reload()" style="font:inherit;padding:10px 16px">Try again</button>',
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }
+  })());
 });
 
 self.addEventListener('pushsubscriptionchange', (event) => {

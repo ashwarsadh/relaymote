@@ -1,5 +1,13 @@
 Relaymote puts your Claude Desktop Code-tab sessions on your phone and in a desktop web app. Each download below includes its own Node.js 22 LTS runtime, so you do not need to install Node.
 
+## 0.2.89
+
+- The phone keeps an outbox. Every message you send is saved on the phone first and stays there, in order, until your PC confirms it reached Claude. A message typed while the PC is unreachable is never replaced by the next one and survives closing the app; it is sent by itself when the PC is back, and is never typed twice.
+- Errors in plain words. Instead of "list failed 530" or "send failed 502" the app says whether your phone is offline or your PC cannot be reached, and what to do.
+- Relaymote names what is wrong with Claude Desktop: not logged in, developer option off, PC locked, Remote Desktop closed, or not running. When Claude Desktop is not running, Relaymote opens it by itself; when Developer Mode is off, it switches it on.
+- A phone that is not paired (or whose pairing was reset) opens a pairing screen: scan the QR code from Settings › Pair a phone on the PC, or paste the link.
+- The app opens with the PC unreachable and shows the messages waiting on the phone.
+
 ## 0.2.88
 
 - A message that fails to send no longer disappears. If the phone gets no answer from the PC (a dropped connection) or the PC accepts it and then fails, the message stays in the chat marked "not sent", with the reason, a Retry button and an Edit button. Its text is also kept as the draft, so reloading the app does not lose it.

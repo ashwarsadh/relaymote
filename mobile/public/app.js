@@ -9,16 +9,35 @@ const BUILD = (() => {
   } catch { return null; }
 })();
 let reauthing = false;
-function reauth() {
+// g1588: a phone whose pairing is no longer valid (a new token, a cleared browser) goes to the pairing
+// screen, which it can complete by itself; messages waiting in its outbox stay (same origin).
+function reauth(kind) {
   if (reauthing) return;
   reauthing = true;
+  const access = kind === 'access';
   document.body.insertAdjacentHTML('beforeend',
-    '<div class="reauth"><div><b>Session expired</b><p>Cloudflare Access needs you to sign in again.</p>' +
-    '<button onclick="location.href=location.pathname">Sign in</button></div></div>');
+    '<div class="reauth"><div><b>' + (access ? 'Sign in again' : 'This phone needs pairing') + '</b><p>' +
+    (access ? 'Cloudflare Access needs you to sign in again.' : 'Its pairing with your PC is no longer valid. Opening the pairing screen…') +
+    '</p><button onclick="location.href=location.pathname">' + (access ? 'Sign in' : 'Pair now') + '</button></div></div>');
   setTimeout(() => { location.href = location.pathname; }, 2500);
 }
 
-const isNetErr = (e) => /Failed to fetch|NetworkError|Load failed|aborted|timed out/i.test(String(e && e.message || e));
+const isNetErr = (e) => !!(e && e.conn) || /Failed to fetch|NetworkError|Load failed|aborted|timed out/i.test(String(e && e.message || e));
+// g1588: "list failed 530", "send failed 502" said nothing he could act on. A failure to REACH the PC is
+// now one of three plain sentences, each saying what to do; e.conn marks it for retries and the banner.
+const CONN_TITLE = { offline: 'Your phone is offline', net: 'Your PC can\'t be reached', 'pc-down': 'Your PC can\'t be reached', timeout: 'Your PC is answering slowly' };
+const CONN_WHY = {
+  offline: 'Connect it to the internet. Anything you send waits on this phone and goes by itself.',
+  net: 'It may be off or asleep, or its internet is down. Anything you send waits on this phone and goes by itself.',
+  'pc-down': 'It may be off or asleep, or its internet is down, so Relaymote\'s link to it is down. Anything you send waits on this phone and goes by itself.',
+  timeout: 'A slow connection, or the PC is busy. It is tried again by itself.',
+};
+function connErr(kind, status) {
+  if (kind !== 'timeout' && navigator.onLine === false) kind = 'offline';
+  const why = CONN_WHY[kind] + (status ? ' (code ' + status + ')' : '');
+  return Object.assign(new Error(CONN_TITLE[kind] + '. ' + why), { kind, why, status: status || null, conn: true });
+}
+const isPcDownStatus = (n) => n === 530 || (n >= 502 && n <= 504) || (n >= 520 && n <= 527);
 const api = async (path, opts) => {
   const method = ((opts && opts.method) || 'GET').toUpperCase();
   if (method !== 'GET') return apiOnce(path, opts);
@@ -29,8 +48,7 @@ const api = async (path, opts) => {
     catch (e) {
       last = e;
       const m = String((e && e.message) || '');
-      if (!/timed out|^50[234]$|Failed to fetch|NetworkError|Load failed/.test(m)) throw e;
-      if (m === 'signin-required') throw e;
+      if (m === 'signin-required' || !(e && e.conn)) throw e;
     }
   }
   throw last;
@@ -51,14 +69,15 @@ const apiOnce = async (path, opts) => {
   const o = { credentials: 'same-origin', signal: ctl.signal, ...opts };
   o.headers = { ...(o.headers || {}), 'X-Baton-Client': CLIENT_ID };
   try { r = await fetch(path, o); }
-  catch (e) { throw new Error(e && e.name === 'AbortError' ? 'timed out' : (e && e.message) || 'Failed to fetch'); }
+  catch (e) { throw connErr(e && e.name === 'AbortError' ? 'timeout' : 'net'); }
   finally { clearTimeout(timer); }
-  if (r.redirected && /cloudflareaccess\.com|\/cdn-cgi\/access\//.test(r.url)) { reauth(); throw new Error('signin-required'); }
+  if (r.redirected && /cloudflareaccess\.com|\/cdn-cgi\/access\//.test(r.url)) { reauth('access'); throw new Error('signin-required'); }
   if (!r.ok) {
     if (r.status === 401 || r.status === 403) { reauth(); throw new Error('signin-required'); }
-    let msg = r.status + '';
-    try { msg = (await r.json()).error || msg; } catch {}
-    throw new Error(msg);
+    let msg = null;
+    if ((r.headers.get('content-type') || '').includes('json')) { try { const j = await r.json(); msg = j.error || j.message || null; } catch {} }
+    if (!msg && isPcDownStatus(r.status)) throw connErr('pc-down', r.status);
+    throw Object.assign(new Error(msg || ('Relaymote on your PC hit an error (code ' + r.status + '). Try again; if it repeats, restart Relaymote on the PC.')), { status: r.status });
   }
   const ct = r.headers.get('content-type') || '';
   if (!ct.includes('json')) { reauth(); throw new Error('signin-required'); }
@@ -899,6 +918,26 @@ function renderLog(messages, force) {
     }
   }
 
+  // g1588: every message still in the phone's outbox, oldest first, each with what is happening to it.
+  for (const it of obItems.filter(x => x.sid === state.open)) {
+    if ((it.state === 'accepted' || it.pcFail) && obSeen(it, messages)) { obRemove(it.cmid); continue; }
+  }
+  {
+    const mine = obItems.filter(x => x.sid === state.open);
+    mine.forEach((it, i) => {
+      const names = (it.atts || []).map(a => esc(String(a).split(/[\\/]/).pop()));
+      const body = it.text ? md(it.text) : '<div class="muted">attached: ' + names.join(', ') + '</div>';
+      const b = (cls, label) => ` <button class="linkish ${cls}" data-cmid="${esc(it.cmid)}">${label}</button>`;
+      const tick = it.state === 'stuck' ? 'not sent — ' + esc(it.error) + b('obx-now', 'Retry') + b('obx-edit', 'Edit') + b('obx-drop', 'Discard')
+        : it.state === 'accepted' ? 'on the PC — handing it to Claude…'
+        : it.state === 'sending' ? 'sending…'
+        : it.error ? 'waiting to send — ' + esc(it.error) + b('obx-now', 'Send now') + b('obx-edit', 'Edit') + b('obx-drop', 'Discard')
+        : i > 0 ? 'waiting — goes after the message above' + b('obx-edit', 'Edit') + b('obx-drop', 'Discard')
+        : 'sending…';
+      html += `<div class="msg user pending ob act${it.state === 'stuck' ? ' failed' : ''}" data-cmid="${esc(it.cmid)}">${body}<span class="tick">${tick}</span></div>`;
+    });
+  }
+
   if (state.pending) {
     const p2 = state.pending;
     const names = (p2.atts || []).map(a => esc(String(a).split(/[/\\/]/).pop()));
@@ -916,8 +955,9 @@ function renderLog(messages, force) {
   }
   log.innerHTML = html || '<div class="empty">No messages yet.</div>';
   if (tts.el) { ttsRelink(); ttsWake(); }
-  log.querySelectorAll('.pend-retry').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); retryFailedSend(); }; });
-  log.querySelectorAll('.pend-edit').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); editFailedSend(); }; });
+  log.querySelectorAll('.obx-now').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); obRetryNow(b.dataset.cmid); }; });
+  log.querySelectorAll('.obx-edit').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); obEdit(b.dataset.cmid); }; });
+  log.querySelectorAll('.obx-drop').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); obDiscard(b.dataset.cmid); }; });
   log.querySelectorAll('.ob-retry').forEach(b => {
     b.onclick = async (ev) => {
       ev.stopPropagation();
@@ -1258,6 +1298,7 @@ async function loadSessions() {
   try {
     const d = await api('/api/sessions?' + p);
     renderSessions(d.sessions);
+    noteConnOk();
     noteLinkState(d);
     if (state.boot && d.build) {
       const moved = state.boot.build !== d.build;
@@ -1265,7 +1306,7 @@ async function loadSessions() {
       if (d.version) state.boot.version = d.version;
       if (moved || typeof d.buildAgeMs === 'number') paintBuildLine();
     }
-  } catch (e) { toast('List failed: ' + e.message, true); }
+  } catch (e) { if (e && e.conn) noteConnFail(e); else if (e.message !== 'signin-required') toast('Could not load the list: ' + e.message, true); }
 }
 
 // With no session open, the header dot beside "Relaymote" says whether Relaymote is connected (g454): green when
@@ -1289,6 +1330,8 @@ function noteLinkState(d) {
   if (!d || typeof d.cdp !== 'boolean' || !state.boot) return;
   const was = state.boot.cdp;
   state.boot.cdp = d.cdp;
+  if (d.desktop) state.boot.desktop = d.desktop;
+  renderDeskState();
   paintConnDot();
   state.snapshotAt = d.snapshotAt || null;
   renderBlocker(d.blocker);
@@ -1299,6 +1342,31 @@ function noteLinkState(d) {
     checkOutbox();
   }
 }
+
+// g1587 + g1588: ONE banner that names what is wrong, in his words, and what to do. The phone's own
+// view (offline / PC unreachable) comes first, because then the PC's state is unknown; otherwise the
+// PC's named Claude Desktop state (lib/desktop-state.js). Messages waiting on the phone are counted.
+state.connIssue = null;
+function noteConnFail(e) { state.connIssue = { kind: e.kind, text: e.why || e.message, at: Date.now() }; renderDeskState(); paintConnDot(); }
+function noteConnOk() { if (state.connIssue) { state.connIssue = null; renderDeskState(); } }
+function renderDeskState() {
+  const el = $('deskstate');
+  if (!el) return;
+  const c = state.connIssue;
+  const d = !c && state.boot && state.boot.desktop && state.boot.desktop.state !== 'ok' ? state.boot.desktop : null;
+  const n = obItems.length;
+  // While the phone cannot reach the PC, the PC's last-known state is stale: hide that banner (settings-ui).
+  document.body.classList.toggle('pc-unreachable', !!c);
+  if (!c && !d) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  el.dataset.state = c ? 'phone-' + c.kind : d.state;
+  el.innerHTML = '<div class="bk-head">' + esc(c ? CONN_TITLE[c.kind] || 'Your PC can\'t be reached' : d.title) + '</div>' +
+    '<div class="bk-text">' + esc(c ? c.text : d.text + (d.detail ? ' (' + d.detail + ')' : '')) + '</div>' +
+    (n ? '<div class="bk-text bk-wait">' + n + ' message' + (n > 1 ? 's' : '') + ' waiting on this phone — they go by themselves, in order.</div>' : '');
+}
+window.addEventListener('offline', () => noteConnFail(connErr('offline')));
+window.addEventListener('online', () => { noteConnOk(); obFlush(); loadSessions(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') obFlush(); });
 
 function renderBlocker(b) {
   const el = $('blocker');
@@ -1553,7 +1621,7 @@ function connectStream(watch) {
   state.es = es;
   state.esWatch = watch || null;
   state.esLastEvent = Date.now();
-  es.onopen = () => { state.esLastEvent = Date.now(); paintConnDot(); };
+  es.onopen = () => { state.esLastEvent = Date.now(); paintConnDot(); noteConnOk(); obFlush(); };
   es.addEventListener('ping', () => { state.esLastEvent = Date.now(); paintConnDot(); });
   es.addEventListener('sessions', ev => {
     state.esLastEvent = Date.now();
@@ -1639,6 +1707,7 @@ function connectStream(watch) {
 
   es.addEventListener('sendresult', ev => {
     const r = JSON.parse(ev.data);
+    if (r.cmid) { const it = obFind(r.cmid); if (it) obResult(it, r); return; }
     if (state.pending && state.pending.jobId && r.jobId !== state.pending.jobId) return;
     if (r.ok) {
       if (state.pending) {
@@ -1655,9 +1724,13 @@ function connectStream(watch) {
       renderLog(state.messages, true);
       return;
     }
-    // Accepted by the PC, then failed there: the same "not sent" bubble with Retry, never a vanished one.
+    // A send from outside the outbox (no cmid) accepted by the PC and then failed there: it goes into the
+    // outbox as "not sent", with Retry, never a vanished message.
     const p0 = state.pending;
-    failSend(r.id || (p0 && p0.sid) || state.open, r.text || (p0 && p0.text) || '', (p0 && p0.atts) || [], { message: r.error });
+    const lost = obAdd(r.id || (p0 && p0.sid) || state.open, r.text || (p0 && p0.text) || '', (p0 && p0.atts) || []);
+    lost.state = 'stuck'; lost.pcFail = 3; lost.error = sendError(r.error); obSave();
+    if (p0 && p0.jobId === r.jobId) state.pending = null;
+    obRepaint(lost.sid);
 
     if (String(r.error || '').includes('blocked-by-dialog')) {
       state.resendAfterAnswer = { id: r.id || state.open, text: r.text || $('input').value || '' };
@@ -2283,6 +2356,9 @@ async function uploadFiles(files) {
 
 async function send(target) {
   if (state.sending) return;
+  if (target && target.id && target.text && target.id === state.open) {   // "Send again" on a held message
+    obAdd(target.id, target.text, []); renderLog(state.messages, true); return obFlush();
+  }
   if (target && target.id && target.id !== state.open) {
     if (target.text) { $('input').value = target.text; autosize(); }
     return sendTo(target.id, target.text || $('input').value.trim(), []);
@@ -2300,11 +2376,13 @@ async function send(target) {
     return toast(failedUps.length + ' upload' + (failedUps.length > 1 ? 's' : '') + ' failed — tap to retry, or × to send without.', true);
   }
   if (state.uploads.length) {
+    state.sending = true;
     $('btn-send').disabled = true;
     toast('Waiting for ' + state.uploads.length + ' upload' + (state.uploads.length > 1 ? 's' : '') + '…');
     const deadline = Date.now() + 120000;
     while (state.uploads.length && Date.now() < deadline) await new Promise(r => setTimeout(r, 200));
     $('btn-send').disabled = false;
+    state.sending = false;
     if (state.uploads.length) return toast('Uploads did not finish — nothing was sent.', true);
   }
 
@@ -2312,68 +2390,151 @@ async function send(target) {
   if (!text && !atts.length) return;
 
   const id = state.open;
-  state.sending = true;
-  $('btn-send').disabled = true;
   $('input').value = ''; autosize();
-  clearDraft(id); markUnsent(id, text);
+  clearDraft(id);
   state.attachments = []; renderAttachments();
   state.liveSuggestion = null;
   renderSuggestion(state.meta);
-  state.pending = { sid: id, text, atts, status: 'sending', at: Date.now() };
+  obAdd(id, text, atts);
   renderLog(state.messages, true);
+  obFlush();
+}
 
+/* ---- The phone's outbox (g1588) -------------------------------------------------------------
+   "When I send one message while the app is in error state, it gets queued. But then as soon as another
+   message is sent, the first message gets lost." The phone held ONE pending message, in memory: the next
+   send replaced it and closing the app dropped it. Every message now goes into an outbox in localStorage
+   first (kept across app exits, in order, never overwritten) and leaves it only when the PC says it
+   reached Claude: its sendresult, or the server's record for its cmid. A session's next message waits for
+   the one before it, so they arrive in the order he typed them. Every try carries the same cmid, and the
+   server never types one cmid twice (mobile/index.js), so a lost answer cannot become a double send. */
+const OB_KEY = 'relaymote.outbox.v1';
+const obRead = () => { try { const a = JSON.parse(localStorage.getItem(OB_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } };
+let obItems = obRead();
+// A send in flight when the app was closed is unknown: it is asked about, or sent again, on the next open.
+for (const it of obItems) if (it.state === 'sending') it.state = 'waiting';
+function obSave() { try { localStorage.setItem(OB_KEY, JSON.stringify(obItems)); } catch {} }
+window.addEventListener('storage', (ev) => { if (ev.key === OB_KEY) { obItems = obRead(); if (state.open) renderLog(state.messages, false); renderDeskState(); } });
+function obAdd(sid, text, atts) {
+  const it = { cmid: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), sid, text: text || '', atts: atts || [],
+               at: Date.now(), state: 'new', tries: 0, next: 0, error: '' };
+  obItems.push(it); obSave(); renderDeskState();
+  return it;
+}
+const obFind = (cmid) => obItems.find(x => x.cmid === cmid);
+function obRemove(cmid) { obItems = obItems.filter(x => x.cmid !== cmid); obSave(); }
+const obBackoff = (n) => Math.min(60000, 3000 * Math.pow(2, Math.max(0, n - 1)));
+function obRepaint(sid) { if (sid === state.open) renderLog(state.messages, false); renderDeskState(); }
+const obNorm = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+function obSeen(it, messages) {
+  const want = obNorm(it.text).slice(0, 60);
+  return !!want && (messages || []).some(m => m.role === 'user' && obNorm(m.text).includes(want));
+}
+const obInLog = (it) => it.sid === state.open && obSeen(it, state.messages);
+
+let obRunning = false, obTimer = null;
+async function obFlush() {
+  if (obRunning) return;
+  obRunning = true;
   try {
-    const r = await api('/api/send', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, text, attachments: atts }),
-    });
-    if (state.pending) {
-      if (r && r.jobId) state.pending.jobId = r.jobId;
-      state.pending.status = 'sent';
+    for (let guard = 0; guard < 100; guard++) {
+      const heads = new Map();
+      for (const it of obItems) if (!heads.has(it.sid)) heads.set(it.sid, it);
+      const now = Date.now();
+      const due = [...heads.values()].find(it => (it.state === 'new' || it.state === 'waiting') && now >= (it.next || 0));
+      if (!due) break;
+      if (!(await obPost(due))) break;      // the PC is not reachable: stop here, the timer tries again
     }
-    renderLog(state.messages, true);
-  } catch (e) {
-    failSend(id, text, atts, e);
-  } finally { state.sending = false; $('btn-send').disabled = false; }
+    for (const it of obItems.slice()) {
+      if (it.state === 'accepted' && Date.now() - (it.acceptedAt || 0) > 45000 && Date.now() >= (it.next || 0)) await obAsk(it);
+    }
+  } finally { obRunning = false; obSchedule(); }
+}
+function obSchedule() {
+  clearTimeout(obTimer);
+  const at = obItems.map(it => it.state === 'stuck' ? Infinity
+    : it.state === 'accepted' ? Math.max((it.acceptedAt || 0) + 45000, it.next || 0) : (it.next || 0));
+  const t = at.length ? Math.min(...at) : Infinity;
+  if (t !== Infinity) obTimer = setTimeout(obFlush, Math.max(500, t - Date.now()));
 }
 
-// g1518b: "I sent a msg there but it times out and vanish". A send that failed (25 s with no answer:
-// the phone lost its connection) used to remove his bubble and only quietly refill an EMPTY box, so the
-// message was simply gone. It now stays in the chat as "not sent", with Retry and Edit; the text is also
-// kept as the chat's draft, so a reload does not lose it either.
-function failSend(id, text, atts, e) {
-  clearUnsent(id);
-  if (text && !loadDraft(id).trim()) saveDraft(id, text);
-  const m = String((e && e.message) || '');
-  const why = /timed out|abort|Failed to fetch|NetworkError|Load failed/i.test(m)
-    ? 'the phone got no answer from the PC (connection dropped?)' : sendError(m);
-  state.pending = { sid: id, text, atts: atts || [], status: 'failed', error: why, at: Date.now() };
-  renderLog(state.messages, true);
-  toast('Not sent: ' + why + '. Tap Retry on the message.', true);
-}
-async function retryFailedSend() {
-  const p = state.pending;
-  if (!p || p.status !== 'failed' || state.sending) return;
-  state.sending = true;
-  p.status = 'sending'; p.at = Date.now(); markUnsent(p.sid, p.text);
-  renderLog(state.messages, true);
+/** One try. true = the PC answered (go on to the next), false = it could not be reached. */
+async function obPost(it) {
+  if (it.pcFail && obInLog(it)) { obResult(it, { ok: true, confirmed: true }); return true; }
+  it.state = 'sending'; it.tries++; obSave(); obRepaint(it.sid);
   try {
-    const r = await api('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: p.sid, text: p.text, attachments: p.atts || [] }) });
-    if (state.pending === p) { if (r && r.jobId) p.jobId = r.jobId; p.status = 'sent'; }
-    if (loadDraft(p.sid).trim() === String(p.text || '').trim()) { clearDraft(p.sid); if (state.open === p.sid) { $('input').value = ''; autosize(); } }
-    renderLog(state.messages, true);
-  } catch (e) { failSend(p.sid, p.text, p.atts, e); }
-  finally { state.sending = false; }
+    const r = await apiOnce('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, timeoutMs: 20000,
+      body: JSON.stringify({ id: it.sid, text: it.text, attachments: it.atts || [], cmid: it.cmid }) });
+    noteConnOk();
+    if (r && r.already) { obResult(it, r.result || { ok: true }); return true; }
+    it.state = 'accepted'; it.jobId = (r && r.jobId) || null; it.acceptedAt = Date.now(); it.error = ''; it.next = 0;
+    obSave(); obRepaint(it.sid);
+    return true;
+  } catch (e) {
+    if (e.message === 'signin-required') { it.state = 'waiting'; it.error = 'this phone needs pairing again'; obSave(); return false; }
+    obFailed(it, e.conn ? CONN_TITLE[e.kind].replace(/^Your/, 'your') : sendError(e.message), !!e.conn);
+    if (e.conn) noteConnFail(e);
+    return !e.conn;
+  }
 }
-function editFailedSend() {
-  const p = state.pending;
-  if (!p || p.status !== 'failed') return;
-  state.pending = null;
-  if (state.open === p.sid) { $('input').value = p.text || ''; autosize(); saveDraft(p.sid, p.text || ''); }
-  state.attachments = (p.atts || []).map(x => ({ name: String(x).split(/[\\/]/).pop(), path: x }));
-  renderAttachments();
-  renderLog(state.messages, true);
+function obFailed(it, why, conn) {
+  if (!conn) it.pcFail = (it.pcFail || 0) + 1;
+  it.error = why;
+  it.state = !conn && it.pcFail >= 3 ? 'stuck' : 'waiting';
+  it.next = Date.now() + obBackoff(conn ? it.tries : it.pcFail * 3);
+  obSave(); obRepaint(it.sid);
+}
+/** The PC's answer for one message: reached Claude (leaves the outbox), or failed there (tried again). */
+function obResult(it, r) {
+  if (!r.ok) {
+    obFailed(it, sendError(r.error), false);
+    if (String(r.error || '').includes('blocked-by-dialog')) checkPermission({ id: it.sid }, true);
+    return;
+  }
+  obRemove(it.cmid);
+  if (it.sid === state.open) {
+    state.pending = { sid: it.sid, text: it.text, atts: it.atts, status: r.confirmed ? 'sent' : 'queued', held: !!r.held,
+                      outboxId: r.outboxId || null, jobId: r.jobId || it.jobId, at: Date.now() };
+  }
+  if (r.delivery === 'queued') sendNowBlocked.delete(it.sid);
+  if (!r.confirmed) checkOutbox();
+  obRepaint(it.sid);
+  setTimeout(obFlush, 0);   // that session's next message can go now
+}
+/** Accepted, and no result came back (the live stream was down): ask the PC what became of it. */
+async function obAsk(it) {
+  try {
+    const d = await apiOnce('/api/send/status?cmid=' + encodeURIComponent(it.cmid), { timeoutMs: 12000 });
+    noteConnOk();
+    if (d.known && d.done && d.result) return obResult(it, d.result);
+    if (d.known && d.running) { it.next = Date.now() + 15000; obSave(); return; }
+    // The PC has no record of finishing it (it restarted mid-send): send again unless it already shows.
+    if (obInLog(it)) return obResult(it, { ok: true, confirmed: true });
+    it.state = 'waiting'; it.next = 0; obSave();
+  } catch (e) { it.next = Date.now() + obBackoff(3); obSave(); if (e.conn) noteConnFail(e); }
+}
+function obRetryNow(cmid) {
+  const it = obFind(cmid);
+  if (!it || it.state === 'sending' || it.state === 'accepted') return;
+  it.state = 'waiting'; it.next = 0; it.pcFail = 0; obSave(); obRepaint(it.sid); obFlush();
+}
+function obEdit(cmid) {
+  const it = obFind(cmid);
+  if (!it || it.state === 'sending' || it.state === 'accepted') return;
+  obRemove(cmid);
+  if (state.open === it.sid) {
+    const cur = $('input').value.trim();
+    $('input').value = cur ? it.text + '\n\n' + cur : it.text; autosize(); saveDraft(it.sid, $('input').value);
+    state.attachments = (it.atts || []).map(x => ({ name: String(x).split(/[\\/]/).pop(), path: x }));
+    renderAttachments();
+  }
+  obRepaint(it.sid);
+}
+function obDiscard(cmid) {
+  const it = obFind(cmid);
+  if (!it || it.state === 'sending' || it.state === 'accepted') return;
+  if (!confirm('Discard this message? It has not been sent.')) return;
+  obRemove(cmid); obRepaint(it.sid);
 }
 
 // Retires the SENT record once his message shows in the conversation. Never touches the box or the
@@ -2391,17 +2552,13 @@ function retireSpentDraft(messages) {
 
 async function sendTo(id, text, atts) {
   if (!text) return;
-  markUnsent(id, text);
-  try {
-    const r = await api('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, text, attachments: atts || [] }) });
-    if (r && r.jobId) { state.pending = { sid: id, text, atts, status: 'sending', at: Date.now(), jobId: r.jobId }; }
-    toast('Sending to ' + ((state.rawSessions || []).find(x => x.id === id) || {}).title || 'that session');
-    // Sending does not move him (g780, 29-Sep: "after sending msg my screen moved"): at the bottom the
-    // render follows to his bubble anyway; higher up, what he was reading stays where it is.
-    clearDraft(id);
-    if (state.open === id) { $('input').value = ''; autosize(); renderLog(state.messages, true); }
-  } catch (e) { restoreFailed(id, text); toast(sendError(e.message), true); }
+  obAdd(id, text, atts || []);
+  toast('Sending to ' + (((state.rawSessions || []).find(x => x.id === id) || {}).title || 'that session'));
+  // Sending does not move him (g780, 29-Sep: "after sending msg my screen moved"): at the bottom the
+  // render follows to his bubble anyway; higher up, what he was reading stays where it is.
+  clearDraft(id);
+  if (state.open === id) { $('input').value = ''; autosize(); renderLog(state.messages, true); }
+  obFlush();
 }
 
 function sendError(code) {
@@ -3528,6 +3685,8 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
     } catch {}
     connectStream(null);
     renderAccountSwitch();
+    renderDeskState();
+    obFlush();
     // Re-subscribe silently on every open, with no capability guard: subscribePush answers
     // 'unsupported' itself, and that (a plain-http origin) is exactly the case worth reporting. The
     // result goes to the SERVER, so "no phone subscribed" on the desktop can say why.
@@ -3553,10 +3712,14 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
   } catch (e) {
     setTimeout(registerSW, 0);
     if (e.message === 'signin-required') return;
+    const n = obItems.length;
     document.body.insertAdjacentHTML('beforeend',
-      '<div class="reauth"><div><b>Could not reach Relaymote</b>' +
+      '<div class="reauth" id="boot-fail"><div><b>' + esc(e.conn ? CONN_TITLE[e.kind] : 'Relaymote could not start') + '</b>' +
       `<p>${esc(e.message)}</p>` +
-      '<button onclick="location.reload()">Retry</button></div></div>');
+      (n ? `<p>${n} message${n > 1 ? 's are' : ' is'} waiting on this phone and will go by ${n > 1 ? 'themselves, in order,' : 'itself'} once your PC is reachable.</p>` : '') +
+      '<button onclick="location.reload()">Try again</button></div></div>');
+    window.addEventListener('online', () => location.reload(), { once: true });
+    setTimeout(() => location.reload(), 20000);
   }
 })();
 

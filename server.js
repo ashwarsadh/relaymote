@@ -13,6 +13,7 @@ const chipwatch = require('./lib/chipwatch');
 const uiqueue = require('./lib/uiqueue');
 const resume = require('./lib/resume');
 const heal = require('./lib/heal');
+const deskState = require('./lib/desktop-state');
 const goal = require('./lib/goal');
 const awaits = require('./lib/await');
 const config = require('./lib/config');
@@ -60,7 +61,7 @@ async function refreshDesktop() {
   const _t0 = Date.now();
   try {
   lastDesktopAt = Date.now();
-  desktop.cdpAvailable().then(ok => { lastCdpOk = ok; lastCdpAt = Date.now(); }).catch(() => { lastCdpOk = false; lastCdpAt = Date.now(); });
+  desktop.cdpAvailable().then(ok => { lastCdpOk = ok; lastCdpAt = Date.now(); deskState.note({ cdp: ok }); }).catch(() => { lastCdpOk = false; lastCdpAt = Date.now(); deskState.note({ cdp: false }); });
   try {
     const sidebar = await desktop.scrapeSidebar();
     // Running comes from Desktop's session API when it answers; the sidebar label is the fallback.
@@ -131,13 +132,17 @@ const DEBUGGER_WAITING = new Set([1, 8, 9, 10, 12]);   // 12: you kept using the
 let debuggerNext = 0, debuggerTries = 0, debuggerPid = null, lastDebuggerWait = null;
 async function debuggerTick() {
   if (process.platform !== 'win32' || config.get().autoEnableDebugger === false) return;
-  if (lastCdpOk !== false || Date.now() < debuggerNext) return;
-  const pid = await new Promise(r => execFile('tasklist', ['/FI', 'IMAGENAME eq claude.exe', '/NH', '/FO', 'CSV'], { windowsHide: true },
-    (e, out) => { const m = !e && /"claude\.exe","(\d+)"/i.exec(String(out)); r(m ? m[1] : null); }));
-  if (!pid) return;
+  if (lastCdpOk !== false) return;
+  // g1587: Desktop gone -> Relaymote opens it (desktop-state.js); every outcome becomes a named state.
+  const pid = await deskState.claudePid();
+  if (pid === undefined) return;
+  deskState.tick({ running: !!pid, busy: config.get().followClaude === true || follow.state().stopping, log: orch.log });
+  if (!pid || Date.now() < debuggerNext) return;
   if (pid !== debuggerPid) { debuggerPid = pid; debuggerTries = 0; }
   if (debuggerTries >= 3) return;
   const r = await heal.enableDebugger().catch(e => ({ ok: false, code: -3, message: e.message }));
+  deskState.note({ debugger: { code: r.code, message: r.message, at: Date.now() }, cdp: r.ok ? true : false });
+  if (r.code === 3 && deskState.ensureDevMode()) orch.log('Developer Mode was off — switched it on in developer_settings.json; Claude Desktop must be restarted to read it');
   if (r.ok) { lastCdpOk = true; debuggerTries = 0; lastDebuggerWait = null; orch.log('debugger auto-enable: on again'); return; }
   if (DEBUGGER_WAITING.has(r.code)) {
     debuggerNext = Date.now() + 60000;
@@ -523,6 +528,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, {
         ok: true, app: 'relaymote', port: PORT, pid: process.pid,
         cdp: lastCdpOk,
+        desktop: deskState.get(),
         cdpCheckedSecAgo: lastCdpAt ? Math.round((Date.now() - lastCdpAt) / 1000) : null,
         uptimeSec: Math.round(process.uptime()),
         lastDesktopTickSecAgo: lastDesktopAt ? Math.round((Date.now() - lastDesktopAt) / 1000) : null,

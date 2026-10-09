@@ -84,6 +84,11 @@ check(/This phone needs pairing/.test(app) && /pairingPage\(\)/.test(mob), 'no v
   check(/if \(p === '\/api\/bootstrap'\) \{\n    await cdpCached\(\); wakeDesktop\('app opened'\);/.test(mob2) && /error: 'DESKTOP_RESTARTING'/.test(mob2), 'opening the app and sending both wake it; a send meanwhile is held, not failed');
   check(app.includes("if (e.code === 'DESKTOP_RESTARTING')") && app.includes('state.deskPoll = setInterval('), 'the phone keeps the message waiting and re-checks every 8 s, so it reconnects by itself');
   ds._seams(null, null);
+  // "didnt auto enable dev mode after i restarted the app myself": every Desktop start gets a quick burst.
+  check(/setInterval\(\(\) => \{ desktopWatch\(\)/.test(server) && /if \(pid !== debuggerPid\) newDesktop\(pid\)/.test(server) && /const BURST_MS = \[8000/.test(server),
+        'any new Desktop (his restart, a relaunch, a reboot) is seen within 10 s and its link switched on in a burst of quick tries');
+  check(/debuggerNext = early \? 0 : Date\.now\(\) \+ 10 \* 60000/.test(server) && /debuggerTries\+\+/.test(server), 'a miss in the first 3 min is retried in seconds, still at most 3 failed clicks a run');
+  check(/pid === null && deskState\.ensureDevMode\(\)/.test(server), 'Developer Mode is switched on while Desktop is closed, so the next start reads it');
 
   fs.rmSync(tmp, { recursive: true, force: true });
   if (fails) { console.error(fails + ' failed'); process.exit(1); }

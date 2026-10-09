@@ -1,3 +1,8 @@
+## 0.2.92
+
+- Claude Desktop's link to Relaymote now comes back within about half a minute of ANY Desktop start: you reopening it, Relaymote reopening it, or the PC restarting. It used to take two minutes or more.
+- Developer Mode is switched on while Claude Desktop is closed, so the next start always has it.
+
 ## 0.2.91
 
 - If Claude Desktop has closed, opening the Relaymote app (or sending a message) now opens it again on the PC, in your own Windows session and only once at a time. The app shows "Restarting Claude…" and reconnects by itself; a message sent meanwhile waits and goes when Claude is back.

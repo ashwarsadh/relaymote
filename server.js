@@ -15,7 +15,7 @@ const resume = require('./lib/resume');
 const heal = require('./lib/heal');
 const deskState = require('./lib/desktop-state');
 // g1638: once Relaymote has reopened Desktop, switch its link on as soon as it is up, not on the next minute.
-deskState.onLaunched = () => { debuggerNext = 0; for (const ms of [20000, 35000, 50000, 70000]) setTimeout(() => serialise(debuggerTick), ms).unref(); };
+deskState.onLaunched = () => { debuggerNext = 0; };   // the 10 s watch sees the new pid and starts the burst
 const goal = require('./lib/goal');
 const awaits = require('./lib/await');
 const config = require('./lib/config');
@@ -131,7 +131,26 @@ async function notifyTick() {
 // disconnected or locked, Desktop gone, you kept typing: codes 1, 8, 9, 10, 12) are retried every minute; one that clicked and failed backs off ten minutes, and a
 // Desktop run gets at most three of those, so a broken menu is never clicked forever.
 const DEBUGGER_WAITING = new Set([1, 8, 9, 10, 12]);   // 12: you kept using the computer during the countdown
-let debuggerNext = 0, debuggerTries = 0, debuggerPid = null, lastDebuggerWait = null;
+let debuggerNext = 0, debuggerTries = 0, debuggerPid = null, lastDebuggerWait = null, debuggerBurstUntil = 0;
+// g1638: "didnt auto enable dev mode after i restarted the app myself". It did, but 2 min 06 s later: the
+// 60 s tick found the new Desktop late and a try before its window was ready waited another minute. Now
+// EVERY Desktop start (his restart, Relaymote's relaunch, a reboot) gets a 3-minute burst of quick tries.
+const BURST_MS = [8000, 18000, 30000, 45000, 60000, 80000, 105000, 135000, 170000];
+function newDesktop(pid) {
+  const first = debuggerPid === null;
+  debuggerPid = pid; debuggerTries = 0; debuggerNext = 0; lastDebuggerWait = null;
+  debuggerBurstUntil = Date.now() + 180000;
+  if (!first || lastCdpOk === false) orch.log('Claude Desktop started (pid ' + pid + ') — switching its link on');
+  for (const ms of BURST_MS) setTimeout(() => serialise(debuggerTick), ms).unref();
+}
+// While the link is down, look for a new Desktop every 10 s (one PowerShell query; nothing runs while it is up).
+async function desktopWatch() {
+  if (process.platform !== 'win32' || config.get().autoEnableDebugger === false || lastCdpOk !== false) return;
+  const pid = await deskState.claudePid();
+  if (pid && pid !== debuggerPid) newDesktop(pid);
+  // Desktop reads Developer Mode only at start: set it while it is closed, so whatever starts it next gets it.
+  if (pid === null && deskState.ensureDevMode()) orch.log('Developer Mode was off — switched it on for the next Claude Desktop start');
+}
 async function debuggerTick() {
   if (process.platform !== 'win32' || config.get().autoEnableDebugger === false) return;
   if (lastCdpOk !== false) return;
@@ -140,19 +159,22 @@ async function debuggerTick() {
   if (pid === undefined) return;
   deskState.tick({ running: !!pid, busy: config.get().followClaude === true || follow.state().stopping, log: orch.log });
   if (!pid || Date.now() < debuggerNext) return;
-  if (pid !== debuggerPid) { debuggerPid = pid; debuggerTries = 0; debuggerNext = 0; }
+  if (pid !== debuggerPid) newDesktop(pid);
   if (debuggerTries >= 3) return;
+  const early = Date.now() < debuggerBurstUntil;
   const r = await heal.enableDebugger().catch(e => ({ ok: false, code: -3, message: e.message }));
   deskState.note({ debugger: { code: r.code, message: r.message, at: Date.now() }, cdp: r.ok ? true : false });
   if (r.code === 3 && deskState.ensureDevMode()) orch.log('Developer Mode was off — switched it on in developer_settings.json; Claude Desktop must be restarted to read it');
   if (r.ok) { lastCdpOk = true; debuggerTries = 0; lastDebuggerWait = null; orch.log('debugger auto-enable: on again'); return; }
   if (DEBUGGER_WAITING.has(r.code)) {
-    debuggerNext = Date.now() + 60000;
+    // Just started: its window is still loading, so the burst retries in seconds rather than a minute.
+    debuggerNext = early ? 0 : Date.now() + 60000;
     if (lastDebuggerWait !== r.code) orch.log('debugger auto-enable: waiting — ' + r.message);
     lastDebuggerWait = r.code;
     return;
   }
-  debuggerTries++; debuggerNext = Date.now() + 10 * 60000; lastDebuggerWait = null;
+  // A click that failed still counts (at most 3 per Desktop run); only in the first 3 min is the next try not 10 min away.
+  debuggerTries++; debuggerNext = early ? 0 : Date.now() + 10 * 60000; lastDebuggerWait = null;
   orch.log('debugger auto-enable: failed (' + debuggerTries + '/3, exit ' + r.code + ') — ' + r.message + (r.detail ? ' [' + r.detail + ']' : ''));
 }
 
@@ -693,6 +715,7 @@ async function evictWedgedHolder(reason) {
     setInterval(() => serialise(chipwatchTick), CHIPWATCH_MS);
     setInterval(() => serialise(uiQueueTick), 45000);
     setInterval(() => serialise(debuggerTick), 60000);
+    setInterval(() => { desktopWatch().catch(() => {}); }, 10000);
     setInterval(() => { follow.tick().catch(e => orch.log('follow Claude: ' + e.message)); }, 5000);
     setInterval(() => { if (config.mod('accounts')) require('./lib/account-sync').autoTick().then(r => { if (r && (r.applied || r.error)) orch.log('accounts auto-sync: ' + (r.error || r.applied + ' change(s) written')); }).catch(e => orch.log('accounts auto-sync: ' + e.message)); }, 15000);
     // Boot window: Desktop not running yet when Relaymote starts -> the pass that waits for a closed Desktop runs now.

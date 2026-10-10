@@ -15,7 +15,22 @@ const resume = require('./lib/resume');
 const heal = require('./lib/heal');
 const deskState = require('./lib/desktop-state');
 // g1638: once Relaymote has reopened Desktop, switch its link on as soon as it is up, not on the next minute.
-deskState.onLaunched = () => { debuggerNext = 0; };   // the 10 s watch sees the new pid and starts the burst
+deskState.onLaunched = () => { debuggerNext = 0; };
+// g1662: "didnt enable even when i opened relaymote app". The switch-on runs OUTSIDE the UI queue (with the link
+// down no queued CDP step can run anyway, and after a reboot one hung step held the queue for ever), one at a
+// time; opening the app tries again at once (at most once a minute) even after three misses.
+let debuggerBusy = false, lastAppOpenTry = 0;
+function runDebuggerTick() {
+  if (debuggerBusy) return;
+  debuggerBusy = true;
+  debuggerTick().catch(e => orch.log('debugger tick: ' + e.message)).finally(() => { debuggerBusy = false; });
+}
+deskState.onAppOpen = () => {
+  if (Date.now() - lastAppOpenTry < 60000) return;
+  lastAppOpenTry = Date.now(); debuggerNext = 0; debuggerTries = 0; runDebuggerTick();
+};
+desktop.onStuck = (e, name) => orch.log(e.message + (name === 'refreshDesktop' ? ' (at ' + refreshStage + ')' : ''));
+   // the 10 s watch sees the new pid and starts the burst
 const goal = require('./lib/goal');
 const awaits = require('./lib/await');
 const config = require('./lib/config');
@@ -59,16 +74,21 @@ async function chipwatchTick() {
   } catch (e) { lastChipwatch = { at: new Date().toISOString(), error: e.message }; }
 }
 
+let refreshStage = '';
 async function refreshDesktop() {
+  refreshStage = 'start';
   const _t0 = Date.now();
   try {
   lastDesktopAt = Date.now();
   desktop.cdpAvailable().then(ok => { lastCdpOk = ok; lastCdpAt = Date.now(); deskState.note({ cdp: ok }); }).catch(() => { lastCdpOk = false; lastCdpAt = Date.now(); deskState.note({ cdp: false }); });
   try {
+    refreshStage = 'scrapeSidebar';
     const sidebar = await desktop.scrapeSidebar();
     // Running comes from Desktop's session API when it answers; the sidebar label is the fallback.
+    refreshStage = 'readRunningAll';
     const truth = await desktop.readRunningAll(sidebar.sessions.map(s => s.id)).catch(() => ({}));
     for (const s of sidebar.sessions) if (typeof truth[s.id] === 'boolean') s.running = truth[s.id];
+    refreshStage = 'claudeAgents';
     const agents = await claudeAgents();
     const cwdMap = desktop.buildCwdMap(agents);
     const merged = desktop.mergeSessions(
@@ -95,6 +115,7 @@ async function refreshDesktop() {
     desktop.saveSnapshot({ sessions: merged, groups, blocker: sidebar.blocker || null, active: sidebar.active });
     lastDesktopErr = null;
     try {
+      refreshStage = 'viewSentinel';
       const vs = await desktop.viewSentinel();
       if (vs.action === 'restored' || vs.action === 'adopted' || vs.action === 'recorded') orch.log('sidebar view sentinel: ' + JSON.stringify(vs));
     } catch (e) { orch.log('sidebar view sentinel error: ' + e.message); }
@@ -141,11 +162,12 @@ function newDesktop(pid) {
   debuggerPid = pid; debuggerTries = 0; debuggerNext = 0; lastDebuggerWait = null;
   debuggerBurstUntil = Date.now() + 180000;
   if (!first || lastCdpOk === false) orch.log('Claude Desktop started (pid ' + pid + ') — switching its link on');
-  for (const ms of BURST_MS) setTimeout(() => serialise(debuggerTick), ms).unref();
+  for (const ms of BURST_MS) setTimeout(runDebuggerTick, ms).unref();
 }
 // While the link is down, look for a new Desktop every 10 s (one PowerShell query; nothing runs while it is up).
 async function desktopWatch() {
-  if (process.platform !== 'win32' || config.get().autoEnableDebugger === false || lastCdpOk !== false) return;
+  if (process.platform !== 'win32' || config.get().autoEnableDebugger === false) return;
+  if (await desktop.cdpAvailable()) return;
   const pid = await deskState.claudePid();
   if (pid && pid !== debuggerPid) newDesktop(pid);
   // Desktop reads Developer Mode only at start: set it while it is closed, so whatever starts it next gets it.
@@ -153,7 +175,9 @@ async function desktopWatch() {
 }
 async function debuggerTick() {
   if (process.platform !== 'win32' || config.get().autoEnableDebugger === false) return;
-  if (lastCdpOk !== false) return;
+  // Read the link here, not from refreshDesktop's last result: that refresh may itself be the thing that is stuck.
+  lastCdpOk = await desktop.cdpAvailable();
+  if (lastCdpOk) return;
   // g1587: Desktop gone -> Relaymote opens it (desktop-state.js); every outcome becomes a named state.
   const pid = await deskState.claudePid();
   if (pid === undefined) return;
@@ -165,11 +189,11 @@ async function debuggerTick() {
   const r = await heal.enableDebugger().catch(e => ({ ok: false, code: -3, message: e.message }));
   deskState.note({ debugger: { code: r.code, message: r.message, at: Date.now() }, cdp: r.ok ? true : false });
   if (r.code === 3 && deskState.ensureDevMode()) orch.log('Developer Mode was off — switched it on in developer_settings.json; Claude Desktop must be restarted to read it');
-  if (r.ok) { lastCdpOk = true; debuggerTries = 0; lastDebuggerWait = null; orch.log('debugger auto-enable: on again'); return; }
+  if (r.ok) { lastCdpOk = true; debuggerTries = 0; lastDebuggerWait = null; orch.log('debugger auto-enable: on again (switch-on took ' + Math.round((r.ms || 0) / 1000) + ' s)'); return; }
   if (DEBUGGER_WAITING.has(r.code)) {
     // Just started: its window is still loading, so the burst retries in seconds rather than a minute.
     debuggerNext = early ? 0 : Date.now() + 60000;
-    if (lastDebuggerWait !== r.code) orch.log('debugger auto-enable: waiting — ' + r.message);
+    if (lastDebuggerWait !== r.code || early) orch.log('debugger auto-enable: waiting — ' + r.message + ' (' + Math.round((r.ms || 0) / 1000) + ' s)');
     lastDebuggerWait = r.code;
     return;
   }
@@ -708,13 +732,15 @@ async function evictWedgedHolder(reason) {
       .catch(e => orch.log('startup recovery failed: ' + e.message))
       .then(() => serialise(refreshDesktop))
       .then(() => serialise(notifyTick));
+    // Test seam (replays only): one UI step that never settles, as after the 10-Oct reboot.
+    if (process.env.RELAYMOTE_TEST_HANG_UI === '1') serialise(function testHang() { return new Promise(() => {}); });
     setInterval(() => { if (config.mod('orchestrator')) Promise.resolve(orch.pump()).catch(e => orch.log('pump error: ' + e.message)); }, PUMP_MS);
     setInterval(() => serialise(refreshDesktop), DESKTOP_MS);
     setInterval(() => serialise(notifyTick), NOTIFY_MS);
     setInterval(() => serialise(resumeTick), RESUME_MS);
     setInterval(() => serialise(chipwatchTick), CHIPWATCH_MS);
     setInterval(() => serialise(uiQueueTick), 45000);
-    setInterval(() => serialise(debuggerTick), 60000);
+    setInterval(runDebuggerTick, 60000);
     setInterval(() => { desktopWatch().catch(() => {}); }, 10000);
     setInterval(() => { follow.tick().catch(e => orch.log('follow Claude: ' + e.message)); }, 5000);
     setInterval(() => { if (config.mod('accounts')) require('./lib/account-sync').autoTick().then(r => { if (r && (r.applied || r.error)) orch.log('accounts auto-sync: ' + (r.error || r.applied + ' change(s) written')); }).catch(e => orch.log('accounts auto-sync: ' + e.message)); }, 15000);

@@ -88,6 +88,15 @@ check(/This phone needs pairing/.test(app) && /pairingPage\(\)/.test(mob), 'no v
   check(/setInterval\(\(\) => \{ desktopWatch\(\)/.test(server) && /if \(pid !== debuggerPid\) newDesktop\(pid\)/.test(server) && /const BURST_MS = \[8000/.test(server),
         'any new Desktop (his restart, a relaunch, a reboot) is seen within 10 s and its link switched on in a burst of quick tries');
   check(/debuggerNext = early \? 0 : Date\.now\(\) \+ 10 \* 60000/.test(server) && /debuggerTries\+\+/.test(server), 'a miss in the first 3 min is retried in seconds, still at most 3 failed clicks a run');
+  // g1662: after a reboot one UI step hung and the switch-on queued behind it; opening the app did nothing.
+  check(!/serialise\(debuggerTick\)/.test(server) && /setInterval\(runDebuggerTick, 60000\)/.test(server) && /lastCdpOk = await desktop\.cdpAvailable\(\)/.test(server),
+        'the debugger switch-on never waits in the UI queue and reads the link itself');
+  check(/deskState\.onAppOpen\(\)/.test(mob) || /deskState\.onAppOpen\(\)/.test(fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8')), 'opening the app with Desktop up and the link off tries the switch-on at once');
+  check(/debuggerNext = 0; debuggerTries = 0; runDebuggerTick\(\)/.test(server) && /< 60000\) return;/.test(server), 'even after misses, at most once a minute');
+  const dsk = fs.readFileSync(path.join(__dirname, '..', 'lib', 'desktop.js'), 'utf8');
+  const heal = fs.readFileSync(path.join(__dirname, '..', 'lib', 'heal.js'), 'utf8');
+  check(/UI_STEP_MAX_MS = 300000/.test(dsk) && /Promise\.race\(\[Promise\.resolve\(\)\.then\(fn\), stuck\]\)/.test(dsk), 'no UI step holds the queue past 5 min, and the stuck one is named');
+  check(/taskkill', \['\/PID', String\(child\.pid\), '\/T', '\/F'\]/.test(heal) && /}, 75000\);/.test(heal), 'a switch-on run is killed and answered at 75 s even if its pipes stay open');
   check(/pid === null && deskState\.ensureDevMode\(\)/.test(server), 'Developer Mode is switched on while Desktop is closed, so the next start reads it');
 
   fs.rmSync(tmp, { recursive: true, force: true });

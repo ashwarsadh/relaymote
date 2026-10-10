@@ -629,7 +629,11 @@ async function cdpCached(ttl = 4000) {
 function deskNow() { deskState.note({ cdp: cdpVal }); return deskState.get(); }
 // g1638: "shud restart if app opened". Opening the app (bootstrap / list) or sending while the link is down
 // reopens Claude Desktop in this Windows session (desktop-state.js wake: single-flight, 90 s apart).
-function wakeDesktop(why) { if (cdpVal === false) deskState.wake({ why, log }).catch(() => {}); }
+function wakeDesktop(why) {
+  if (cdpVal !== false) return;
+  deskState.wake({ why, log }).catch(() => {});
+  if (deskState.onAppOpen) deskState.onAppOpen();   // Desktop up but link off: switch it on now (g1662)
+}
 
 // g1588: the phone keeps its own outbox and re-sends until the PC says the message reached Claude. A
 // re-send of the same message (same cmid: the answer to the first try was lost on the way back) must

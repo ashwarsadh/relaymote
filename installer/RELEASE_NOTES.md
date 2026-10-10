@@ -1,3 +1,8 @@
+## 0.2.93
+
+- After a PC restart Claude Desktop's link could stay off for minutes: one step that never finished held up everything behind it, including switching the link on. Switching the link on now runs on its own, any single try is stopped after 75 seconds, and no step can hold the others up for more than 5 minutes (the log names it).
+- Opening the Relaymote app while Claude Desktop is running with its link off now switches the link on straight away, even after earlier tries failed.
+
 ## 0.2.92
 
 - Claude Desktop's link to Relaymote now comes back within about half a minute of ANY Desktop start: you reopening it, Relaymote reopening it, or the PC restarting. It used to take two minutes or more.

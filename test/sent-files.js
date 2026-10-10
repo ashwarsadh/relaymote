@@ -70,5 +70,19 @@ const ok = (c, name) => { assert.ok(c, name); n++; console.log('ok ' + name); };
   const cssSrc = fs.readFileSync(path.join(root, 'public', 'style.css'), 'utf8');
   ok(/\.filebody \.mdbody \.mdh\{[^}]*white-space:normal/.test(cssSrc), 'a long heading wraps instead of the sheet-title ellipsis');
   ok(sf.typeOf('notes.markdown') === 'text/plain; charset=utf-8', '.markdown is served as text');
+  // g1695: the same name sent again with new content showed the old picture on the phone.
+  ok(/'&path=' \+ encodeURIComponent\(f\) \+ \(t\.id \? '&v=' \+ encodeURIComponent\(t\.id\) : ''\)/.test(app), 'each send has its own URL (its tool id), so a re-sent name never reuses the old image or its size');
+  ok(/'Cache-Control': 'private, no-cache'/.test(sfSrc) && /ETag: etag/.test(sfSrc) && /sentfiles\.stream\(req, res, file, st\.size, st\.mtimeMs\)/.test(idx), 'a sent file is revalidated by size+mtime, so a rewritten file is fetched fresh');
+  {
+    const img = path.join(os.tmpdir(), 'rm-etag-' + process.pid + '.png'); fs.writeFileSync(img, 'aaaa');
+    const srv = http.createServer((req, res) => { const st = fs.statSync(img); sf.stream(req, res, img, st.size, st.mtimeMs); });
+    await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    const get = (h) => new Promise(r => http.get({ port: srv.address().port, path: '/', headers: h || {} }, x => { let d = ''; x.on('data', c => d += c).on('end', () => r({ s: x.statusCode, e: x.headers.etag, d })); }));
+    const a = await get(); const a2 = await get({ 'if-none-match': a.e });
+    fs.writeFileSync(img, 'bbbbbbbb'); fs.utimesSync(img, new Date(), new Date(Date.now() + 5000));
+    const b = await get({ 'if-none-match': a.e });
+    srv.close(); fs.unlinkSync(img);
+    ok(a.s === 200 && a2.s === 304 && b.s === 200 && b.d === 'bbbbbbbb' && b.e !== a.e, 'unchanged file answers 304; the rewritten file answers 200 with the new bytes', [a.s, a2.s, b.s, b.d]);
+  }
   console.log(`\n${n}/${n} passed`);
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

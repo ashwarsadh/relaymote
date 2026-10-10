@@ -642,7 +642,9 @@ function sentFileHtml(t) {
   if (t.caption) out += `<div class="sf-cap">${esc(t.caption)}</div>`;
   for (const f of t.files) {
     const name = String(f).split(/[\\/]/).pop() || f;
-    const url = '/api/sent-file?session=' + encodeURIComponent(sid) + '&path=' + encodeURIComponent(f);
+    // g1695: the same name sent again with new content showed the OLD picture (browser cache, and the
+    // size remembered per URL). Each send's own id makes its URL unique.
+    const url = '/api/sent-file?session=' + encodeURIComponent(sid) + '&path=' + encodeURIComponent(f) + (t.id ? '&v=' + encodeURIComponent(t.id) : '');
     const e = ((name.match(/\.([a-z0-9]+)$/i) || [])[1] || '').toLowerCase();
     out += '<div class="sf">';
     if (/^(wav|mp3|ogg|oga|opus|m4a|aac|flac)$/.test(e)) out += `<audio controls preload="metadata" src="${esc(url)}"></audio>`;

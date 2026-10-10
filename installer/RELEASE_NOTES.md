@@ -1,3 +1,7 @@
+## 0.2.94
+
+- A file sent again under the same name with new content (a redone image, for example) now shows the NEW picture in the app. It used to show the earlier one from the cache.
+
 ## 0.2.93
 
 - After a PC restart Claude Desktop's link could stay off for minutes: one step that never finished held up everything behind it, including switching the link on. Switching the link on now runs on its own, any single try is stopped after 75 seconds, and no step can hold the others up for more than 5 minutes (the log names it).

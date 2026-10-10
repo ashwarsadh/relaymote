@@ -1021,7 +1021,7 @@ async function handle(req, res) {
     if (!sent.has(file)) return json(res, 403, { ok: false, error: 'NOT_SENT', message: 'This session did not send that file.' });
     let st; try { st = await fs.promises.stat(file); } catch { st = null; }
     if (!st || !st.isFile()) return json(res, 404, { ok: false, error: 'GONE', message: 'The file is no longer on the desktop.' });
-    return sentfiles.stream(req, res, file, st.size);
+    return sentfiles.stream(req, res, file, st.size, st.mtimeMs);
   }
 
   if (p === '/api/tts-audio') {

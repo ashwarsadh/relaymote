@@ -59,10 +59,14 @@ async function sentFiles(transcript) {
 }
 
 // Answer GET for one file, honouring a single Range. Returns nothing; writes the response.
-function stream(req, res, file, size) {
+function stream(req, res, file, size, mtimeMs) {
   const type = typeOf(file);
+  // g1695: a file can be rewritten under the same name; the browser must ask each time and get the new bytes.
+  const etag = mtimeMs ? '"' + size.toString(36) + '-' + Math.floor(mtimeMs).toString(36) + '"' : null;
+  if (etag && req.headers['if-none-match'] === etag && !req.headers.range) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'private, no-cache' }); return res.end(); }
   const headers = {
-    'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=300',
+    'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, no-cache',
+    ...(etag ? { ETag: etag } : {}),
     'X-Content-Type-Options': 'nosniff',
     'Content-Disposition': 'inline; filename="' + path.basename(file).replace(/[^\w.\- ]/g, '_') + '"',
   };

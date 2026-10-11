@@ -33,3 +33,8 @@ finish-the-task.py blocks once only (honours `stop_hook_active`). wake-gate.py (
 ONE prompt and a test Stop hook that blocked 20 times: **21 assistant turns (READY, TICK-1…TICK-20), 0 cap
 events, 0 human messages**, finished 00:18:32 IST. Before the change, the same shape (ago `14a7eef4…`, a /goal that kept blocking, 09-Sep) stopped at 9.
 The test hook (`.claude/settings.local.json`) was removed afterwards.
+
+**Deployed.** v0.2.95 released (signed, GitHub Actions run green 00:23 IST); installed copy updated with
+`relaymote update --apply`; daemon running 0.2.95 since 00:34 IST 12-Oct (pids 121272/59984).
+Open edge: sessions whose CLI process started before 00:16 IST still carry cap 8 until they restart; the
+relay backstop covers those meanwhile.

@@ -62,3 +62,24 @@ key event (`webContents.sendInputEvent` Enter) is what raises the dialog.
 **Deployed.** v0.2.96 released (Actions green), installed 00:58:57 IST via `relaymote update --apply`; daemon pid
 115260 serves it. The live HTTP route was not exercised with the phone's access key (not handled by this lane);
 the first real tap from the phone is its end-to-end check.
+
+## g1719 — phone: false "send now" on a delivered /goal; "/" list (12-Oct-2026, 01:35 IST)
+
+**Bug 1 (fixed, 0.2.97).** Claude Code writes every `dequeue` queue-operation WITHOUT `content` (measured: 3,324 of
+3,324 in the Conductor transcript; 3,621 enqueues = 3,324 dequeues + 297 content-keyed removes). `mobile/sessions.js`
+only read queue ops with string content, so a dequeue never cleared its message. Only the text match below rescued
+plain messages, and a slash command lands as a `<command-name>/goal…` turn, so his `/goal` stayed "queued" with a
+live "send now" that would re-run it. Fix: a dequeue takes the oldest waiting enqueue (first in, first out), and a command
+turn counts as arrived in its typed form "/name args". Proof: real Conductor transcript `4853c4dc…` showed 1 queued row
+(the /goal) on 0.2.96 and 0 with the fix. `test/queued-command.js` has 3 FAIL on the old code and passes on the new.
+On the phone page (demo world with the same shape), the /goal turn shows with 0 queued tags and 0 "send now" buttons.
+
+**Bug 2 ("/" list) — NOT reproduced; hardened + instrumented.** Tried on the phone page in mobile emulation:
+demo data; his REAL data (27 commands, 15 skills, served correctly); his Conductor session; after sending a /goal; at
+100% and 140% text. The list opened every time. Server side is fine (the daemon runs as KKFE0ashwar, home correct).
+Changes: the list opens on `input`, `compositionend` and `keyup`; a throwing autosize can no longer stop it; a leading
+space before "/" is accepted; a stale async result can't overwrite a newer one. Phone errors and a "/" with no list now
+go to the PC log as `[mobile] phone: …` (POST /api/clientlog, owner only, at most 6 a minute). **Next time it happens,
+grep relaymote.log for "phone:"** — that is the evidence this lane could not get.
+Also found: Python on Windows wrote CRLF into mobile/index.js and app.js (git normalised the commits, but the
+working-tree tests broke); converted back to LF.

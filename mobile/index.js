@@ -1483,6 +1483,12 @@ async function handle(req, res) {
     return json(res, 200, { ok: true, running, offered: [], fromTranscript, pending: true });
   }
 
+  // g1719: errors the phone hit (see clientLog in app.js), so a phone-only failure leaves evidence on the PC.
+  if (p === '/api/clientlog' && req.method === 'POST') {
+    let b = {}; try { b = JSON.parse(await readBody(req)) || {}; } catch {}
+    log(`phone: ${String(b.msg || '').replace(/\s+/g, ' ').slice(0, 400)} [${String(b.ua || '').slice(0, 80)}]`);
+    return json(res, 200, { ok: true });
+  }
   if (p === '/api/commands') {
     return json(res, 200, { ok: true, commands: slashCommands() });
   }

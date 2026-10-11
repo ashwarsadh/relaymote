@@ -271,6 +271,15 @@ function stripFraming(text) {
   return t.trim();
 }
 
+function commandAsTyped(text) {
+  const t = String(text || '');
+  const n = /<command-name>\s*([^<]+?)\s*<\/command-name>/.exec(t);
+  if (!n) return null;
+  const a = /<command-args>([\s\S]*?)<\/command-args>/.exec(t);
+  const name = n[1].startsWith('/') ? n[1] : '/' + n[1];
+  return (name + ' ' + (a ? a[1] : '')).trim();
+}
+
 function unwrap(text) {
   const raw = String(text || '');
   if (!isInjected(raw)) return { text: raw, injected: false };
@@ -503,9 +512,14 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
       if (!t) continue;
       let row;
       try { row = JSON.parse(t); } catch { continue; }
-      if (row.type === 'queue-operation' && typeof row.content === 'string') {
-        if (row.operation === 'enqueue') queued.set(row.content, { ts: row.timestamp || null, taken: false });
-        else if (queued.has(row.content)) queued.get(row.content).taken = true;
+      if (row.type === 'queue-operation') {
+        if (row.operation === 'enqueue' && typeof row.content === 'string') queued.set(row.content, { ts: row.timestamp || null, taken: false });
+        else if (typeof row.content === 'string') { if (queued.has(row.content)) queued.get(row.content).taken = true; }
+        // g1719: Claude Code writes `dequeue` with NO content (every one, measured). It takes the oldest
+        // waiting message, so mark that one picked up. Before this, only the text-match below cleared it,
+        // and a slash command (its turn is <command-name>…, not the typed text) stayed "queued" with a
+        // live "send now" that would have run the command twice.
+        else if (row.operation === 'dequeue') { for (const v of queued.values()) if (!v.taken) { v.taken = true; break; } }
       }
       const f = flatten(row);
       if (f) msgs.push(f);
@@ -563,6 +577,8 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
 
   const norm = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 120);
   const arrived = new Set(msgs.filter(m => m.role === 'user').map(m => norm(m.text)));
+  // A slash command arrives as "<command-name>/goal</command-name>…<command-args>…</command-args>"; as typed it was "/goal …".
+  for (const m of msgs) { const c = commandAsTyped(m.text); if (c) arrived.add(norm(c)); }
 
   const extras = [...queued.entries()]
     .map(([text, info]) => ({ u: unwrap(text), info }))

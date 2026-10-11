@@ -1,3 +1,7 @@
+## 0.2.96
+
+- When a box on the PC blocks sends ("Trust this workspace?" and the like), the phone now shows that box's own buttons. Tap one and Relaymote presses that same button on the PC, then confirms the box closed. It only ever presses what you tap; if the box changed in the meantime it refuses and shows you the new one. Permission prompts inside a session already worked this way.
+
 ## 0.2.95
 
 - A session that is working on its own no longer stops after about 10 turns. Claude Code ends a turn once a stop hook (a goal, the finish-the-task rule) has kept it going 9 times in a row; if that still happens to a session that was doing real work, Relaymote now sends it one labelled "continue" so it carries on. A session that was only waiting for you is left alone, and each session gets at most 12 such nudges a day.

@@ -38,3 +38,24 @@ The test hook (`.claude/settings.local.json`) was removed afterwards.
 `relaymote update --apply`; daemon running 0.2.95 since 00:34 IST 12-Oct (pids 121272/59984).
 Open edge: sessions whose CLI process started before 00:16 IST still carry cap 8 until they restart; the
 relay backstop covers those meanwhile.
+
+## g1712 add-on — Desktop dialogs answerable from the phone (12-Oct-2026, ~01:20 IST)
+
+**Before.** Relaymote's snapshot scraped a blocking `[role=dialog]` (e.g. "Trust this workspace?") and the phone
+could only say "Sends are blocked — answer this on the PC". Tool-permission prompts were already answerable
+(`/api/permission/answer`); app-level dialogs were not. The baton trust prompt Ashwar saw was most likely caused by
+this lane's temporary `.claude/settings.local.json` Stop hook — a folder that gains project settings becomes
+untrusted (Desktop: `WorkspaceTrustError … trust_required`), and the next UI send raises the dialog.
+
+**Built (0.2.96).** `mobile/dialog.js` `pressDialogButton({key,label,index})` + `POST /api/dialog/press` +
+phone buttons in the blocker banner. It presses only the button at that index WITH that label, on the dialog
+whose text matches what the phone showed; otherwise `DIALOG_CHANGED`. ok only after the dialog is gone.
+The only caller is that route (his tap); scoped sub-users get 403. Test: `test/dialog-press.js`.
+
+**Proof (real dialog, fresh folder).** Fresh scratch folder `g1712-trust-probe`, then an inert project Stop hook was
+added, then a UI send was made. Desktop raised "Trust this workspace? … Cancel / Trust workspace". The scrape gave the
+phone exactly `["Cancel","Trust workspace"]`. A wrong label was refused (`DIALOG_CHANGED`) and a stale key was not
+touched. Pressing "Trust workspace" returned `{ok:true,closed:true}`, the blocker went to null, and the held send
+then started session `local_94177558-8c20-4175-9772-253fbb5f37b0`.
+Gotcha for automation: a synthetic `button.click()` on Send in an untrusted workspace does nothing; a trusted
+key event (`webContents.sendInputEvent` Enter) is what raises the dialog.

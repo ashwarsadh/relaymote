@@ -1382,12 +1382,35 @@ function renderBlocker(b) {
   if (!key || state.blockerDismissed === key) { el.classList.add('hidden'); el.innerHTML = ''; return; }
   const btns = (b.buttons || []).filter(Boolean);
   el.classList.remove('hidden');
-  el.innerHTML = '<div class="bk-head">Sends are blocked — answer this on the PC</div>'
+  // g1712: the dialog's own buttons, pressed on the PC by his tap — never answered without it.
+  el.innerHTML = '<div class="bk-head">A box on the PC is blocking sends — answer it here</div>'
     + '<div class="bk-text">' + esc(b.text.slice(0, 300)) + '</div>'
-    + (btns.length ? '<div class="bk-text" style="margin-top:4px">Buttons: ' + esc(btns.join(' / ')) + '</div>' : '')
-    + '<div class="bk-acts"><button class="linkish" id="bk-hide">Dismiss</button></div>';
+    + (btns.length ? '<div class="permacts">' + btns.map((t, i) =>
+        `<button class="permbtn dlgbtn" data-i="${i}">${esc(t)}</button>`).join('') + '</div>' : '')
+    + '<div class="bk-acts"><button class="linkish" id="bk-hide">Hide on this phone</button></div>';
   const h = $('bk-hide');
   if (h) h.onclick = () => { state.blockerDismissed = key; el.classList.add('hidden'); el.innerHTML = ''; };
+  el.querySelectorAll('.dlgbtn').forEach(btn => {
+    btn.onclick = async () => {
+      const i = Number(btn.dataset.i), label = btns[i];
+      el.querySelectorAll('.dlgbtn').forEach(x => { x.disabled = true; });
+      btn.textContent = 'pressing on the PC…';
+      const revert = () => renderBlocker(b);
+      try {
+        const d = await api('/api/dialog/press', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, label, index: i }),
+        });
+        if (d && d.jobId) uiJobs.set(d.jobId, {
+          label: '"' + label + '"',
+          done: r => r.closed ? '"' + label + '" pressed — the box closed on the PC' : '"' + label + '" pressed',
+          after: () => { state.blockerDismissed = key; el.classList.add('hidden'); el.innerHTML = ''; setTimeout(() => loadSessions(), 3000); },
+          revert,
+        });
+        else revert();
+      } catch (e) { toast('Failed: ' + e.message, true); revert(); }
+    };
+  });
 }
 
 function renderStats() {

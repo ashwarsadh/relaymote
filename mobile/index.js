@@ -32,6 +32,7 @@ const accountScope = require('../lib/account-scope');
 const { readUsage } = require('./usage');
 const board = require('./board');
 const { readPermission, answerPermission } = require('./permission');
+const { pressDialogButton } = require('./dialog');
 const accounts = require('./accounts');
 const subusers = require('./subusers');
 
@@ -1809,6 +1810,13 @@ async function handle(req, res) {
         return json(res, 400, { ...o, ok: false, code: o.error || 'NO_RESULT', error: o.message || o.error || 'The session could not be created.' });
       }
       return json(res, 200, out);
+    }
+    // g1712: his tap on a Desktop dialog's button (workspace trust etc.), pressed on the same dialog on the PC.
+    if (p === '/api/dialog/press') {
+      log(`dialog press "${String(body.label || '').slice(0, 40)}" on "${String(body.key || '').slice(0, 60)}"`);
+      return uiJobWith(res, 'dialog-press',
+                       () => ui(() => pressDialogButton({ key: body.key, label: body.label, index: body.index })),
+                       (out) => ({ key: body.key, label: body.label, closed: !!(out && (out.closed || out.alreadyClosed)) }));
     }
     if (p === '/api/permission/answer') {
       return uiJobWith(res, 'permission-answer',

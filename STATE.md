@@ -83,3 +83,5 @@ go to the PC log as `[mobile] phone: …` (POST /api/clientlog, owner only, at m
 grep relaymote.log for "phone:"** — that is the evidence this lane could not get.
 Also found: Python on Windows wrote CRLF into mobile/index.js and app.js (git normalised the commits, but the
 working-tree tests broke); converted back to LF.
+
+**Deployed 12-Oct-2026:** v0.2.97 release workflow succeeded; `update --apply` installed it (installed package.json reads 0.2.97, daemon answers on :8798).

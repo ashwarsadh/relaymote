@@ -39,7 +39,7 @@ The test hook (`.claude/settings.local.json`) was removed afterwards.
 Open edge: sessions whose CLI process started before 00:16 IST still carry cap 8 until they restart; the
 relay backstop covers those meanwhile.
 
-## g1712 add-on — Desktop dialogs answerable from the phone (12-Oct-2026, ~01:20 IST)
+## g1712 add-on — Desktop dialogs answerable from the phone (12-Oct-2026, 01:00 IST)
 
 **Before.** Relaymote's snapshot scraped a blocking `[role=dialog]` (e.g. "Trust this workspace?") and the phone
 could only say "Sends are blocked — answer this on the PC". Tool-permission prompts were already answerable
@@ -59,3 +59,6 @@ touched. Pressing "Trust workspace" returned `{ok:true,closed:true}`, the blocke
 then started session `local_94177558-8c20-4175-9772-253fbb5f37b0`.
 Gotcha for automation: a synthetic `button.click()` on Send in an untrusted workspace does nothing; a trusted
 key event (`webContents.sendInputEvent` Enter) is what raises the dialog.
+**Deployed.** v0.2.96 released (Actions green), installed 00:58:57 IST via `relaymote update --apply`; daemon pid
+115260 serves it. The live HTTP route was not exercised with the phone's access key (not handled by this lane);
+the first real tap from the phone is its end-to-end check.

@@ -23,8 +23,10 @@ function world() {
   const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
   const $ = id => (id === 'cmdlist' ? box : input);
   const esc = s => String(s);
-  const f = new Function('api', 'localStorage', '$', 'esc', src + '\nreturn { ensureCommands, updateCommandList, get list() { return commandList; }, set at(v) { commandsAt = v; } };');
-  return { env, box, input, store, fns: f(api, localStorage, $, esc) };
+  env.logged = [];
+  const clientLog = (m) => env.logged.push(m);
+  const f = new Function('api', 'localStorage', '$', 'esc', 'clientLog', src +'\nreturn { ensureCommands, updateCommandList, get list() { return commandList; }, set at(v) { commandsAt = v; } };');
+  return { env, box, input, store, fns: f(api, localStorage, $, esc, clientLog) };
 }
 const shown = (w) => !w.box.cls.has('hidden');
 const tick = () => new Promise(r => setTimeout(r, 0));
@@ -36,6 +38,7 @@ const tick = () => new Promise(r => setTimeout(r, 0));
   w.input.value = '/';
   await w.fns.updateCommandList();
   check(shown(w) && /could not be loaded/.test(w.box.innerHTML), 'with the PC unreachable and nothing saved, "/" says the list could not be loaded (not silence)');
+  check(w.env.logged.length === 1, 'and the failure is reported to the PC log (g1719: a phone-only failure left no trace)', w.env.logged);
   w.env.up = true;
   await w.fns.updateCommandList();
   check(shown(w) && /\/goal/.test(w.box.innerHTML) && /\/conductor/.test(w.box.innerHTML), 'once the PC answers, the next "/" opens the list with /goal and the skills', w.box.innerHTML.slice(0, 80));
@@ -55,6 +58,8 @@ const tick = () => new Promise(r => setTimeout(r, 0));
   check(shown(w) && /conductor/.test(w.box.innerHTML) && !/\/goal/.test(w.box.innerHTML), '"/co" narrows to the matching commands');
   w.input.value = '/zzz'; await w.fns.updateCommandList();
   check(!shown(w), 'a word nothing matches closes the list');
+  w.input.value = ' /'; await w.fns.updateCommandList();
+  check(shown(w), 'a space a phone keyboard put in front of "/" still opens the list (g1719)');
   w.input.value = 'hello /goal'; await w.fns.updateCommandList();
   check(!shown(w), 'a "/" inside a sentence does not open it');
 
@@ -64,6 +69,8 @@ const tick = () => new Promise(r => setTimeout(r, 0));
   check(w.env.calls > before, 'a list older than its time-to-live is fetched again (new skills appear)');
 
   check(/setTimeout\(\(\) => \{ ensureCommands\(\)/.test(app), 'the list is fetched at load, so the first "/" does not wait');
+  check(/addEventListener\('compositionend', onComposerChange\)/.test(app) && /try \{ autosize\(\); \} catch/.test(app),
+        'g1719: the list also opens on compositionend, and a failing autosize can no longer stop it');
 
   if (fails) { console.error(fails + ' failed'); process.exit(1); }
   console.log('slash-commands: all checks passed');

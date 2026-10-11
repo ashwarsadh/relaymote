@@ -53,6 +53,20 @@ const api = async (path, opts) => {
   }
   throw last;
 };
+// g1719: phone-side failures that would otherwise be invisible go to the PC's log. At most 6 a minute.
+let clientLogN = 0, clientLogAt = 0;
+function clientLog(msg) {
+  try {
+    if (Date.now() - clientLogAt > 60000) { clientLogAt = Date.now(); clientLogN = 0; }
+    if (++clientLogN > 6) return;
+    fetch('/api/clientlog', { method: 'POST', credentials: 'same-origin', keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ msg: String(msg).slice(0, 400), ua: navigator.userAgent.slice(0, 120), build: document.documentElement.dataset.build || '' }) }).catch(() => {});
+  } catch {}
+}
+window.addEventListener('error', e => clientLog('error: ' + (e.message || '') + ' @' + (e.filename || '').split('/').pop() + ':' + (e.lineno || '')));
+window.addEventListener('unhandledrejection', e => { const r = e.reason; if (r && (r.conn || r.message === 'signin-required')) return; clientLog('rejection: ' + ((r && r.message) || String(r))); });
+
 const CLIENT_ID = (() => {
   const mint = () => 'c' + Math.random().toString(36).slice(2) + Date.now().toString(36);
   try {
@@ -3417,7 +3431,17 @@ $('input').addEventListener('paste', (e) => {
   e.preventDefault();
   uploadFiles(files);
 });
-$('input').addEventListener('input', () => { autosize(); updateCommandList(); saveDraft(state.open, $('input').value); });
+// g1719: the "/" list is opened by EVERY way text can change on a phone keyboard, and nothing before it
+// (autosize) can stop it opening. "/" stopped showing the list on his phone and could not be reproduced on
+// the PC, so a failure here is now reported to the PC's log (clientLog) instead of failing silently.
+const onComposerChange = () => {
+  try { autosize(); } catch (e) { clientLog('autosize: ' + e.message); }
+  updateCommandList().catch(e => clientLog('command list: ' + (e && e.message)));
+  saveDraft(state.open, $('input').value);
+};
+$('input').addEventListener('input', onComposerChange);
+$('input').addEventListener('compositionend', onComposerChange);
+$('input').addEventListener('keyup', () => { if (/^\s*\//.test($('input').value)) updateCommandList().catch(() => {}); });
 
 let searchTimer;
 function syncSearchClear() {
@@ -3657,10 +3681,12 @@ async function fetchCommands() {
 async function updateCommandList() {
   const box = $('cmdlist');
   const v = $('input').value;
-  const m = /^\/([\w:-]*)$/.exec(v);
+  const m = /^\s*\/([\w:-]*)$/.exec(v);       // a keyboard may put a space or newline in front
   if (!m) { box.classList.add('hidden'); return; }
   const all = await ensureCommands();
+  if ($('input').value !== v) return;           // he typed on while the list loaded: the newer call draws it
   if (!all.length) {
+    clientLog('"/" typed but no command list (fetch failed and none saved on the phone)');
     box.innerHTML = '<div class="cmd"><b>Commands could not be loaded</b><span>The PC may be restarting. Type / again in a moment.</span></div>';
     box.classList.remove('hidden');
     return;

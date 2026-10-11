@@ -1,3 +1,8 @@
+## 0.2.97
+
+- A slash command you sent (like /goal …) that the session already took no longer stays "queued · waiting to be picked up" with a "send now" button. A second tap there would have run the command again.
+- Typing "/" opens the commands-and-skills list more reliably on a phone keyboard (also after a keyboard's text suggestion, or a space in front). If it ever fails to open, the phone now writes the reason to the PC's Relaymote log, so it can be found.
+
 ## 0.2.96
 
 - When a box on the PC blocks sends ("Trust this workspace?" and the like), the phone now shows that box's own buttons. Tap one and Relaymote presses that same button on the PC, then confirms the box closed. It only ever presses what you tap; if the box changed in the meantime it refuses and shows you the new one. Permission prompts inside a session already worked this way.

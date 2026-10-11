@@ -1,3 +1,7 @@
+## 0.2.95
+
+- A session that is working on its own no longer stops after about 10 turns. Claude Code ends a turn once a stop hook (a goal, the finish-the-task rule) has kept it going 9 times in a row; if that still happens to a session that was doing real work, Relaymote now sends it one labelled "continue" so it carries on. A session that was only waiting for you is left alone, and each session gets at most 12 such nudges a day.
+
 ## 0.2.94
 
 - A file sent again under the same name with new content (a redone image, for example) now shows the NEW picture in the app. It used to show the earlier one from the cache.

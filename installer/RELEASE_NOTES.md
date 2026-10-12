@@ -1,3 +1,8 @@
+## 0.2.100
+
+- The phone no longer says "A box on the PC is blocking sends" for Claude Desktop's Usage popover. Desktop leaves closed popups in the page; those, and small popovers that don't block anything, are now ignored.
+- A real blocking box now also offers one "Dismiss (Esc)" button, which closes it on the PC without choosing any of its options. Blank or icon-only buttons are no longer shown.
+
 ## 0.2.99
 
 - A message the PC never takes is no longer shown as "delivered". If Claude Desktop drops a message (seen when it was sent at the very moment a session's turn ended), Relaymote notices within a minute and sends it once more. If that is lost too, the phone says "NOT delivered — the PC never took it" with Send again.

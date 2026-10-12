@@ -1401,19 +1401,21 @@ function renderBlocker(b) {
   if (!el) return;
   const key = b && b.text ? b.text.slice(0, 80) : '';
   if (!key || state.blockerDismissed === key) { el.classList.add('hidden'); el.innerHTML = ''; return; }
-  const btns = (b.buttons || []).filter(Boolean);
+  const btns = (b.buttons || []).filter(t => /[A-Za-z0-9]/.test(t));
   el.classList.remove('hidden');
   // g1712: the dialog's own buttons, pressed on the PC by his tap — never answered without it.
   el.innerHTML = '<div class="bk-head">A box on the PC is blocking sends — answer it here</div>'
     + '<div class="bk-text">' + esc(b.text.slice(0, 300)) + '</div>'
     + (btns.length ? '<div class="permacts">' + btns.map((t, i) =>
         `<button class="permbtn dlgbtn" data-i="${i}">${esc(t)}</button>`).join('') + '</div>' : '')
+    // Esc on the PC: closes it without choosing any of its buttons.
+    + '<div class="permacts"><button class="permbtn dlgbtn" data-i="-1">Dismiss (Esc)</button></div>'
     + '<div class="bk-acts"><button class="linkish" id="bk-hide">Hide on this phone</button></div>';
   const h = $('bk-hide');
   if (h) h.onclick = () => { state.blockerDismissed = key; el.classList.add('hidden'); el.innerHTML = ''; };
   el.querySelectorAll('.dlgbtn').forEach(btn => {
     btn.onclick = async () => {
-      const i = Number(btn.dataset.i), label = btns[i];
+      const i = Number(btn.dataset.i), label = i === -1 ? 'Dismiss' : btns[i];
       el.querySelectorAll('.dlgbtn').forEach(x => { x.disabled = true; });
       btn.textContent = 'pressing on the PC…';
       const revert = () => renderBlocker(b);

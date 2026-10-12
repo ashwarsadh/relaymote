@@ -122,3 +122,23 @@ it (g1782), so no hand fix was needed.
 - The transcript has one enqueue at 08:17:40.863Z and exactly one user turn, whose uuid is the original 0211928f. The session replied "OK".
 **CI note:** in the v0.2.99 release, the macOS Intel (macos-15-intel x64) job failed at "Self-test the DMG". The Windows, arm64 and
 release jobs succeeded, so that version has no Intel DMG. Not investigated; the arm64 DMG is unaffected.
+
+## Usage popover shown as "a box blocking sends" (13-Oct-2026, ~01:45 IST report) — DONE, 0.2.100 live
+
+**Cause (measured on his Desktop 13-Oct):** Desktop keeps closed dialogs in the page at full size.
+- The Usage popover after it closes: `data-closed`, `data-side=top`, pointer-events none. Relaymote's own usage read
+  opens and closes this popover, so it is often lying in the page.
+- A claimed-credit modal (`cloud-credit-claim-modal`): `data-closed`, opacity 0.
+
+Three places tested only offsetWidth/Height, so a closed popover counted as a blocking box: the sidebar scrape (the phone
+banner), the send-path cover check, and `mobile/dialog.js`. Live check: the old rule flagged both elements, the new one flags nothing.
+
+**Fix:**
+- A shared `desktop.OPEN_DIALOG_FN` requires a dialog that is not data-closed, not anchored (data-side), visible, opacity
+  above 0.05 and pointer-events not none.
+- A button needs a letter or digit, so no blank glyph is shown.
+- A real blocker also gets one "Dismiss (Esc)" button, which sends a trusted Escape key to the window
+  (`pressDialogButton` with index -1).
+
+**Proof:** `test/dialog-press.js` builds the measured shapes. The old code fails 6 of its checks; the new code passes them all.
+The full suite passes, the v0.2.100 CI is green on all jobs, the installed 0.2.100 is running, and the live scrape returns blocker null.

@@ -96,3 +96,29 @@ Proof: the phone page (mobile viewport, a daemon on the real Desktop) showed Ses
 both weekly windows "Resets Sun 3:30 PM". get_usage returned 7 / 2 / 0 at the same moment, resetting 2026-10-18T10:00Z,
 which is Sun 15:30 IST. Screenshot: `C:\Users\Ashwar\.relaymote\results\g1756-usage-fable.jpg`. Release CI green;
 `update --apply` installed 0.2.98.
+
+## g1783 — a message Desktop dropped showed "delivered" for 73 min (12-Oct-2026, 13:50 IST) — DONE, 0.2.99 live
+
+**Cause (Conductor's evidence, confirmed):** outbox `ob_mv4u2tlkbs0x` went over the bridge (`LS.sendMessage`, priority
+'next') at 05:50:47.384Z, 157 ms before a Stop-hook continuation in the Conductor transcript (4853c4dc). Desktop wrote
+no enqueue, no remove and no user row: it dropped the message. `sendQueued` still returned delivery 'held' because
+isRunning was true at the call, and nothing ever checked again. The 15-min suspect flag only offered "Send again", under
+the words "delivered, waiting for a reply". That item has been `confirmed` since 07:56:55Z, after the Conductor relayed
+it (g1782), so no hand fix was needed.
+**Fix (`mobile/outbox.js` checkAccepted / markResent, `outboxTickInner`, `desktop.sendQueued(…, {uuid})`):**
+- A bridge send (one that has a uuid) must leave a trace within 60 s: an enqueue/remove row with its text, a row carrying its uuid,
+  or the user turn.
+- If there is none, it is re-sent ONCE under the same uuid, and only within 5 min of sending, so nothing old is re-sent late.
+- If that also leaves no trace in 60 s, it becomes `failed` and `notDelivered`, the phone gets an alert titled "Message NOT delivered",
+  and the bubble reads "NOT delivered — the PC never took it". "Delivered, waiting for a reply" now needs `acceptedAt`;
+  before that the bubble reads "not seen arriving yet".
+- `test/outbox-mention.js`'s "tick never sends" rule now allows exactly this one same-uuid re-send.
+**Proof:**
+- `test/outbox-accept.js` replays that morning's transcript shape: re-sent once at 61 s with the same uuid, the re-send's
+  enqueue is seen, never re-sent again; lost twice → NOT delivered; never a third send.
+- Live on 0.2.99: I planted a never-sent held entry (`ob_mv4zabj6gdiz`, uuid 0211928f…) for the idle probe session
+  local_38c2c10e (transcript ebc25ecf). relaymote.log shows "never reached … re-sent once, same uuid 0211928f: ok" at
+  08:17:38.858Z (+63.5 s), then "confirmed" at 08:17:43.6Z.
+- The transcript has one enqueue at 08:17:40.863Z and exactly one user turn, whose uuid is the original 0211928f. The session replied "OK".
+**CI note:** in the v0.2.99 release, the macOS Intel (macos-15-intel x64) job failed at "Self-test the DMG". The Windows, arm64 and
+release jobs succeeded, so that version has no Intel DMG. Not investigated; the arm64 DMG is unaffected.

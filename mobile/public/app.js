@@ -2693,6 +2693,11 @@ function paintUsage(u, forThisSession) {
               usageBar(u.weekly.pct) +
               (u.weekly.resets ? `<div class="unote">${esc(u.weekly.resets)}</div>` : ''));
   }
+  for (const m of u.weeklyModels || []) {
+    rows.push(`<div class="urow"><span>Weekly · ${esc(m.name)}</span><b>${m.pct}%</b></div>` +
+              usageBar(m.pct) +
+              (m.resets ? `<div class="unote">${esc(m.resets)}</div>` : ''));
+  }
   if (u.plan) rows.push(`<div class="unote">Plan · ${esc(u.plan)}</div>`);
   el.innerHTML = rows.join('') || '<div class="empty">No usage figures on screen.</div>';
 

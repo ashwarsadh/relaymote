@@ -85,3 +85,14 @@ Also found: Python on Windows wrote CRLF into mobile/index.js and app.js (git no
 working-tree tests broke); converted back to LF.
 
 **Deployed 12-Oct-2026:** v0.2.97 release workflow succeeded; `update --apply` installed it (installed package.json reads 0.2.97, daemon answers on :8798).
+
+## g1756 — Weekly · Fable missing from Relaymote usage (12-Oct-2026, 08:10 IST) — DONE, 0.2.98 live
+
+Desktop's usage panel lists `Weekly · Fable` after `Weekly · all models`; `mobile/usage.js` read only "all models".
+Now every `Weekly · <model>` window is parsed (`weeklyModels`) and drawn on the phone with its bar and reset.
+Also fixed: the panel was read on its first non-empty paint, which can come before its figures load. Measured once:
+Session limit missing and Weekly 0% when the real value was 2%. It is now read until two reads 200 ms apart agree.
+Proof: the phone page (mobile viewport, a daemon on the real Desktop) showed Session 7% · Weekly all models 2% · Weekly Fable 0%,
+both weekly windows "Resets Sun 3:30 PM". get_usage returned 7 / 2 / 0 at the same moment, resetting 2026-10-18T10:00Z,
+which is Sun 15:30 IST. Screenshot: `C:\Users\Ashwar\.relaymote\results\g1756-usage-fable.jpg`. Release CI green;
+`update --apply` installed 0.2.98.

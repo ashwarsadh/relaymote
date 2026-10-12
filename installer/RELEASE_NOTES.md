@@ -1,3 +1,8 @@
+## 0.2.98
+
+- Usage now shows the per-model weekly limit (for example "Weekly · Fable") below Session limit and Weekly · all models, with its own bar and reset time.
+- Usage no longer reads the panel before its figures have loaded (it sometimes showed no Session limit and 0% weekly).
+
 ## 0.2.97
 
 - A slash command you sent (like /goal …) that the session already took no longer stays "queued · waiting to be picked up" with a "send now" button. A second tap there would have run the command again.

@@ -47,6 +47,10 @@ function parse(text, label) {
   const plan = num(/Plan usage limits\s*[·\-]\s*(.+?)\s*(?:5-hour|Session) limit/i);
   const five = num(/(?:5-hour|Session) limit\s*(Resets[^%]*?)\s*(\d+)%/i);
   const week = num(/Weekly\s*[·-]\s*all models\s*(Resets[^%]*?)\s*(\d+)%/i);
+  // g1756: per-model weekly windows ("Weekly · Fable", Oct 2026) sit after "all models" in the panel.
+  const perModel = [];
+  for (const m of t.matchAll(/Weekly\s*[·-]\s*(?!all models)([A-Za-z][\w .-]*?)\s*(Resets[^%]*?)?\s*(\d+)%/gi))
+    perModel.push({ name: tidy(m[1]), pct: Number(m[3]), resets: m[2] ? tidy(m[2]) : null });
 
   const lab = String(label || '');
   const labWeek = lab.match(/all models:\s*(\d+)%/i);
@@ -60,6 +64,7 @@ function parse(text, label) {
     fiveHour: five ? { pct: Number(five[2]), resets: tidy(five[1]) } : null,
     weekly: week ? { pct: Number(week[2]), resets: tidy(week[1]) }
           : labWeek ? { pct: Number(labWeek[1]), resets: labReset ? labReset[1].trim() : null } : null,
+    weeklyModels: perModel,
     raw: t.slice(0, 400) || lab,
   };
 }
@@ -102,9 +107,14 @@ async function readUsage(sessionId, opts = {}) {
     if (panel) {
       await at('open-panel', () => conn.evaluate(desktop.rEval(CID, TOGGLE_JS)));
       opened = true;
-      for (let i = 0; i < 16 && !text; i++) {
+      // g1756: the panel paints before its figures load (measured: Session limit missing, Weekly 0% vs 2%),
+      // so wait until two reads 200 ms apart agree.
+      let prev = '';
+      for (let i = 0; i < 20; i++) {
         await sleep(200);
         text = String(await at('read-panel', () => conn.evaluate(desktop.rEval(CID, PANEL_JS))) || '');
+        if (text && text === prev) break;
+        prev = text;
       }
       await at('close-panel', () => conn.evaluate(desktop.rEval(CID, TOGGLE_JS)));
       await sleep(300);

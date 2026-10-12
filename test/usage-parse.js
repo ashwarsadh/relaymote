@@ -14,6 +14,8 @@ let u = parse(panel, label);
 check(u.plan === 'Max (20x)', 'plan', u.plan);
 check(u.fiveHour && u.fiveHour.pct === 16 && /1 hr 28 min/.test(u.fiveHour.resets), 'session limit (Oct 2026 wording)', u.fiveHour);
 check(u.weekly && u.weekly.pct === 44, 'weekly all models', u.weekly);
+check(u.weeklyModels.length === 1 && u.weeklyModels[0].name === 'Fable' && u.weeklyModels[0].pct === 2 && u.weeklyModels[0].resets === 'Resets Mon 9:00 AM',
+      'g1756: the Weekly · Fable window is read too', u.weeklyModels);
 u = parse('Plan usage limits · Pro5-hour limitResets 3 PM20%Weekly · all modelsResets Mon10%', '');
 check(u.fiveHour && u.fiveHour.pct === 20 && u.plan === 'Pro', 'older "5-hour limit" wording still parses', u);
 u = parse('', label);

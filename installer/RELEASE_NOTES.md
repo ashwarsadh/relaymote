@@ -1,3 +1,8 @@
+## 0.2.99
+
+- A message the PC never takes is no longer shown as "delivered". If Claude Desktop drops a message (seen when it was sent at the very moment a session's turn ended), Relaymote notices within a minute and sends it once more. If that is lost too, the phone says "NOT delivered — the PC never took it" with Send again.
+- "Delivered, waiting for a reply" now appears only after the session has actually taken the message; before that it reads "not seen arriving yet".
+
 ## 0.2.98
 
 - Usage now shows the per-model weekly limit (for example "Weekly · Fable") below Session limit and Weekly · all models, with its own bar and reset time.

@@ -848,6 +848,13 @@ function jumpToBottom() {
   renderJump();
 }
 
+// g1783: "delivered" only when the session actually took it; a message Desktop dropped says so.
+function obStatus(e) {
+  if (e.notDelivered || e.state === 'failed') return 'NOT delivered — the PC never took it';
+  if (e.accepted) return 'delivered, waiting for a reply';
+  return 'not seen arriving yet';
+}
+
 function renderLog(messages, force) {
   messages = reconcileQueued(messages);
   state.messages = messages;
@@ -923,7 +930,7 @@ function renderLog(messages, force) {
       const sn = !bad && e.held ? heldControls(e.id) : (!bad && e.delivery === 'queued' ? sendNowBtn() : '');
       html += `<div class="msg user pending${bad ? ' stuck' : ''}${sn ? ' act' : ''}">${md(e.text)}` +
         (bad
-          ? `<span class="tick">delivered, waiting for a reply${mins ? ' · ' + mins + 'm' : ''} ` +
+          ? `<span class="tick">${obStatus(e)}${mins ? ' · ' + mins + 'm' : ''} ` +
             `<button class="linkish ob-retry" data-ob="${esc(e.id)}">Send again</button> ` +
             `<button class="linkish ob-forget" data-ob="${esc(e.id)}">Discard</button></span>`
           : `<span class="tick">${e.held
@@ -2009,7 +2016,7 @@ async function checkOutbox() {
   el.innerHTML = worry.map(e => `
     <div class="obrow" data-id="${esc(e.id)}">
       <div class="obtext">${esc(e.text.slice(0, 160))}${e.text.length > 160 ? '…' : ''}</div>
-      <div class="obmeta">delivered, waiting for a reply · ${Math.round(e.ageMs / 60000)}m</div>
+      <div class="obmeta">${obStatus(e)} · ${Math.round(e.ageMs / 60000)}m</div>
       <div class="obacts">
         <button class="linkish ob-resend">Send again</button>
         <button class="linkish ob-drop">Discard</button>

@@ -1192,6 +1192,7 @@ async function handle(req, res) {
       delivery: e.delivery, state: e.state, error: e.error || null,
       ageMs: Date.now() - e.at, suspect: !!e.suspectedAt,
       held: e.state === 'pending' && e.delivery === 'held' && !!e.uuid,
+      accepted: !!e.acceptedAt, notDelivered: !!e.notDelivered, resent: !!e.resentAt,
     })) });
   }
 
@@ -2007,6 +2008,21 @@ async function outboxTickInner() {
   const busy = (id) => { const s = sessions.get(id); return !!(s && (s.running || s.dot === 'Running')); };
   const { confirmed, suspect } = outbox.reconcile(transcriptTail, Date.now(), busy);
   for (const e of confirmed) log(`outbox: confirmed ${e.id} in ${e.session}`);
+  // g1783: a bridge send Desktop never took is re-sent once (same uuid), then reported NOT delivered.
+  const acc = outbox.checkAccepted(transcriptTail, Date.now());
+  for (const e of acc.resend) {
+    let r = null;
+    try { r = await ui(() => desktop.sendQueued(e.session, e.text, { uuid: e.uuid })); } catch (x) { r = { ok: false, error: x.message }; }
+    outbox.markResent(e.id, { ok: !!(r && r.ok), error: r && (r.detail || r.error) });
+    log(`outbox: ${e.id} never reached ${e.session} (no queue or user row in ${outbox.ACCEPT_MS / 1000}s) -- re-sent once, same uuid ${String(e.uuid).slice(0, 8)}: ${r && r.ok ? 'ok' : 'FAILED ' + (r && (r.detail || r.error))}`);
+  }
+  for (const e of acc.failed) {
+    log(`outbox: ${e.id} NOT delivered to ${e.session} -- dropped twice`);
+    for (const c of clients) {
+      if (isSubuser(c.identity) && !c.identity.sessions.has(e.session)) continue;
+      sseSend(c, 'alert', { kind: 'outbox', title: 'Message NOT delivered', body: e.text.slice(0, 120), id: e.session, outboxId: e.id });
+    }
+  }
   if (confirmed.length) {
     for (const c of clients) {
       const mine = isSubuser(c.identity) ? confirmed.filter(e => c.identity.sessions.has(e.session)) : confirmed;

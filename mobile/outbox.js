@@ -7,6 +7,11 @@ const FILE = path.join(STATE, 'outbox.json');
 
 const SUSPECT_MS = 15 * 60 * 1000;
 const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+// g1783: Desktop silently dropped a bridge send made 157 ms before a turn boundary. No queue row, no user
+// row, yet the phone said "delivered" for 73 min. A bridge send (it has a uuid) must show up in the
+// transcript within this long, else it is re-sent once under the same uuid, then called NOT delivered.
+const ACCEPT_MS = 60 * 1000;
+const RESEND_WINDOW_MS = 5 * 60 * 1000;
 
 function load() {
   try {
@@ -141,4 +146,48 @@ function reconcile(readText, now = Date.now(), busy = null) {
   return { confirmed, suspect, checked };
 }
 
-module.exports = { withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };
+// Did Desktop take it at all? Any trace counts, queue rows included: an enqueue/remove carrying the text,
+// a row carrying the uuid (queued_command attachment, remove.commandUuid), or the user turn itself.
+function arrivedIn(raw, e) {
+  if (!raw) return false;
+  if (e.uuid && raw.includes(e.uuid)) return true;
+  const needle = needleFor(e.text);
+  return !!needle && norm(unescapeTranscript(raw)).includes(needle);
+}
+
+// Returns the bridge sends that need a re-send now, and those that failed it. The caller re-sends and then
+// calls markResent; nothing here talks to Desktop.
+function checkAccepted(readText, now = Date.now()) {
+  const entries = load();
+  const resend = [], failed = [];
+  let changed = false;
+  const cache = new Map();
+  for (const e of entries) {
+    if (e.state !== 'pending' || !e.uuid || e.acceptedAt) continue;
+    let raw = cache.get(e.session);
+    if (raw === undefined) { try { raw = readText(e.session) || ''; } catch { raw = ''; } cache.set(e.session, raw); }
+    if (arrivedIn(raw, e)) { e.acceptedAt = now; changed = true; continue; }
+    // Only a fresh send is re-sent: an older one (from before this check, or a tail that no longer reaches
+    // back to it) is left to the 15-minute suspect flag rather than risk a late duplicate.
+    if (!e.resentAt) { if (now - e.at > ACCEPT_MS && now - e.at < RESEND_WINDOW_MS) resend.push(e); continue; }
+    if (now - e.resentAt > ACCEPT_MS) {
+      e.state = 'failed'; e.notDelivered = true;
+      e.error = 'NOT delivered: Desktop dropped it twice (sent, then re-sent once). Nothing reached the session.';
+      failed.push(e); changed = true;
+    }
+  }
+  if (changed) save(entries);
+  return { resend, failed };
+}
+
+function markResent(id, { ok, error, now = Date.now() } = {}) {
+  const entries = load();
+  const e = entries.find(x => x.id === id);
+  if (!e) return null;
+  e.resentAt = now;
+  if (!ok) { e.state = 'failed'; e.notDelivered = true; e.error = 'NOT delivered: the re-send failed (' + String(error || 'unknown') + ')'; }
+  save(entries);
+  return e;
+}
+
+module.exports = { checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };

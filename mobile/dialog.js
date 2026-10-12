@@ -5,6 +5,7 @@
 // (POST /api/dialog/press) — nothing in Relaymote answers a dialog on its own.
 const desktop = require('../lib/desktop');
 
+const DISMISS = 'Dismiss';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // Must read the dialog exactly the way lib/desktop.js's sidebar scrape does, so `key` and the button
@@ -14,12 +15,12 @@ const FIND_JS = (key) => `(function(){
   var dl=document.querySelectorAll('[role=dialog],[role=alertdialog]');
   for(var q=0;q<dl.length;q++){
     var c=dl[q];
-    if(!(c.offsetWidth||c.offsetHeight)) continue;
+    if(!(${desktop.OPEN_DIALOG_FN})(c)) continue;
     var ct=((c.innerText)||'').split(NL).join(' ').trim();
     if(!ct) continue;
     if(ct.slice(0,300).slice(0,80)!==want) continue;
     var btns=Array.prototype.slice.call(c.querySelectorAll('button'),0,6)
-      .filter(function(b){ return (b.textContent||'').trim(); });
+      .filter(function(b){ return /[A-Za-z0-9]/.test((b.textContent||'').trim()); });
     window.__relaymoteDialogBtns=btns;
     return JSON.stringify({present:true, buttons:btns.map(function(b){ return (b.textContent||'').trim().slice(0,40); })});
   }
@@ -43,6 +44,17 @@ async function pressDialogButton({ key, label, index } = {}) {
     const CID = await desktop.pickChat(conn);
     const st = JSON.parse(await conn.evaluate(desktop.rEval(CID, FIND_JS(key))) || '{}');
     if (!st.present) return { ok: true, alreadyClosed: true, message: 'That box is no longer open on the PC.' };
+    // "Dismiss": a trusted Escape key to the Desktop window, the way he would close it at the PC.
+    if (label === DISMISS && Number(index) === -1) {
+      await conn.evaluate(`(function(){const wc=process.mainModule.require('electron').webContents.fromId(${CID});` +
+        `wc.sendInputEvent({type:'keyDown',keyCode:'Escape'});wc.sendInputEvent({type:'keyUp',keyCode:'Escape'});return 1})()`);
+      for (let n = 0; n < 10; n++) {
+        await sleep(300);
+        const after = JSON.parse(await conn.evaluate(desktop.rEval(CID, FIND_JS(key))) || '{}');
+        if (!after.present) return { ok: true, pressed: DISMISS, closed: true };
+      }
+      return { ok: false, error: 'STILL_SHOWING', pressed: DISMISS, message: 'Esc was sent but the box is still open on the PC.' };
+    }
     const i = Number(index);
     // The exact button he tapped: same position AND same words. A changed dialog is never guessed at.
     if (!(i >= 0 && st.buttons[i] === label)) {
@@ -61,4 +73,4 @@ async function pressDialogButton({ key, label, index } = {}) {
   } finally { conn.close(); }
 }
 
-module.exports = { pressDialogButton, FIND_JS };
+module.exports = { pressDialogButton, FIND_JS, DISMISS };

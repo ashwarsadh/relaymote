@@ -112,6 +112,23 @@ function visibleSessions(identity, all) {
   return isSubuser(identity) ? all.filter(s => identity.sessions.has(s.id)) : all;
 }
 
+// g1875: the phone says who holds it (X-Relaymote-As, set by app.js from Settings › This phone / ?as=).
+// Sagar's phone lists his Conductor + what he touched in the last 7 days; Ashwar's list marks Sagar's sessions.
+const principalOf = (req, url) => require('./principals').resolve(board.CONDUCTOR_DIR, req.headers['x-relaymote-as'] || url.searchParams.get('as'));
+function principalList(req, url, list) {
+  const touch = require('./principal-touch');
+  try { touch.refresh(board.CONDUCTOR_DIR, (id) => sessions.transcriptPath(sessions.get(id))); } catch (e) { log('principal touch scan failed: ' + e.message); }
+  return touch.view(list, principalOf(req, url), board.CONDUCTOR_DIR);
+}
+function notePrincipalTouch(req, url, sid, started) {
+  try {
+    const p = principalOf(req, url);
+    if (!p.own || !sid) return;
+    const touch = require('./principal-touch');
+    if (touch.note(sid, p.key, { started })) touch.save();
+  } catch {}
+}
+
 // Warm the per-transcript caches of the most recent sessions after the list is served, so opening
 // one does not pay the first full read (backgroundTasks parses incrementally from then on).
 let warmAt = 0;
@@ -583,6 +600,7 @@ function slimSession(s) {
     running: s.running, awaiting: s.awaiting, unread: s.unread, active: s.active,
     live: s.live, archived: s.archived, at: s.lastActivityAt, turns: s.turns,
     stalled: !!s.stalled, quietFor: s.quietFor || 0,
+    by: s.by || undefined, othersOnly: s.othersOnly || undefined,
   };
 }
 
@@ -933,7 +951,7 @@ async function handle(req, res) {
     await cdpCached(); wakeDesktop('app opened');
     noteClientBuild(res._agoClient, url.searchParams.get('build'));
     await sessions.refresh();
-    const all = visibleSessions(identity, sessions.decorate(sessions.index().list, desktop.loadSnapshot()));
+    const all = principalList(req, url, visibleSessions(identity, sessions.decorate(sessions.index().list, desktop.loadSnapshot())));
     return json(res, 200, {
       ok: true,
       host: os.hostname(),
@@ -962,7 +980,7 @@ async function handle(req, res) {
   if (p === '/api/sessions') {
     await cdpCached(); wakeDesktop('app open');
     await sessions.refresh();
-    const all = visibleSessions(identity, sessions.decorate(sessions.index().list, desktop.loadSnapshot()));
+    const all = principalList(req, url, visibleSessions(identity, sessions.decorate(sessions.index().list, desktop.loadSnapshot())));
     warmRecent(all);
     const folder = url.searchParams.get('folder');
     const q = (url.searchParams.get('q') || '').toLowerCase();
@@ -1667,6 +1685,7 @@ async function handle(req, res) {
       const job = { id: jobId, session: body.id, text: String(body.text || ''), at: Date.now(),
                     origin: res._agoClient || null, cmid };
       sendJobs.set(jobId, job);
+      notePrincipalTouch(req, url, body.id, false);
       if (cmid) { cmidStore().set(cmid, { jobId, at: job.at, done: false }); cmidSave(); }
       doSend(body.id, body.text, body.attachments)
         .then(out => finishSend(job, out))
@@ -1813,6 +1832,7 @@ async function handle(req, res) {
           if (!sessions.get(out.sessionId)) await new Promise(r => setTimeout(r, 250));
         }
         out.indexed = !!sessions.get(out.sessionId);
+        notePrincipalTouch(req, url, out.sessionId, true);
         log(`new ${out.sessionId} in ${out.cwd} model=${out.model} effort=${out.effort} perm=${out.permissionMode} ${out.ms}ms indexed=${out.indexed}`);
       } else log(`new failed: ${(out && (out.error + ': ' + out.message)) || 'no result'}`);
       if (!out || !out.ok) {

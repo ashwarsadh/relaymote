@@ -1153,3 +1153,7 @@ mark.hit.cur{background:#f5a524; color:#000}
 .msg.pending.ob .tick .linkish{min-height:30px; padding:0 10px; margin:3px 0 0 4px; border:1px solid var(--on-accent-line); border-radius:8px;
   background:transparent; color:inherit; font:inherit; text-decoration:none}
 .pc-unreachable #relaymote-desk-banner{display:none}
+
+/* g1875: another user's (Sagar's) sessions on the owner's list */
+.tag.tag-by { background: color-mix(in srgb, var(--accent, #3b82f6) 18%, transparent); }
+.row.others-fold .row-title { font-weight: 600; opacity: .85; }

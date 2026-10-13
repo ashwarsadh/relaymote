@@ -2,6 +2,27 @@
 
 What is TRUE now, with evidence. Requests live in the goal register; this file is where things stand.
 
+## g1870 — Sagar Conductor: one Conductor per principal on the same account (13-Oct-2026, ~21:00 IST)
+
+**Built.** `principals.json` sits in the Conductor folder (`~/.claude/conductor`, the same folder as board.json):
+it lists `ashwar` (the default, sees everything) and `sagar` (`conductor: local_e2e162ac-2489-4147-a2d2-00151a57555c`, sees only his own).
+Relaymote `mobile/principals.js` and `board.view/act/actBatch({as})`: a phone with `?as=sagar` (or Settings › This phone is › Sagar)
+opens cold on Sagar Conductor, and its Board shows only rows with `principal: sagar` (goals, asks, and the sessions serving them).
+Its board taps go only to Sagar Conductor, and a tap on an item that is not his is refused (400).
+Ashwar's phone works as before: it shows everything, with a "Sagar's" tag on Sagar's asks. `GET /api/principals` returns the list.
+Commits e7b7512 and the follow-up "keep the goal's principal". `test/principals.js` passes 15/15 and is in `npm test`.
+
+**Proof (live board.json, repo code).** View with no principal: 1872 goals, 198 asks, taps go to `local_a1a539c7`.
+View with `as=sagar`: 1 goal (g1872) and 1 ask (#1790), taps go to `local_e2e162ac`. Both were TEST items, now closed.
+
+**NOT YET LIVE ON PHONES.** The installed daemon still runs 0.2.100. These commits ship with the next release
+(0.2.101, which the relaymote-deeplinks lane is preparing in this same checkout; it has been asked to include them).
+Until then, `?as=` and the picker do nothing.
+
+**Not a security boundary.** Sagar's phone uses Ashwar's full pairing key ("same everything", as Ashwar asked).
+His Conductor's role card enforces Ashwar's hard taps. The only way to revoke the phone is Settings › Pair a phone ›
+Issue a new key, which also re-pairs Ashwar's phone.
+
 ## g1712 — sessions stopping after ~10 autonomous turns (12-Oct-2026, 00:20 IST)
 
 **Cause (measured, not guessed).** Claude Code itself ends a turn once Stop hooks have blocked it

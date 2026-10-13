@@ -2,6 +2,30 @@
 
 What is TRUE now, with evidence. Requests live in the goal register; this file is where things stand.
 
+## g1875 — Sagar's session list = his Conductor + what he touched in 7 days; Ashwar can fold/hide them (13-Oct-2026, ~21:30 IST)
+
+**Built (0.2.102, 5b4f7a6; feature commit 8f1c010).** `mobile/principal-touch.js` keeps a ledger (`~/.relaymote/state/principal-touch.json`)
+of the sessions each non-default principal ACTED on. Two sources:
+- His Conductor's own transcript, read incrementally from a saved offset. It counts send_message / SendMessage /
+  start_session / spawn / start_task / hand_off calls, by their target field only, so ids quoted in message text do not count.
+  The ids a start call returned, and `/api/new` results, are marked "started".
+- His phone's `/api/send` and `/api/new`. The phone sends the `X-Relaymote-As` header from Settings › This phone.
+
+Reads (list_events) are not touches. Ashwar's Conductor is never put on his list, even when Sagar escalates to it.
+`/api/sessions` and `/api/bootstrap` now pass through `principalList`:
+- Sagar's phone gets his Conductor plus the sessions he touched within 7 days. A session goes hidden after a week and comes back on the next touch.
+- Ashwar's phone gets every session. Sessions Sagar touched carry `by` (a name tag); sessions he started carry `othersOnly`.
+  An "Others" chip cycles shown → folded (one collapsible "Sagar's sessions" group at the end) → hidden.
+  Shared sessions stay visible, with the tag.
+
+Tests: `test/principal-touch.js` (15) is part of `npm test`, and the full suite passes. I ran it on the STAGED tree
+(checkout-index), not the working copy.
+Gotcha: Python `open(...,'w')` on Windows writes CRLF. That broke the tests that slice source on `
+}
+`
+(mobile-session-search, mobile-burst-tts-held). Write with `newline='
+'`.
+
 ## g1870 — Sagar Conductor: one Conductor per principal on the same account (13-Oct-2026, ~21:00 IST)
 
 **Built.** `principals.json` sits in the Conductor folder (`~/.claude/conductor`, the same folder as board.json):
@@ -15,9 +39,9 @@ Commits e7b7512 and the follow-up "keep the goal's principal". `test/principals.
 **Proof (live board.json, repo code).** View with no principal: 1872 goals, 198 asks, taps go to `local_a1a539c7`.
 View with `as=sagar`: 1 goal (g1872) and 1 ask (#1790), taps go to `local_e2e162ac`. Both were TEST items, now closed.
 
-**NOT YET LIVE ON PHONES.** The installed daemon still runs 0.2.100. These commits ship with the next release
-(0.2.101, which the relaymote-deeplinks lane is preparing in this same checkout; it has been asked to include them).
-Until then, `?as=` and the picker do nothing.
+**LIVE in 0.2.101** (deployed 15:40Z on 13-Oct by the deeplinks lane). I checked it through the live daemon:
+`GET /api/principals` lists ashwar and sagar, and `/api/board?as=sagar` returns principal sagar with taps going to local_e2e162ac
+(the Conductor shows as up). The app.js placement e7b7512 got wrong was fixed in 2afc051.
 
 **Not a security boundary.** Sagar's phone uses Ashwar's full pairing key ("same everything", as Ashwar asked).
 His Conductor's role card enforces Ashwar's hard taps. The only way to revoke the phone is Settings › Pair a phone ›

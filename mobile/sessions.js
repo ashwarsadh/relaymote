@@ -167,8 +167,12 @@ function decorate(list, snapshot) {
   }
   const active = snapshot && snapshot.active ? snapshot.active : null;
   const seen = loadAcks();
+  const apiS = require('./api-sessions');
   return list.map(s => {
-    const d = dots.get(s.id);
+    const d0 = dots.get(s.id);
+    // An API session (claude-api service, g1871) answers a program: it never shows an unread or awaiting dot.
+    const api = apiS.isApi(s);
+    const d = d0 && api ? { ...d0, awaiting: false, unread: false, dot: d0.running ? d0.dot : null } : d0;
     const ack = seen[s.id];
     const acked = !!(d && (d.awaiting || d.unread) && !d.running && ack && s.turnMark && ack.mark === s.turnMark);
     return {
@@ -183,6 +187,7 @@ function decorate(list, snapshot) {
       live: !!d,
       stalled: !!(d && d.running && s.lastActivityAt && (Date.now() - s.lastActivityAt) > STALE_RUN_MS),
       quietFor: d && d.running && s.lastActivityAt ? Date.now() - s.lastActivityAt : 0,
+      api,
     };
   });
 }

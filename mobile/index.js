@@ -368,6 +368,7 @@ const obStamps = new Map();
 
 function attentionState(s) {
   if (s.archived) return null;
+  if (s.api) return null;          // API sessions (claude-api) never alert or push (Ashwar 14-Oct)
   if (s.awaiting) return 'awaiting';
   if (s.unread) return 'done';
   if (wasRunning.get(s.id) && !s.running) return 'done';
@@ -600,7 +601,7 @@ function slimSession(s) {
     running: s.running, awaiting: s.awaiting, unread: s.unread, active: s.active,
     live: s.live, archived: s.archived, at: s.lastActivityAt, turns: s.turns,
     stalled: !!s.stalled, quietFor: s.quietFor || 0,
-    by: s.by || undefined, othersOnly: s.othersOnly || undefined,
+    by: s.by || undefined, othersOnly: s.othersOnly || undefined, api: s.api || undefined,
   };
 }
 

@@ -1268,25 +1268,45 @@ function toggleFav(id) {
 
 // g1875: sessions another user (Sagar) started carry `othersOnly`; ones he only touched carry `by`. On the
 // owner's phone the "Others" chip cycles show -> fold (his sessions in one collapsed group at the end) -> hide.
+// Ashwar 14-Oct: "we can also have the ability to hide API session" -> the "API" chip does the same for API
+// sessions (claude-api service; `api` from the server), and starts HIDDEN. Each group folds on its own.
+const FOLDS = [
+  { key: 'api', store: 'baton.apiSessions', def: 'hide', is: s => !!s.api, chip: 'API',
+    title: 'Sessions the claude-api service runs for apps: show them, fold them into one group, or hide them. They never notify.',
+    head: () => 'API sessions' },
+  { key: 'others', store: 'baton.others', def: 'show', is: s => !!s.othersOnly && !s.api, chip: 'Others',
+    title: "Sessions other users (Sagar) started: show them, fold them into one group, or hide them. Shared sessions always stay, with a name tag.",
+    head: rows => ([...new Set(rows.flatMap(s => (s.by || []).filter(b => b.started).map(b => b.name)))].join(', ') || 'Other users') + "'s sessions" },
+];
 const OTHERS_KEY = 'baton.others';
-function othersMode() { try { return localStorage.getItem(OTHERS_KEY) || 'show'; } catch { return 'show'; } }
-/** Pure: the list as the owner's toggle shapes it. -> { rows, folded } (folded = the others' rows held back). */
-function applyOthers(list, mode) {
-  if (mode === 'hide') return { rows: list.filter(s => !s.othersOnly), folded: [] };
-  if (mode === 'fold') return { rows: list.filter(s => !s.othersOnly), folded: list.filter(s => s.othersOnly) };
+function foldMode(f) { try { return localStorage.getItem(f.store) || f.def; } catch { return f.def; } }
+function othersMode() { return foldMode(FOLDS[1]); }
+/** Pure: one toggle applied to a list. -> { rows, folded } (folded = the rows held back in a group). */
+function applyFold(list, mode, is) {
+  if (mode === 'hide') return { rows: list.filter(s => !is(s)), folded: [] };
+  if (mode === 'fold') return { rows: list.filter(s => !is(s)), folded: list.filter(is) };
   return { rows: list, folded: [] };
 }
+function applyOthers(list, mode) { return applyFold(list, mode, s => !!s.othersOnly); }
+state.foldOpen = state.foldOpen || {};
 function renderSessions(list, opts = {}) {
   setTimeout(() => prefetchChats(sortSessions(state.rawSessions || state.sessions || [])), 1500);
   state.rawSessions = list;
   const sorted = opts.noSort ? list : sortSessions(list);
-  const { rows: mainRows, folded } = applyOthers(sorted, othersMode());
-  const shown = state.othersOpen ? mainRows.concat(folded) : mainRows;
+  let mainRows = sorted;
+  const groups = [];
+  for (const f of FOLDS) {
+    const r = applyFold(mainRows, foldMode(f), f.is);
+    mainRows = r.rows;
+    if (r.folded.length) groups.push({ f, rows: r.folded });
+  }
+  const shown = mainRows.concat(...groups.filter(g => state.foldOpen[g.f.key]).map(g => g.rows));
   state.sessions = shown;
   const ul = $('sessions');
   ul.innerHTML = '';
+  const firstOf = new Map(groups.filter(g => state.foldOpen[g.f.key]).map(g => [g.rows[0], g]));
   for (const s of shown) {
-    if (folded.length && s === folded[0]) ul.appendChild(othersHeader(folded));
+    if (firstOf.has(s)) ul.appendChild(foldHeader(firstOf.get(s)));
     const li = document.createElement('li');
     li.className = 'row' + (s.id === state.open ? ' current' : '');
     const cls = s.running ? (s.stalled ? 'running stalled' : 'running') : s.awaiting ? 'awaiting' : 'idle';
@@ -1317,15 +1337,15 @@ function renderSessions(list, opts = {}) {
     };
     ul.appendChild(li);
   }
-  if (folded.length && !state.othersOpen) ul.appendChild(othersHeader(folded));
-  $('list-empty').classList.toggle('hidden', shown.length > 0 || folded.length > 0);
+  for (const g of groups) if (!state.foldOpen[g.f.key]) ul.appendChild(foldHeader(g));
+  $('list-empty').classList.toggle('hidden', shown.length > 0 || groups.length > 0);
 }
-function othersHeader(folded) {
+function foldHeader(g) {
   const li = document.createElement('li');
   li.className = 'row others-fold';
-  const names = [...new Set(folded.flatMap(s => (s.by || []).filter(b => b.started).map(b => b.name)))].join(', ') || 'Other users';
-  li.innerHTML = `<div class="row-main"><div class="row-title">${state.othersOpen ? '▾' : '▸'} ${esc(names)}'s sessions <span class="muted">${folded.length}</span></div></div>`;
-  li.onclick = () => { state.othersOpen = !state.othersOpen; renderSessions(state.rawSessions || []); };
+  const open = !!state.foldOpen[g.f.key];
+  li.innerHTML = `<div class="row-main"><div class="row-title">${open ? '▾' : '▸'} ${esc(g.f.head(g.rows))} <span class="muted">${g.rows.length}</span></div></div>`;
+  li.onclick = () => { state.foldOpen[g.f.key] = !open; renderSessions(state.rawSessions || []); };
   return li;
 }
 
@@ -1342,19 +1362,22 @@ function renderSortChips() {
     };
     wrap.appendChild(b);
   }
-  // g1875: on a phone that sees everything, one chip for other users' sessions: show -> fold -> hide.
+  // g1875 / API sessions: one chip per fold, shown only when the list has such sessions. "Others" only on a
+  // phone that sees everything (a sub-user's list never holds another user's sessions).
   let mine = ''; try { mine = localStorage.getItem('baton.principal') || ''; } catch {}
-  if (!mine && (state.rawSessions || []).some(s => s.by)) {
-    const NEXT = { show: 'fold', fold: 'hide', hide: 'show' };
-    const LABEL = { show: 'Others: shown', fold: 'Others: folded', hide: 'Others: hidden' };
-    const m = othersMode();
+  const NEXT = { show: 'fold', fold: 'hide', hide: 'show' };
+  const WORD = { show: 'shown', fold: 'folded', hide: 'hidden' };
+  for (const f of FOLDS) {
+    if (f.key === 'others' && mine) continue;
+    if (!(state.rawSessions || []).some(f.is)) continue;
+    const m = foldMode(f);
     const b = document.createElement('button');
     b.className = 'chip' + (m !== 'show' ? ' on' : '');
-    b.textContent = LABEL[m];
-    b.title = "Sessions other users (Sagar) started: show them, fold them into one group, or hide them. Shared sessions always stay, with a name tag.";
+    b.textContent = f.chip + ': ' + WORD[m];
+    b.title = f.title;
     b.onclick = () => {
-      try { localStorage.setItem(OTHERS_KEY, NEXT[m]); } catch {}
-      state.othersOpen = false;
+      try { localStorage.setItem(f.store, NEXT[m]); } catch {}
+      state.foldOpen[f.key] = false;
       renderSortChips(); renderSessions(state.rawSessions || []);
     };
     wrap.appendChild(b);
@@ -1388,7 +1411,7 @@ async function loadSessions() {
   try {
     const d = await api('/api/sessions?' + p);
     renderSessions(d.sessions);
-    if (d.sessions.some(s => s.by)) renderSortChips();
+    if (d.sessions.some(s => s.by || s.api)) renderSortChips();
     noteConnOk();
     noteLinkState(d);
     if (state.boot && d.build) {

@@ -69,8 +69,8 @@ check(T.view(list, sag, dir).some(s => s.id === STARTED), 'ledger persists acros
 
 // The owner's chip: show / fold / hide, taken from app.js as written.
 const app = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'public', 'app.js'), 'utf8');
-const fn = app.slice(app.indexOf('function applyOthers'), app.indexOf('function renderSessions'));
-const ctx = {}; vm.createContext(ctx); vm.runInContext(fn + '; this.applyOthers = applyOthers;', ctx);
+const fn = app.slice(app.indexOf('function applyFold'), app.indexOf('function renderSessions'));
+const ctx = { state: {} }; vm.createContext(ctx); vm.runInContext(fn + '; this.applyOthers = applyOthers;', ctx);
 const sample = [{ id: 'a' }, { id: 'b', by: [{ name: 'Sagar' }] }, { id: 'c', by: [{ name: 'Sagar', started: true }], othersOnly: true }];
 const r = (m) => ctx.applyOthers(sample, m);
 check(r('show').rows.length === 3 && !r('show').folded.length, 'Others: shown -> all rows');

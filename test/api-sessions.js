@@ -23,6 +23,8 @@ check(!A.isApi({ id: 'local_ME', title: 'Apiary notes' }) && !A.isApi({ id: 'y',
 fs.writeFileSync(stateFile, JSON.stringify({ grading: { session: 'local_API3' } }));
 const t = Date.now() / 1000 + 5; fs.utimesSync(stateFile, t, t);
 check(A.isApi({ id: 'local_API3' }) && !A.isApi({ id: 'local_API1' }), 'the state file is re-read when it changes');
+fs.writeFileSync(path.join(dir, 'api-sessions.json'), JSON.stringify({ local_API5: { app: 'pattern3d', title: 'API · pattern3d' } }));
+check(A.isApi({ id: 'local_API5', title: 'renamed' }) && A.isApi({ id: 'local_API3' }), 'a key of api-sessions.json is one too');
 
 // decorate: an API session never carries an unread / awaiting dot; a person's session still does.
 const sessions = require('../mobile/sessions');

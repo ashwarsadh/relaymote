@@ -5,7 +5,7 @@ What is TRUE now, with evidence. Requests live in the goal register; this file i
 ## API sessions never notify; "API" chip hides them by default (14-Oct-2026, ~02:00 IST) — committed 93ce223, NOT yet released
 Ashwar (via Conductor): "API session ... should not show up ... as having the relay mode as a notification all the time ... ability to hide API session."
 - Marker (`mobile/api-sessions.js`): the id is a `session` value in `~/.claude/ago/state/claude-api/sessions.json`
-  (`settings.apiSessions.stateFile` overrides), OR the title starts with `API:` or `API ·`. The file is re-read on mtime.
+  (`settings.apiSessions.stateFile` overrides) or a key of `api-sessions.json` beside it, OR the title starts with `API:` or `API ·`. The file is re-read on mtime.
   The claude-api lane (local_58ed4015) was told to keep both stable. "Pattern 3D API session" matches only via the file.
 - `sessions.decorate`: an API row loses unread, awaiting and dot. A running dot still shows. `index.js attentionState`
   returns null for `s.api`, so no SSE alert and no push. `slimSession` carries `api`.

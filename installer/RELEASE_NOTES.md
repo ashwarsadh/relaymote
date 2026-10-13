@@ -1,3 +1,9 @@
+## 0.2.104
+
+- An update can no longer leave Relaymote dead. On 13-Oct the 0.2.102 update met a locked tray icon; setup stopped half-way after it had already removed Relaymote's program folders, and nothing restarted it. Now setup first stops the tray and daemon and checks that no file is in use. If one still is, it stops BEFORE changing anything and the current version keeps running.
+- If an install fails anyway, it is retried once; Relaymote is always started again afterwards (twice if needed), and the "you stopped Relaymote" flag left by the install is cleared so the tray and watchdog can bring it back.
+- Includes 0.2.103 (the new Board).
+
 ## 0.2.103
 
 - The Board opens on **Needs you**: only what waits on your tap or answer, each with its one-tap action (Answer, Go ahead, Close ✓, Got it). Decisions come first, then goals waiting on your move, then results to check and close, then replies. Anything older than a week folds below as "probably stale", with a "Mark all done" button.

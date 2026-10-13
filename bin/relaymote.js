@@ -321,7 +321,8 @@ async function accountsCmd() {
     case '--version': case 'version': return console.log(require('../package.json').version);
     case 'start':
       if (args.includes('--foreground') || args.includes('-f')) return require('../server.js');
-      return void (await startBackground());
+      // A non-zero exit lets the update script (lib/updater.js apply) see a failed start and try again.
+      return void (process.exitCode = (await startBackground()) ? 0 : 1);
     case 'stop': {
       // `relaymote stop <task-id>` stops ONE worker (cli.js); only a bare `relaymote stop` stops the daemon.
       if (args[1] && !args[1].startsWith('-')) {

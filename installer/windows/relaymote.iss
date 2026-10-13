@@ -66,6 +66,8 @@ Type: filesandordirs; Name: "{app}\node_modules"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; PrepareToInstall runs this copy, so an upgrade is guarded by the NEW stop logic, not the old install's.
+Source: "{#SourceDir}\stop-relaymote.ps1"; Flags: dontcopy
 
 [Icons]
 Name: "{group}\Relaymote"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\scripts\run-hidden.vbs"" ""{app}\runtime\node.exe"" ""{app}\bin\relaymote.js"" open"; WorkingDir: "{app}"; IconFilename: "{app}\relaymote.ico"; Comment: "Open Relaymote (starts it in the background if needed)"
@@ -122,6 +124,31 @@ begin
   if FileExists(Script) then
     Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       '-NoProfile -ExecutionPolicy Bypass -File "' + Script + '" ' + Extra, '', SW_HIDE, ewWaitUntilTerminated, Rc);
+end;
+
+// Runs BEFORE [InstallDelete]. An upgrade stops the old Relaymote and proves nothing holds its files; if
+// something still does, setup stops here with the old install untouched. (13-Oct-2026: a locked tray.png
+// aborted setup after [InstallDelete] had emptied the folder, and the rollback could not restore it.)
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Script, Locked: AnsiString;
+  Rc: Integer;
+begin
+  Result := '';
+  if not FileExists(ExpandConstant('{app}\runtime\node.exe')) and not FileExists(ExpandConstant('{app}\scripts\tray.ps1')) then Exit;
+  ExtractTemporaryFile('stop-relaymote.ps1');
+  Script := ExpandConstant('{tmp}\stop-relaymote.ps1');
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -ExecutionPolicy Bypass -File "' + Script + '" -ForUpdate -Root "' + ExpandConstant('{app}') + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, Rc) then Rc := -1;
+  Log('stop-relaymote -ForUpdate exit ' + IntToStr(Rc));
+  if Rc = 3 then
+  begin
+    Locked := '';
+    LoadStringFromFile(ExpandConstant('{%TEMP}\relaymote-update-locked.txt'), Locked);
+    Result := 'A Relaymote file is still in use, so nothing was changed: ' + Trim(String(Locked)) +
+      '. Close the Relaymote tray (or restart Windows) and run the update again.';
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

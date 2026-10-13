@@ -53,6 +53,9 @@ check(P.narrow(board, ash, 'ashwar') === board, "Ashwar's board is untouched (se
     check(r1.code === 200 && sentTo[0] === 'local_S', "Sagar's tap on his ask goes to Sagar Conductor", { r1, sentTo });
     check(r2.code === 400, "Sagar's phone cannot tap an item that is not his", r2);
     check(r3.code === 200 && sentTo[1] === 'local_ASH', "Ashwar's tap still goes to his Conductor", { r3, sentTo });
+    const vs = (await B.view({ as: 'sagar' })).body, va = (await B.view({})).body;
+    check(vs.goals.map(g => g.id + ':' + g.principal).join() === 'g2:sagar,g3:sagar' && vs.principal.own, "Sagar's view: his goals, principal field kept", vs.goals);
+    check(va.goals.length === 3 && !va.principal.own, "Ashwar's view: every goal", va.goals.length);
   }
 
   // Cold open: a Sagar phone lands on his Conductor; resume still wins.

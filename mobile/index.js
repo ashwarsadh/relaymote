@@ -1114,11 +1114,16 @@ async function handle(req, res) {
     return json(res, 200, { ok: true, at: meta.at, count: Object.keys(meta.tasks).length });
   }
 
+  // g1870: the principals a phone can belong to (Settings › This phone; a ?as= link). Names and Conductor ids only.
+  if (p === '/api/principals') {
+    try { return json(res, 200, { ok: true, principals: require('./principals').list(board.CONDUCTOR_DIR) }); }
+    catch (e) { return json(res, 500, { ok: false, error: e.message }); }
+  }
   if (p === '/api/board') {
     try {
       try { await sessions.refresh(); } catch {}
       try { await require('../lib/board-build').maybeBuild(60000); } catch (e) { log('board build failed: ' + e.message); }
-      const r = await board.view();
+      const r = await board.view({ as: url.searchParams.get('as') });
       if (r.body && r.body.ok) r.body.bundle = assetVersion();
       return json(res, r.code, r.body);
     }
@@ -1133,7 +1138,7 @@ async function handle(req, res) {
   if (p === '/api/board/act-batch' && req.method === 'POST') {
     let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { ok: false, error: 'bad json' }); }
     try {
-      const r = await board.actBatch({ items: body && body.items, bid: body && body.bid, who: 'mobile' });
+      const r = await board.actBatch({ items: body && body.items, bid: body && body.bid, who: 'mobile', as: body && body.as });
       return json(res, r.code, r.body);
     } catch (e) {
       log('board batch failed: ' + e.message);
@@ -1178,7 +1183,7 @@ async function handle(req, res) {
   if (p === '/api/board/act' && req.method === 'POST') {
     let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { ok: false, error: 'bad json' }); }
     try {
-      const r = await board.act({ kind: body.kind, id: body.id, text: body.text, who: 'mobile' });
+      const r = await board.act({ kind: body.kind, id: body.id, text: body.text, who: 'mobile', as: body.as });
       return json(res, r.code, r.body);
     } catch (e) {
       log('board act failed: ' + e.message);

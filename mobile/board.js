@@ -19,6 +19,10 @@ const ACTED = path.join(require('../lib/config').STATE, 'board-acted.json');
 const ACTED_TTL_MS = 12 * 3600 * 1000;
 
 const Filter = require('./public/board-ui.js');
+const Principals = require('./principals');
+/** g1870: the device's principal (?as=) -> who it is, and the board narrowed to them (the default sees all). */
+function principalOf(as) { return Principals.resolve(CONDUCTOR_DIR, as); }
+function boardFor(board, p) { return p && p.own ? Principals.narrow(board, p, Principals.load(CONDUCTOR_DIR).default) : board; }
 const log = (m) => { try { orch.log('[board] ' + m); } catch { console.log('[board] ' + m); } };
 
 function readBoard() {
@@ -85,17 +89,19 @@ function liveNotes() {
   return map;
 }
 
-let stCache = { at: 0, val: null };
+const stCache = new Map();   // conductor id ('' = the default's) -> { at, val }
 
 async function conductorState(board, opts) {
-  if (!(opts && opts.fresh) && stCache.val && Date.now() - stCache.at < 15000) return stCache.val;
-  const val = computeConductorState(board);
-  stCache = { at: Date.now(), val };
+  const want = (opts && opts.id) || '';
+  const hit = stCache.get(want);
+  if (!(opts && opts.fresh) && hit && Date.now() - hit.at < 15000) return hit.val;
+  const val = computeConductorState(board, want || null);
+  stCache.set(want, { at: Date.now(), val });
   return val;
 }
 
-function computeConductorState(board) {
-  const id = conductorId(board);
+function computeConductorState(board, forId) {
+  const id = forId || conductorId(board);
   if (!id) return { id: null, ok: false, reason: 'No Conductor session is claimed — set one in Settings > Conductor, or add "conductor" to board.json.' };
 
   let row = null, snapAt = null;
@@ -204,14 +210,16 @@ function audit(rec) {
   } catch (e) { log('audit write failed: ' + e.message); }
 }
 
-async function act({ kind, id, text, who }) {
-  const board = readBoard();
-  if (!board.ok) return { code: 503, body: { ok: false, error: board.error, detail: board.detail } };
+async function act({ kind, id, text, who, as }) {
+  const raw = readBoard();
+  if (!raw.ok) return { code: 503, body: { ok: false, error: raw.error, detail: raw.detail } };
+  const p = principalOf(as);
+  const board = boardFor(raw, p);     // Sagar's taps reach only Sagar's items, and go to Sagar Conductor
 
   const l = lineFor(board, kind, id, text);
   if (!l.ok) return { code: 400, body: l };
 
-  const st = await conductorState(board, { fresh: true });
+  const st = await STATE_FN(raw, { fresh: true, id: p.conductor });
   if (!st.ok) {
     audit({ at: new Date().toISOString(), kind, id, line: l.line, who: who || 'mobile', result: 'refused', reason: st.reason });
     return { code: 429, body: { ok: false, error: 'conductor-unavailable', reason: st.reason, conductor: st.id, line: l.line } };
@@ -230,7 +238,7 @@ async function act({ kind, id, text, who }) {
 
   const rec = {
     at: new Date().toISOString(), kind, id, target: l.target, line: l.line, message,
-    conductor: st.id, who: who || 'mobile',
+    conductor: st.id, who: who || 'mobile', principal: p.key,
     result: out.ok ? (out.delivered ? 'delivered' : 'queued') : 'failed',
     reason: out.reason || out.error || null,
   };
@@ -267,11 +275,13 @@ function closeRelaymoteNote(board, l, kind) {
  * the way back) is answered from memory and never delivered twice.
  */
 const BATCHES = new Map();
-async function actBatch({ items, bid, who } = {}) {
+async function actBatch({ items, bid, who, as } = {}) {
   bid = bid ? String(bid).slice(0, 80) : null;
   if (bid && BATCHES.has(bid)) return { code: 200, body: { ...BATCHES.get(bid), repeat: true } };
-  const board = readBoard();
-  if (!board.ok) return { code: 503, body: { ok: false, error: board.error, detail: board.detail } };
+  const raw = readBoard();
+  if (!raw.ok) return { code: 503, body: { ok: false, error: raw.error, detail: raw.detail } };
+  const p = principalOf(as);
+  const board = boardFor(raw, p);
   const byId = new Map();
   const rejected = [];
   for (const it of (Array.isArray(items) ? items : []).slice(0, 50)) {
@@ -282,7 +292,7 @@ async function actBatch({ items, bid, who } = {}) {
   const lines = [...byId.values()];
   if (!lines.length) return { code: 400, body: { ok: false, error: 'nothing-to-send', rejected } };
 
-  const st = await STATE_FN(board, { fresh: true });
+  const st = await STATE_FN(raw, { fresh: true, id: p.conductor });
   const batch = bid || 'b' + Date.now().toString(36);
   if (!st.ok) {
     audit({ at: new Date().toISOString(), kind: 'batch', batch, lines: lines.map(l => l.line), who: who || 'mobile', result: 'refused', reason: st.reason });
@@ -298,7 +308,7 @@ async function actBatch({ items, bid, who } = {}) {
   const at = new Date().toISOString();
   const result = out.ok ? (out.delivered ? 'delivered' : 'queued') : 'failed';
   // One summary record for the batch, then the per-line records the Conductor's index reads (id + kind).
-  audit({ at, kind: 'batch', batch, n: lines.length, ids: lines.map(l => l.id), who: who || 'mobile', conductor: st.id, result, reason: out.reason || out.error || null });
+  audit({ at, kind: 'batch', batch, n: lines.length, ids: lines.map(l => l.id), who: who || 'mobile', principal: p.key, conductor: st.id, result, reason: out.reason || out.error || null });
   for (const l of lines) {
     audit({ at, kind: l.kind, id: l.id, target: l.target, line: l.line, batch, conductor: st.id, who: who || 'mobile', result, reason: out.reason || out.error || null });
     if (out.ok) { recordActed(l.id, l.kind); closeRelaymoteNote(board, l, l.kind); }
@@ -313,11 +323,13 @@ async function actBatch({ items, bid, who } = {}) {
   return { code: 200, body };
 }
 
-async function view() {
-  const board = readBoard();
-  if (!board.ok) return { code: 503, body: board };
+async function view({ as } = {}) {
+  const raw = readBoard();
+  if (!raw.ok) return { code: 503, body: raw };
+  const p = principalOf(as);
+  const board = boardFor(raw, p);
   let st;
-  try { st = await conductorState(board); }
+  try { st = await conductorState(raw, { id: p.conductor }); }
   catch (e) { st = { id: board.conductor || null, ok: false, reason: 'Conductor check failed: ' + e.message }; }
   let recent = [];
   try {
@@ -372,9 +384,11 @@ async function view() {
       finished_older: board.finished_older || 0, finished_keep_days: board.finished_keep_days || 3,
       goals_health: board.goals_health || null, hygiene: board.hygiene || null,
       conductor: { id: st.id, ok: st.ok, reason: st.reason, at: st.at || null },
+      principal: { key: p.key, name: p.name, own: p.own, conductor: p.conductor || st.id || null },
+      principals: Principals.list(CONDUCTOR_DIR),
       recent,
     },
   };
 }
 
-module.exports = { view, act, actBatch, _setSender, _setConductorState, unhide, readActed, readBoard, liveNotes, conductorId, conductorState, composeLine, lineFor, BOARD_JSON, AUDIT };
+module.exports = { CONDUCTOR_DIR, view, act, actBatch, principalOf, _setSender, _setConductorState, unhide, readActed, readBoard, liveNotes, conductorId, conductorState, composeLine, lineFor, BOARD_JSON, AUDIT };

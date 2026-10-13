@@ -380,6 +380,7 @@ async function view({ as } = {}) {
         progress: g.progress || null, outcome: g.outcome || null,
         detail: String(g.detail || '').slice(0, 400),
         project: g.project || '', condition: g.condition || null, closed_at: g.closed_at || null,
+        principal: g.principal || null,
       })),
       finished_older: board.finished_older || 0, finished_keep_days: board.finished_keep_days || 3,
       goals_health: board.goals_health || null, hygiene: board.hygiene || null,

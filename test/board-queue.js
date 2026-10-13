@@ -30,11 +30,11 @@ check(Filter.count([{ bucket: 'decide', age: 12 }], { ...f0, bucket: 'decide', d
   const OLD = (r, f) => (r.n != null ? r.status === 'open' : !(f.days != null && r.age != null && r.age > f.days));
   check([old, fresh].filter(r => OLD(r, { days: 7 })).length === 2, 'control: the old predicate let the 10-day-old card through a 7d chip');
 }
-check(/if \(!B\.showHandled && B\.days != null\) \{\s*const older = Filter\.count\(d\.inbox, filt\(\{ days: null \}\)\) - inbox\.length;/.test(ui)
-  && /id="board-older"/.test(ui) && /closest\('#board-older'\)\) \{ B\.days = null; render\(\); return; \}/.test(ui),
-  'the list says how many older asks the chip holds back, and one tap shows them');
-check(/const nDone = Filter\.count\(d\.rows, filt\(\{ showHandled: true \}\)\) \+ Filter\.count\(d\.inbox, filt\(\{ showHandled: true \}\)\);/.test(ui)
-  && !/filt\(\{ bucket: 'all', showHandled: true \}\)/.test(ui), 'the Handled count is the list a tap on it shows (this bucket), not bucket "all"');
+// g1881: no day chips in the UI any more (Filter keeps them for the server). Asks older than a week fold under
+// "Needs you" with their count, one tap away, and the fold can mark them all done.
+check(/const OLD_DAYS = 7\b/.test(ui) && /id="bs-old"/.test(ui) && /data-bulk="old"/.test(ui) && /if \(t\.id === 'bs-old'\) B\.oldOpen = t\.open;/.test(ui),
+  'asks older than a week fold under Needs you with their count, and the fold opens in place');
+check(!/B\.days|B\.showHandled|filt\(/.test(ui), 'the old bucket/day/handled filter state is gone from the UI');
 
 // ---- the queue: every tap queues; one message; the flush triggers
 const oldUi = "send(kind, id);\n api('/api/board/act', {";
@@ -53,7 +53,8 @@ check(!/B\.batch\b/.test(ui), 'the old opt-in Batch switch is gone (queueing is 
 // ---- the markup
 const board = (html.match(/<section id="view-board"[\s\S]*?<\/section>/) || [''])[0];
 check(/<div class="board-head">\s*<h2>Board[\s\S]*?id="btn-board-refresh"[^>]*>&#x21bb;<\/button>\s*<\/div>/.test(board), 'Refresh is the ↻ icon in the title row');
-check(/<div class="board-filters">\s*<div class="search-row board-search">[\s\S]*?id="board-q"[\s\S]*?id="board-days"[\s\S]*?<\/nav>\s*<\/div>/.test(board), 'search and the day chips share one row');
+check(/<div class="search-row board-search">[\s\S]*?id="board-q"[\s\S]*?<\/div>\s*<nav class="board-tabs" id="board-tabs"/.test(board) && !/board-days|board-buckets/.test(board),
+  'g1881: search, then the section tabs (Needs you / In progress / Waiting / Done); no day or bucket chips');
 check(/id="board-pending"[\s\S]*id="board-pending-n"[\s\S]*id="board-sendall"/.test(board), 'the pending bar is under the list');
 {
   const acts = (board.match(/<div class="sheet-actions board-actions">([\s\S]*?)<\/div>/) || [, ''])[1];

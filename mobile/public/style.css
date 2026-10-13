@@ -1157,3 +1157,100 @@ mark.hit.cur{background:#f5a524; color:#000}
 /* g1875: another user's (Sagar's) sessions on the owner's list */
 .tag.tag-by { background: color-mix(in srgb, var(--accent, #3b82f6) 18%, transparent); }
 .row.others-fold .row-title { font-weight: 600; opacity: .85; }
+
+/* ---- g1881: the board, phone-first — Needs you / In progress / Waiting on others / Done ---------------- */
+.board-search{margin:0 0 6px}
+.board-tabs{display:flex; gap:6px; margin:0 0 6px}
+.board-tabs[hidden]{display:none}
+.btab{flex:1 1 0; min-width:0; min-height:40px; padding:4px 6px; border-radius:10px; border:1px solid var(--line);
+  background:var(--panel); color:var(--dim); font:inherit; font-size:12px; line-height:1.15; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.btab b{font-size:15px; color:var(--txt); font-variant-numeric:tabular-nums}
+.btab.need{border-color:var(--accent-ground); background:color-mix(in srgb,var(--accent) 12%,var(--panel))}
+.btab.need b{color:var(--accent)}
+.btab:active{background:color-mix(in srgb,var(--accent) 18%,var(--panel))}
+
+.board-list{gap:10px}
+.bsect{display:flex; flex-direction:column; gap:8px}
+.bsect>summary{list-style:none; cursor:pointer; display:flex; align-items:baseline; gap:8px; padding:12px 2px 4px;
+  border-top:1px solid var(--line); min-height:44px}
+.bsect>summary::-webkit-details-marker{display:none}
+.bsect>summary::before{content:"▸"; color:var(--faint); font-size:12px; width:10px}
+.bsect[open]>summary::before{content:"▾"}
+.bs-title,.bs-t{margin:0; font-size:17px; font-weight:700; letter-spacing:-.01em; color:var(--txt)}
+.bs-n{font-size:13px; font-weight:600; color:var(--dim); font-variant-numeric:tabular-nums}
+.bsect.need .bs-n{color:var(--accent)}
+.bs-h{margin:0; font-size:12px; color:var(--dim); line-height:1.35}
+.bsect.need{padding-top:2px}
+.bsub{margin:8px 2px 0; font-size:11.5px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--dim)}
+
+/* a card: meta line, plain title (tap for the rest), one row of actions */
+.bcard.need,.bcard.goal,.bcard.row{border-left-width:4px; padding:10px 12px 10px; border-radius:12px}
+.bcard.need.k-decide,.bcard.goal.s-you{border-left-color:var(--err)}
+.bcard.need.k-you,.bcard.need.k-nudge{border-left-color:var(--accent)}
+.bcard.need.k-do{border-left-color:var(--wait)}
+.bcard.need.k-check,.bcard.goal.s-check{border-left-color:var(--run)}
+.bcard.need.k-ask{border-left-color:var(--dim)}
+.bcard.need.k-fyi{border-left-color:var(--faint)}
+.bcard.goal.s-run{border-left-color:var(--ok)}
+.bcard.goal.s-wait{border-left-color:var(--faint)}
+.bcard.need.old{opacity:.82}
+.bmeta{display:flex; align-items:center; gap:6px; min-width:0; font-size:11.5px; color:var(--dim); margin-bottom:4px}
+.bnum{font-variant-numeric:tabular-nums; color:var(--faint); font-size:11.5px; flex:0 0 auto}
+.blane{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.bage{margin-left:auto; flex:0 0 auto; font-variant-numeric:tabular-nums}
+.bp{flex:0 0 auto; display:inline-block; border-radius:6px; padding:1px 7px; font-size:11px; font-weight:600; line-height:1.5; white-space:nowrap;
+  background:color-mix(in srgb,var(--dim) 16%,transparent); color:var(--txt)}
+.bp.k-decide,.bp.st-you{background:color-mix(in srgb,var(--err) 18%,transparent); color:var(--err)}
+.bp.k-you,.bp.k-nudge{background:color-mix(in srgb,var(--accent) 18%,transparent); color:var(--accent)}
+.bp.k-do{background:color-mix(in srgb,var(--wait) 20%,transparent); color:var(--wait)}
+.bp.k-check,.bp.st-new{background:color-mix(in srgb,var(--run) 18%,transparent); color:var(--run)}
+.bp.k-fyi,.bp.st-done{color:var(--dim)}
+.bp.st-run{background:color-mix(in srgb,var(--ok) 16%,transparent); color:var(--ok)}
+.bp.st-stale{background:color-mix(in srgb,var(--wait) 22%,transparent); color:var(--wait)}
+.bp.st-wait{color:var(--dim)}
+.st-stale-t{font-style:normal; font-size:12px; font-weight:600; color:var(--wait)}
+.bcard.need .bcard-t,.bcard.goal .gc-title,.bcard.row .gc-title{font-size:15px; font-weight:600; line-height:1.35}
+.bcard-t .bmore{display:none; margin-top:6px; font-weight:400; font-size:13px; color:var(--dim); white-space:pre-wrap}
+.bcard-t.bexp.open .bmore{display:block}
+.bcard-t.bexp:has(.bmore) .bgo{display:block; margin:2px 0 0; font-size:11.5px; color:var(--accent)}
+.bcard-t.bexp:has(.bmore):not(.open) .bgo::before{content:"▾ more"}
+.bfoot{display:flex; align-items:center; gap:8px; margin-top:9px}
+.bfoot .bcard-acts{flex:1 1 auto; margin:0; flex-wrap:nowrap}
+.bfoot .bcard-done{flex:1 1 auto; margin:0}
+.bfoot .bopen{margin-left:0; flex:0 0 auto; min-height:42px}
+.bcard .bbtn{min-height:42px; min-width:0; flex:1 1 0; background:var(--panel); color:var(--txt); border-color:var(--line); font-weight:500}
+.bcard .bbtn.primary{background:var(--accent-ground); border-color:var(--accent-ground); color:var(--on-accent); font-weight:600}
+
+/* the full goal */
+.gc-title{margin:0 0 6px}
+.gkv{display:grid; grid-template-columns:74px 1fr; gap:8px; padding:5px 0; border-top:1px dashed var(--line); font-size:13px; line-height:1.4}
+.gkv b{font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--dim); padding-top:1px}
+.gkv span{min-width:0; overflow-wrap:anywhere}
+.gkv.must{background:color-mix(in srgb,var(--err) 9%,transparent); border-radius:8px; border-top:0; padding:7px 8px; margin:4px 0}
+.gkv.must span{font-weight:600}
+
+/* lanes and compact goal rows */
+.lane{border:1px solid var(--line); border-radius:12px; background:var(--panel-2); overflow:hidden}
+.lane>summary{list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; padding:10px 12px; min-height:46px}
+.lane>summary::-webkit-details-marker{display:none}
+.lane-t{flex:1 1 auto; min-width:0; font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.lane[open]>summary{border-bottom:1px solid var(--line)}
+.lane .bs-h{padding:6px 12px 0}
+.lane>.bcard{margin:8px}
+.grow{padding:8px 12px; border-bottom:1px solid var(--line)}
+.grow:last-child{border-bottom:0}
+.bsect>.grow{border:1px solid var(--line); border-radius:12px; background:var(--panel-2)}
+.grow-h{display:flex; align-items:flex-start; gap:8px; width:100%; min-height:36px; padding:2px 0; background:none; border:0; color:inherit; font:inherit; text-align:left; cursor:pointer}
+.grow-h.static{cursor:default}
+.grow-h .bnum{padding-top:2px}
+.grow-t{flex:1 1 auto; min-width:0; font-size:13.5px; line-height:1.35; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden}
+.grow-p{margin:2px 0 0 0; font-size:12px; color:var(--dim); line-height:1.35; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden}
+.grow.open .bcard.goal{margin:8px 0 2px}
+.grow.done .grow-t{color:var(--dim)}
+.bold-fold{border:1px dashed var(--line); border-radius:12px; padding:0 10px 8px}
+.bold-fold>summary{cursor:pointer; padding:11px 2px; font-size:13px; color:var(--dim); min-height:44px}
+.bold-fold>.bcard{margin-top:8px}
+.bsearch-h{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; color:var(--dim); padding:2px 2px 0}
+.bsearch-h b{color:var(--txt)}
+.bsubline{margin-top:3px; font-size:12.5px; color:var(--dim); line-height:1.35; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden}

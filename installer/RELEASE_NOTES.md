@@ -1,3 +1,10 @@
+## 0.2.103
+
+- The Board opens on **Needs you**: only what waits on your tap or answer, each with its one-tap action (Answer, Go ahead, Close ✓, Got it). Decisions come first, then goals waiting on your move, then results to check and close, then replies. Anything older than a week folds below as "probably stale", with a "Mark all done" button.
+- Below it, four tabs: **In progress** (grouped by the session that owns it, stuck goals first), **Waiting** (on someone else), and **Done** (your sent taps and recently closed goals, folded). Day and bucket chips are gone.
+- A tapped goal number (g1874) now always shows that goal first: title, owner, status, latest progress, what you must do and when it counts as done. Goals named in the last 30 minutes were missing before; the board now reads the goal register live, so a goal shows the moment it is named.
+- Goal cards can be acted on directly: Close ✓, Go ahead, Answer or Reopen go to the Conductor as `close g1874`, `go g1874` and so on.
+
 ## 0.2.102
 
 - A second person on the same account (set in Settings › This phone, or with an `&as=<name>` added to the pairing link) gets their own Conductor and board. Their phone opens on their Conductor. Their Board shows only their own goals and questions, and their taps go to their own Conductor (from 0.2.101).

@@ -53,6 +53,41 @@ const B = require('../mobile/board');
   check(g2v && g2v.status === 'done' && !g2v.progress && !g2v.checks.length && !g2v.detail && g2v.outcome === 'shipped',
     'a finished goal goes to the phone slim: status and outcome only (its full texts made /api/board 4.3 MB)', g2v);
 
+  // ---- g1885: the first screen comes from a light board; the whole one only on demand
+  {
+    const dayMs = 86400000;
+    const ib = [{ n: 11, status: 'open', ts: new Date(Date.now() - 1 * dayMs).toISOString(), text: 'x'.repeat(5000), ask: 'pick one', ask_kind: 'decide' },
+                { n: 12, status: 'open', ts: new Date(Date.now() - 20 * dayMs).toISOString(), text: 'old ask' },
+                { n: 13, status: 'open', ts: new Date(Date.now() - 20 * dayMs).toISOString(), text: 'old ask about g3' }];
+    const bj = JSON.parse(fs.readFileSync(path.join(dir, 'board.json'), 'utf8'));
+    fs.writeFileSync(path.join(dir, 'board.json'), JSON.stringify(Object.assign(bj, { inbox: ib, owner_name: 'Ashwar' })));
+    const n = (await B.needs({})).body;
+    check(n.light && n.inbox.map(r => r.n).join() === '11' && n.old_ids.join() === '12,13' && n.inbox[0].text.length <= 700,
+      'needs: last week\'s asks (text capped), older ones as numbers only', { inbox: n.inbox.map(r => r.n), old: n.old_ids });
+    check(n.goals.map(g => g.id).join() === 'g3' && n.tab_counts && typeof n.tab_counts.run === 'number', 'needs: only goals on his move or to check, plus the tab counts', n.goals.map(g => g.id));
+    const ng = (await B.needs({ goal: 'g2' })).body;
+    check(ng.goal === 'g2' && ng.goals.some(g => g.id === 'g2' && g.status === 'done'), 'needs?goal=: a tapped goal comes along whatever its status');
+    const n3 = (await B.needs({ goal: 'g3' })).body;
+    check(n3.inbox.some(r => r.n === 13) && !n3.old_ids.includes(13), 'needs?goal=: an old ask naming that goal comes in full');
+    const t = Date.now(); await B.viewCached({}); await B.viewCached({});
+    check(Date.now() - t < 2000, 'the built view is reused while nothing it reads has changed');
+    const full = B.phoneFull({ ok: true, finished_keep_days: 3, goals: [{ id: 'a', status: 'open' }, { id: 'b', status: 'done', closed_at: new Date().toISOString() },
+      { id: 'c', status: 'done', closed_at: new Date(Date.now() - 30 * dayMs).toISOString() }] });
+    check(full.goals.map(g => g.id).join() === 'a,b' && full.finished_hidden === 1, 'the whole board leaves goals finished long ago on the PC', full);
+  }
+  {
+    const idx = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
+    const route = (idx.match(/if \(p === '\/api\/board' \|\| p === '\/api\/board\/needs'\) \{[\s\S]*?\n  \}\n/) || [''])[0];
+    check(/res\.once\('finish'[\s\S]*maybeBuild/.test(route) && !/await require\('\.\.\/lib\/board-build'\)\.maybeBuild/.test(route),
+      'the 2-second board rebuild runs after the answer has gone, never inside it (control: 0.2.104 awaited it)');
+    check(/\[board\] \$\{p === '\/api\/board' \? 'full' : 'needs'\} /.test(route), 'every board open is logged with its size and time on the phone\'s path');
+    const ui = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'public', 'board-ui.js'), 'utf8');
+    check(/api\('\/api\/board\/needs' \+ asQ\(\)/.test(ui) && /const c = cacheGet\(\); if \(c\) \{ B\.data = c;/.test(ui) && /if \(!goal\) cachePut\(d\);/.test(ui),
+      'the phone asks for the light board and paints the cached one first (stale-while-revalidate)');
+    check(/if \(t\.open && \['bs-run', 'bs-wait', 'bs-done', 'bs-old'\]\.includes\(t\.id\) && !B\.full\) ensureFull\(\);/.test(ui) && /if \(t\.dataset\.tab !== 'bs-need'\) ensureFull\(\);/.test(ui),
+      'the whole board loads only when a tab, section or the old fold opens');
+  }
+
   // ---- the phone side: which goals are his, and the order of "Needs you"
   const ui = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'public', 'board-ui.js'), 'utf8');
   const cut = (a, b) => { const i = ui.indexOf(a), j = ui.indexOf(b, i + 1); if (i < 0 || j < 0) throw new Error('missing ' + a); return ui.slice(i, j); };

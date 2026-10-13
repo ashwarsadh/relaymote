@@ -1,3 +1,9 @@
+## 0.2.105
+
+- The Board opens fast on a phone. Its first screen ("Needs you") now comes from a small download (about 20 KB instead of about 420 KB) and shows at once from the phone's last copy while the fresh one loads. In progress, Waiting, Done, search and the week-old fold load the rest only when you open them.
+- A tapped goal number fetches just that goal (any goal, open or long closed), so it opens in under a second on mobile data.
+- The PC no longer rebuilds the board while the phone waits for it (that alone took about 2 seconds every minute); it rebuilds right after answering.
+
 ## 0.2.104
 
 - An update can no longer leave Relaymote dead. On 13-Oct the 0.2.102 update met a locked tray icon; setup stopped half-way after it had already removed Relaymote's program folders, and nothing restarted it. Now setup first stops the tray and daemon and checks that no file is in use. If one still is, it stops BEFORE changing anything and the current version keeps running.

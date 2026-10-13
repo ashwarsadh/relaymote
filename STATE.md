@@ -2,6 +2,38 @@
 
 What is TRUE now, with evidence. Requests live in the goal register; this file is where things stand.
 
+## g1885 — the Board opened slowly on his phone (14-Oct-2026, ~23:45 IST) — 0.2.105
+**Measured on his path.** relaymote.log for his 0.2.104 open at 22:39 IST: `slow /api/board 4174ms`. That timer runs
+until the last byte has left through cloudflared. Where the time went:
+- `board-build.maybeBuild(60000)` was AWAITED inside the request: inbox upkeep, compose and HTML took **2.1 s**,
+  every minute, and the result is usually discarded (build_index.py owns board.json).
+- The payload was **412 KB gzipped** (1,883 goals: 341 KB; inbox: 62 KB). At 1.5 Mbps that is 2.55 s.
+- The JS bundle is not a factor: board-ui.js is part of the app shell, already loaded before the board opens.
+**Fix.**
+- `GET /api/board/needs[?goal=gN]` (board.js `needs()`) sends only what the first screen shows: about **19 KB gzipped**.
+  - Asks from the last 7 days (text ≤700); older ones go as numbers (`old_ids`) for the fold count and "Mark all done".
+  - Only goals on his move or to check, plus `tab_counts` (Filter.tabCounts).
+  - The tapped goal, whatever its status, and any old ask that names it.
+- `viewCached()` memoises the view per principal while board.json, goals.jsonl, taps and the audit are unchanged (≤15 s).
+- The full `/api/board` goes through `phoneFull()`: goals finished more than `finished_keep_days` ago stay on the PC (412 → 159 KB).
+- The route rebuilds after `finish`, not before the answer. Every open logs `[board] needs|full N KB in Xms (build Yms)`.
+- Phone (board-ui.js):
+  - paints the cached light board from localStorage at once, then revalidates (stale-while-revalidate);
+  - `ensureFull()` loads the whole board only for a tab, section, search or the old fold;
+  - goal taps never need it.
+- `onMe`/`goalKind`/`tabCounts` moved into `Filter`, so the phone and the server agree.
+**Before/after (harness on live data; the real APIs, gzip, shaped to 1.5 Mbps + 300 ms RTT; Chromium at 375×812).**
+| | 0.2.104 | 0.2.105 |
+|---|---|---|
+| open, nothing cached | 2,871 ms first paint (412 KB), +2.1 s rebuild on the daemon | **440 ms** (19 KB) |
+| reopen | 412 KB again | **18 ms** paint from cache, fresh at 469 ms |
+| tap g1874 / g1881 / closed g100 | full board | **521 / 429 / 438 ms**, 19 KB each |
+| open a tab (lazy) | — | 159 KB, ~1.2 s on the wire |
+| old card #273 → Answer focused | — | 2.2 s (needs the whole board) |
+The harness's "before" leaves out the 2.1 s rebuild (running it would touch his live inbox), so the real gain is larger.
+Tests: `test/board-live-goals.js` +9 checks (payload, memo, old_ids, goal of any status, phoneFull, route order, cache/lazy markers).
+**Proof still owed:** the `[board] needs … KB in …ms` lines from his own phone once 0.2.105 is installed.
+
 ## API sessions never notify; "API" chip hides them by default (14-Oct-2026, ~02:00 IST) — committed 93ce223, NOT yet released
 Ashwar (via Conductor): "API session ... should not show up ... as having the relay mode as a notification all the time ... ability to hide API session."
 - Marker (`mobile/api-sessions.js`): the id is a `session` value in `~/.claude/ago/state/claude-api/sessions.json`

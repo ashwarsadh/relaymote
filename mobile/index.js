@@ -1138,13 +1138,25 @@ async function handle(req, res) {
     try { return json(res, 200, { ok: true, principals: require('./principals').list(board.CONDUCTOR_DIR) }); }
     catch (e) { return json(res, 500, { ok: false, error: e.message }); }
   }
-  if (p === '/api/board') {
+  if (p === '/api/board' || p === '/api/board/needs') {
+    // g1885: the rebuild (inbox upkeep + compose + HTML, ~2.1 s) used to run INSIDE the request every minute.
+    // It now runs after the answer has gone, so it only freshens the next open.
+    const t0 = Date.now();
+    let built = 0;
+    res.once('finish', () => {
+      // Every open is measured on the phone's own path: bytes sent, our build, and until the last byte left
+      // (through the tunnel, so a slow link shows here).
+      log(`[board] ${p === '/api/board' ? 'full' : 'needs'} ${Math.round((Number(res.getHeader('Content-Length')) || 0) / 1024)} KB in ${Date.now() - t0}ms (build ${built}ms)`);
+      setTimeout(() => { require('../lib/board-build').maybeBuild(60000).catch(e => log('board build failed: ' + e.message)); }, 50);
+    });
     try {
       try { await sessions.refresh(); } catch {}
-      try { await require('../lib/board-build').maybeBuild(60000); } catch (e) { log('board build failed: ' + e.message); }
-      const r = await board.view({ as: url.searchParams.get('as') });
-      if (r.body && r.body.ok) r.body.bundle = assetVersion();
-      return json(res, r.code, r.body);
+      const as = url.searchParams.get('as');
+      const r = p === '/api/board' ? await board.viewCached({ as }) : await board.needs({ as, goal: url.searchParams.get('goal') });
+      const body = r.body && r.body.ok ? Object.assign({}, p === '/api/board' ? board.phoneFull(r.body) : r.body, { bundle: assetVersion() }) : r.body;
+      built = Date.now() - t0;
+      res.setHeader('Server-Timing', 'build;dur=' + built);
+      return json(res, r.code, body);
     }
     catch (e) { log('board view failed: ' + e.message); return json(res, 503, { ok: false, error: 'board-failed', detail: e.message }); }
   }

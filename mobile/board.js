@@ -467,4 +467,54 @@ async function view({ as } = {}) {
   };
 }
 
-module.exports = { CONDUCTOR_DIR, GOALS_JSONL, liveGoals, withLiveGoals, readBoardLive, view, act, actBatch, principalOf, _setSender, _setConductorState, unhide, readActed, readBoard, liveNotes, conductorId, conductorState, composeLine, lineFor, BOARD_JSON, AUDIT };
+// g1885: the phone opened the board over mobile data in seconds — the full view is ~420 KB gzipped (1,883 goals).
+// The first screen needs only "Needs you". viewCached() keeps one built view per principal while nothing it
+// reads has changed (board.json, goals.jsonl, taps, the audit) and for at most 15 s; needs() cuts it down to the
+// cards Needs you shows, the tab counts, and (when a chat link asked for one) that goal and its asks.
+const VIEW_TTL = 15000;
+const viewMemo = new Map();
+const stampOf = () => [BOARD_JSON, GOALS_JSONL, ACTED, AUDIT].map(f => { try { const s = fs.statSync(f); return s.mtimeMs + ':' + s.size; } catch { return '-'; } }).join('|');
+async function viewCached({ as } = {}) {
+  const key = String(principalOf(as).key || ''), stamp = stampOf(), hit = viewMemo.get(key);
+  if (hit && hit.stamp === stamp && Date.now() - hit.at < VIEW_TTL) return hit.r;
+  const r = await view({ as });
+  if (r.code === 200) viewMemo.set(key, { stamp, at: Date.now(), r });
+  return r;
+}
+/** The whole board as the phone gets it: goals finished more than finished_keep_days ago stay on the PC (they were
+ *  ~1,770 of 1,883 goals and most of the 412 KB). A goal id still finds any of them through needs({ goal }). */
+function phoneFull(body) {
+  if (!body || !body.ok) return body;
+  const keep = (Number(body.finished_keep_days) || 3) * 86400000, now = Date.now();
+  const goals = (body.goals || []).filter(g => !Filter.FINISHED.includes(g.status) || now - (Date.parse(g.closed_at || g.ts || '') || 0) < keep);
+  return Object.assign({}, body, { goals, finished_hidden: (body.goals || []).length - goals.length });
+}
+const NEED_OLD_DAYS = 7;
+const cut = (s, n) => s == null ? s : String(s).length > n ? String(s).slice(0, n) : s;
+async function needs({ as, goal } = {}) {
+  const r = await viewCached({ as });
+  if (r.code !== 200) return r;
+  const v = r.body, p = v.principal || {};
+  const me = (p.own && p.name) || v.owner_name || 'you';
+  const gid = /^g\d+$/i.test(String(goal || '')) ? String(goal).toLowerCase() : '';
+  const inbox = [], old_ids = [];
+  for (const x of v.inbox || []) {
+    if (x.status !== 'open' || Filter.isDone(x)) continue;
+    const old = (Filter.ageOf(x) || 0) > NEED_OLD_DAYS;
+    const named = gid && new RegExp('\\b' + gid + '\\b', 'i').test((x.ask || '') + ' ' + (x.text || ''));
+    // Older than a week sits in a closed fold: its number is enough (count, "Mark all done") until it opens.
+    if (old && !named) { old_ids.push(x.n); continue; }
+    inbox.push(Object.assign({}, x, { text: cut(x.text, 700), ask: cut(x.ask, 400), note: cut(x.note, 300) }));
+  }
+  const rows = (v.rows || []).filter(x => !Filter.isDone(x) && ['decide', 'buried', 'nudge'].includes(x.bucket))
+    .map(x => Object.assign({}, x, { ask: x.ask ? String(x.ask).slice(-600) : x.ask }));
+  const goals = (v.goals || []).filter(g => (!Filter.FINISHED.includes(g.status) && !g.acted && ['you', 'check'].includes(Filter.goalKind(g, me)))
+    || (gid && String(g.id).toLowerCase() === gid));
+  return { code: 200, body: {
+    ok: true, light: true, built_at: v.built_at, owner_name: v.owner_name, principal: v.principal, principals: v.principals,
+    conductor: v.conductor, finished_keep_days: v.finished_keep_days, goal: gid || null,
+    tab_counts: Filter.tabCounts(v, me), inbox, old_ids, rows, goals, inbox_waiting: [], inbox_resolved: [],
+  } };
+}
+
+module.exports = { CONDUCTOR_DIR, GOALS_JSONL, liveGoals, withLiveGoals, readBoardLive, view, viewCached, needs, phoneFull, act, actBatch, principalOf, _setSender, _setConductorState, unhide, readActed, readBoard, liveNotes, conductorId, conductorState, composeLine, lineFor, BOARD_JSON, AUDIT };

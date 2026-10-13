@@ -41,7 +41,7 @@ const oldUi = "send(kind, id);\n api('/api/board/act', {";
 const perTap = (src) => /api\('\/api\/board\/act',/.test(src) || /\bsend\(kind, id\)/.test(src);
 check(perTap(oldUi) && !perTap(ui), 'no per-tap send is left: a tap never POSTs /api/board/act on its own (fires on the old shape)');
 check(/enqueue\(kind, id\);\s*\/\/ queued/.test(ui) && /enqueue\('answer', id, text\);/.test(ui), 'a tap and an answer both queue');
-check(/body: JSON\.stringify\(\{ bid: batchId\(batch\), why, items:/.test(ui), 'the batch carries a bid, so a retry is recognised');
+check(/body: JSON\.stringify\(\{ bid: batchId\(batch\), why, (?:as: [^,]+, )?items:/.test(ui), 'the batch carries a bid, so a retry is recognised');
 check(/new MutationObserver\(\(\) => \{\s*if \(\$\('view-board'\)\.classList\.contains\('hidden'\) && B\.queue\.length && !isHeld\(\)\) flush\('board-closed'\);/.test(ui)
   && /\.observe\(\$\('view-board'\), \{ attributes: true, attributeFilter: \['class'\] \}\)/.test(ui), 'closing the board by ANY path sends the queue (watched on the sheet\'s hidden class)');
 check(/\$\('board-sendall'\)\.onclick = \(\) => flush\('send-all'\);/.test(ui), '"Send all as one" sends it');

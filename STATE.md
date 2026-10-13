@@ -2,6 +2,36 @@
 
 What is TRUE now, with evidence. Requests live in the goal register; this file is where things stand.
 
+## g1881 — Board opens on "Needs you"; a tapped gNNNN always shows its goal (13-Oct-2026, ~22:30 IST)
+
+**Bug, root cause.** The board read only `~/.claude/conductor/board.json`, which `build_index.py cycle` rewrites every
+30 min. A goal named since the last build was absent, so tapping it opened an empty search. The old UI also put the
+goal card below unfiltered drawers (197 "For you" asks, 135 of them older than a week).
+**Built.**
+- `mobile/board.js`: `liveGoals()` folds `goals.jsonl` (stat-cached, CRLF-safe). `withLiveGoals()` merges rows newer
+  than `built_at` (marked `fresh`; new open goals = FRESH) and carries each goal's last-change `ts`. `board.json` is never written.
+  `view`/`act`/`actBatch` use it. Goals gain `owner` (session title) and `lane`.
+  `lineFor` accepts a goal id: done→`close gN`, yes→`go gN`, answer→`answer gN …`, reopen.
+- `board-ui.js` rewrite. Search, then tabs **Needs you / In progress / Waiting / Done**.
+  - Needs you: decide, his-move goals, paused sessions, do, check-and-close, reply, read; newest first. Each card
+    has a one-tap primary action. Asks older than 7 days fold as "probably stale" with "Mark all N done".
+  - In progress: grouped by owner session, stale first. Done: folded.
+  - A goal card always shows title, owner, status, Latest ("nothing reported yet" if empty), You (blocked_on said to him), and Done when.
+  - Day and bucket chips are removed. `Filter` (server-side) is unchanged.
+- Tests: `test/board-live-goals.js`, new and in `npm test`, with a control check that board.json alone lacks the new
+  goal. `test/board-queue.js` was moved to the new layout.
+**Proof (live data, harness on the working tree, 375×812, no real token).** The live view held 1,882 goals, including g1877–g1881
+named after the 30-min snapshot. Tabs read Needs you 71 · In progress 93 · Waiting 54 · Done 9.
+- `openBoardAt({goal:'g1881'})` (fresh) and `{goal:'g1874'}` each showed the goal card first.
+- `openBoardAt({card:273})` (oldest, in the stale fold) opened the fold with the Answer box focused.
+- Screenshots `g1881-before-board.jpg`, `g1881-after-needs-you.jpg` and `g1881-after-goal-tap-g1874.jpg` are in the
+  Conductor's side-session-notes folder.
+**Open data issue (not code).** About 50 goals' `blocked_on` is status prose ("his tap, unchanged (re-checked …)"),
+not an instruction. The card shows it as written. A lane writing blocked_on should state the tap itself.
+
+## g1878 — admin-only sources for sub-user Conductors (14-Oct-2026)
+Mostly conductor-side (see ~/.claude/skills/conductor/STATE.md g1878). In Relaymote: `mobile/principals.js` drops `enabled: false` templates (Ajay), so no phone is ever offered one (9e3f3e9). Not yet released; it ships with the next release (0.2.103, deeplinks lane).
+
 ## g1875 — Sagar's session list = his Conductor + what he touched in 7 days; Ashwar can fold/hide them (13-Oct-2026, ~21:30 IST)
 
 **Built (0.2.102, 5b4f7a6; feature commit 8f1c010).** `mobile/principal-touch.js` keeps a ledger (`~/.relaymote/state/principal-touch.json`)

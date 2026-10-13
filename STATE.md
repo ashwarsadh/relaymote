@@ -163,3 +163,28 @@ banner), the send-path cover check, and `mobile/dialog.js`. Live check: the old 
 
 **Proof:** `test/dialog-press.js` builds the measured shapes. The old code fails 6 of its checks; the new code passes them all.
 The full suite passes, the v0.2.100 CI is green on all jobs, the installed 0.2.100 is running, and the live scrape returns blocker null.
+
+## g1869 — session links, goal ids, card numbers and "board" are taps in the phone chat (13-Oct-2026, 21:10 IST) — DONE, 0.2.101 live
+
+**Before.** `md()` turned `[title](#local_<uuid>)` into a file link (`data-p="#local_…"`), so a tap asked the file viewer
+for "#local_…" and nothing opened. Goal ids, card numbers and "board" were plain text.
+**Built (mobile/public/app.js `md()` + `boardLinks()`, board-ui.js `openBoardAt`).**
+- `[title](#local_<uuid>)` and a bare `local_<uuid>` → `a.sesslink` → `navOpenFrom(id)` (any open sheet closes first).
+  Any other `#target` link (e.g. `#terminal/3`) renders as plain label text.
+- `g\d{3,5}` → board with search = that goal: its register card (finished ones too; `data-goal`, flashed) plus every
+  ask/session row whose text names it. `#\d{3,5}` → that inbox card expanded + flashed, Answer sheet open and focused
+  when it is open, not acted and not FYI; a waiting/resolved/missing card gives a toast that says so. Word "board" → board.
+- The board-word pass runs on text outside tags only, after files/URLs are parked: paths (`notes/g1822-x.md`), URLs,
+  "PR #12"/"issue #12", "dashboard" and `&#39;` are never linked. Test: `test/session-links.js` (in `npm test`).
+**Proof (staged build, real data, no real token).** A harness that served the staged `mobile/public`, the real board.json
+(15:17Z) and two real Conductor messages (4853c4dc…, 11-Oct 23:02Z "#1783" and 13-Oct 15:10Z
+"[Claude-Desktop-as-API…](#local_58ed4015…) (g1871)"), checked at 375×812 with real clicks:
+- the session link opened `local_58ed4015…`, with the header showing that title;
+- g1871 opened the board with search "g1871" and one goal card, "g1871 Claude-Desktop-as-API…", flashed;
+- #1783 opened the board with the Answer sheet for "#1783 Rentals (g1742)…", the textarea focused, and nothing sent.
+**Deployed.** v0.2.101 (the tag also carries g1870); Release workflow success; `relaymote update --apply` → log line
+"updated 0.2.100 -> 0.2.101" at 15:40:17Z; daemon pid 160164 serves it. The phone picks up the new bundle on its next
+open (or via the "ready, Reload" banner).
+**Shared-checkout note.** e7b7512 (g1870) was applied as a zero-context patch and misplaced app.js hunks (the
+principal line landed inside `openChat()`). 2afc051 carries the correct layout. 4afc0d5 widens the board-queue
+`bid` regex for g1870's `as:` field.

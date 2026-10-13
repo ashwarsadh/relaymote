@@ -1,3 +1,9 @@
+## 0.2.102
+
+- A second person on the same account (set in Settings › This phone, or with an `&as=<name>` added to the pairing link) gets their own Conductor and board. Their phone opens on their Conductor. Their Board shows only their own goals and questions, and their taps go to their own Conductor (from 0.2.101).
+- Their session list shows their Conductor plus the sessions they or their Conductor started or messaged in the last 7 days. A session left untouched for a week hides again and comes back the next time it is used.
+- On the owner's phone those sessions carry the person's name, and an "Others" chip cycles through shown, folded into one group, and hidden for the sessions they started. Sessions both of you use always stay visible, with the name tag.
+
 ## 0.2.101
 
 - Session links in chat now open the session in the app. A Conductor message that says "open [some session](#local_…) and allow X" is a tap away; a bare `local_…` id works too. Links to other in-page targets (e.g. a terminal) show as plain text instead of a dead file link.

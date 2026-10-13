@@ -32,7 +32,11 @@ until the last byte has left through cloudflared. Where the time went:
 | old card #273 → Answer focused | — | 2.2 s (needs the whole board) |
 The harness's "before" leaves out the 2.1 s rebuild (running it would touch his live inbox), so the real gain is larger.
 Tests: `test/board-live-goals.js` +9 checks (payload, memo, old_ids, goal of any status, phoneFull, route order, cache/lazy markers).
-**Proof still owed:** the `[board] needs … KB in …ms` lines from his own phone once 0.2.105 is installed.
+**LIVE 0.2.105 at 23:12:58 IST** (8e9cfa8, Release run 38438953770).
+- `setup-0.2.105.log`: "stop-relaymote -ForUpdate exit 0" at 23:11:59, then "Installation process succeeded".
+- `apply.log`: installer exit 0, started, tray started. No stop marker is left.
+**Proof still owed:** the `[board] needs … KB in …ms` lines from his own phone on his next open. Last 0.2.104
+opens: 22:39 IST 4,174 ms, 22:40 IST 2,920 ms.
 
 ## API sessions never notify; "API" chip hides them by default (14-Oct-2026, ~02:00 IST) — committed 93ce223, NOT yet released
 Ashwar (via Conductor): "API session ... should not show up ... as having the relay mode as a notification all the time ... ability to hide API session."

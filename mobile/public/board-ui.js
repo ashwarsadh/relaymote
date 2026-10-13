@@ -37,6 +37,32 @@
       return true;
     },
     count: (list, f) => (list || []).filter(r => Filter.matches(r, f)).length,
+    /** The goal waits on HIM (his tap, OTP, password, OK) — "on Sagar ... at his repair link" does not. */
+    onMe(g, me) {
+      const b = String(g.blocked_on || '').trim();
+      if (!b) return false;
+      const name = String(me || '').replace(/[^\w]/g, '');
+      return (name && name !== 'you' && new RegExp('\\b' + name + '\\b', 'i').test(b))
+        || /^\W*(?:[\w-]+\s+){0,3}?on\s+(?:his|him|your)\b/i.test(b);
+    },
+    /** you | check | wait | run — where a goal belongs on the board (the phone and /api/board/needs agree). */
+    goalKind(g, me) {
+      if (g.condition === 'DELIVERED' || g.condition === 'VERIFY-NOW') return 'check';
+      if (Filter.onMe(g, me)) return 'you';
+      if (g.blocked_on || g.condition === 'BLOCKED' || g.condition === 'BLOCKED-STALE') return 'wait';
+      return 'run';
+    },
+    /** In progress / Waiting / Done counts, so a light board can show its tabs before the full one loads. */
+    tabCounts(d, me, now = Date.now()) {
+      const open = (d.goals || []).filter(g => !FINISHED.includes(g.status));
+      const kinds = open.map(g => Filter.goalKind(g, me));
+      const keep = (Number(d.finished_keep_days) || 3) * 86400000;
+      const paused = (d.rows || []).filter(r => !Filter.isDone(r) && (r.bucket === 'un' || r.bucket === 'open')).length;
+      const closed = (d.goals || []).filter(g => FINISHED.includes(g.status) && g.closed_at && now - Date.parse(g.closed_at) < keep).length;
+      const sent = (d.inbox || []).filter(Filter.isDone).length + (d.rows || []).filter(Filter.isDone).length;
+      return { run: kinds.filter(k => k === 'run').length + paused, wait: kinds.filter(k => k === 'wait').length + (d.inbox_waiting || []).length,
+        done: closed + sent + (d.inbox_resolved || []).length };
+    },
   };
   if (typeof module === 'object' && module.exports) module.exports = Filter;
   if (typeof document === 'undefined') return;
@@ -47,6 +73,9 @@
   const asQ = () => (asP() ? '?as=' + encodeURIComponent(asP()) : '');
   const B = {
     data: null, q: '',
+    // g1885: data = the light "Needs you" board (/api/board/needs, ~20 KB); full = the whole board, fetched only
+    // when a tab, a search, the old fold or a link needs it. The times say which is newer.
+    dataAt: 0, full: null, fullAt: 0, fullLoading: null, doneOpen: false,
     busy: Object.create(null),
     posts: 0,
     drafts: Object.create(null),
@@ -215,7 +244,9 @@
     if (typeof drawer === 'function') drawer(false);
     setHeld(false);
     showSheet($('view-board'));
-    // The last board shows at once (a tapped goal is usually in it); the fresh one replaces it when it lands.
+    // The last board shows at once — from this page, else from the phone's cache — and the fresh one replaces it
+    // when it lands (stale-while-revalidate). A cold phone used to wait for ~420 KB over the tunnel first.
+    if (!B.data) { const c = cacheGet(); if (c) { B.data = c; B.dataAt = 0; } }
     if (B.data) render(); else $('board-list').innerHTML = '<div class="empty">Loading…</div>';
     await loadBoard();
   }
@@ -240,16 +271,19 @@
       setTimeout(() => el.classList.remove('bflash'), 2400);
     };
     if (t.goal) {
-      const el = list.querySelector('.bcard.goal[data-goal="' + B.q + '"]');
+      let el = list.querySelector('.bcard.goal[data-goal="' + B.q + '"]');
       if (el) flash(el); else toast(B.q + ' is not in the goal register yet — pull down to refresh in a minute');
       return;
     }
     if (t.card) {
       const n = String(t.card), k = '#' + n;
-      const r = (d.inbox || []).find(x => String(x.n) === n);
+      let r = (d.inbox || []).find(x => String(x.n) === n);
+      // The light board carries only the last week's asks (and numbers for the rest).
+      if (!r && !B.full) { const f = await ensureFull(); r = f && (f.inbox || []).find(x => String(x.n) === n); }
+      const dd = B.full || d;
       if (!r) {
-        const w = (d.inbox_waiting || []).find(x => String(x.n) === n) ? 'is waiting on someone else'
-          : (d.inbox_resolved || []).find(x => String(x.n) === n) ? 'looks handled already' : 'is not an open card on the board';
+        const w = (dd.inbox_waiting || []).find(x => String(x.n) === n) ? 'is waiting on someone else'
+          : (dd.inbox_resolved || []).find(x => String(x.n) === n) ? 'looks handled already' : 'is not an open card on the board';
         toast(k + ' ' + w);
         return;
       }
@@ -267,17 +301,37 @@
   }
   window.openBoardAt = openBoardAt;
 
+  const CACHE_KEY = () => 'baton.boardNeeds.v1.' + (asP() || '-');
+  function cacheGet() { try { const d = JSON.parse(localStorage.getItem(CACHE_KEY()) || 'null'); return d && d.ok && d.light ? d : null; } catch { return null; } }
+  function cachePut(d) { try { localStorage.setItem(CACHE_KEY(), JSON.stringify(d)); } catch {} }
+
   async function loadBoard() {
     B.busy = Object.create(null);
     let d;
-    try { d = await api('/api/board' + asQ()); }
+    const goal = /^g\d+$/.test(B.q) ? B.q : '';
+    try { d = await api('/api/board/needs' + asQ() + (goal ? (asQ() ? '&' : '?') + 'goal=' + goal : '')); }
     catch (e) {
+      if (B.data) { toast('Could not refresh the board: ' + e.message); return; }
       $('board-list').innerHTML = '<div class="empty">Could not load the board: ' + esc(e.message)
         + ' <button class="linkish" onclick="openBoard()">retry</button></div>';
       return;
     }
-    B.data = d;
+    B.data = d; B.dataAt = Date.now();
+    if (!goal) cachePut(d);
+    // Whatever is open on screen that shows the whole board is refreshed with it.
+    if (B.full && needsFull()) { B.fullAt = 0; ensureFull(); }
     render();
+  }
+  /** A search, an open In progress / Waiting / Done section, or the old fold show the whole board. */
+  const needsFull = () => (B.q && !/^g\d+$/.test(B.q)) || B.goalsOpen || B.waitOpen || B.doneOpen || B.oldOpen;
+  function ensureFull() {
+    if (B.full && Date.now() - B.fullAt < 60000) return Promise.resolve(B.full);
+    if (B.fullLoading) return B.fullLoading;
+    B.fullLoading = api('/api/board' + asQ())
+      .then(f => { B.full = f; B.fullAt = Date.now(); render(); return f; })
+      .catch(e => { toast('Could not load the whole board: ' + e.message); return null; })
+      .finally(() => { B.fullLoading = null; });
+    return B.fullLoading;
   }
 
   function staleBanner(serverBundle) {
@@ -336,21 +390,7 @@
   const SENT = { yes: 'Yes sent', skip: 'Skip sent', answer: 'Answer sent', done: 'Done sent', reopen: 'Reinstated' };
 
   const meName = () => { const d = B.data || {}, p = d.principal || {}; return (p.own && p.name) || d.owner_name || 'you'; };
-  /** The goal waits on HIM (his tap, OTP, password, OK) — "on Sagar ... at his repair link" does not. */
-  function onMe(g) {
-    const b = String(g.blocked_on || '').trim();
-    if (!b) return false;
-    const name = meName().replace(/[^\w]/g, '');
-    return (name && name !== 'you' && new RegExp('\\b' + name + '\\b', 'i').test(b))
-      || /^\W*(?:[\w-]+\s+){0,3}?on\s+(?:his|him|your)\b/i.test(b);
-  }
-  /** you | check | wait | run — where a goal belongs on this page. */
-  function goalKind(g) {
-    if (g.condition === 'DELIVERED' || g.condition === 'VERIFY-NOW') return 'check';
-    if (onMe(g)) return 'you';
-    if (g.blocked_on || g.condition === 'BLOCKED' || g.condition === 'BLOCKED-STALE') return 'wait';
-    return 'run';
-  }
+  const goalKind = (g) => Filter.goalKind(g, meName());
   /** One plain line: the ask, else the first sentence — no "#123", "Conductor 04:16 IST:" or similar prefixes. */
   function plain(s, max) {
     max = max || 150;
@@ -469,6 +509,8 @@
       if (k === 'you' || k === 'check') out.push({ type: 'goal', id: g.id, kind: k, age: goalAge(g), g });
     }
     for (const it of out) it.old = it.age != null && it.age > OLD_DAYS;
+    // A light board sends only the numbers of asks older than a week (they sit in a closed fold).
+    for (const n of d.old_ids || []) out.push({ type: 'inbox', id: '#' + n, kind: 'ask', age: null, old: true, stub: true, r: { n, status: 'open' } });
     const age = (x) => x.age == null ? 1e6 : x.age;
     return out.sort((a, b) => (a.old - b.old) || (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || (age(a) - age(b)));
   }
@@ -533,8 +575,15 @@
     + body + '</details>';
 
   /** What the page holds, computed once per render: the four sections and the tab counts. */
-  function model(d) {
-    const need = needsYou(d);
+  function model(light) {
+    const d = B.full || light;
+    let need = needsYou(B.full && B.fullAt >= B.dataAt ? B.full : light);
+    // A newer light board carries only numbers for the week-old asks; the whole board, once here, fills them in.
+    if (B.full && need.some(x => x.stub)) {
+      const byN = new Map((B.full.inbox || []).map(r => [String(r.n), r]));
+      need = need.map(x => { const r = x.stub && byN.get(String(x.r.n));
+        return r ? { type: 'inbox', id: x.id, kind: r.ask_kind === 'decide' ? 'decide' : r.ask_kind === 'do' ? 'do' : r.ask_kind === 'fyi' ? 'fyi' : 'ask', age: Filter.ageOf(r), old: true, r } : x; });
+    }
     const open = (d.goals || []).filter(g => !FINISHED.includes(g.status));
     const run = open.filter(g => goalKind(g) === 'run');
     const wait = open.filter(g => goalKind(g) === 'wait');
@@ -543,23 +592,37 @@
     const closed = (d.goals || []).filter(g => FINISHED.includes(g.status) && g.closed_at && Date.now() - Date.parse(g.closed_at) < keep)
       .sort((a, b) => String(b.closed_at).localeCompare(String(a.closed_at)));
     const sent = [].concat((d.inbox || []).filter(r => Filter.isDone(r)), (d.rows || []).filter(r => Filter.isDone(r)));
-    return { need, run, wait, paused, closed, sent, waitingAsks: d.inbox_waiting || [], resolved: d.inbox_resolved || [] };
+    return { need, run, wait, paused, closed, sent, waitingAsks: d.inbox_waiting || [], resolved: d.inbox_resolved || [],
+      lightOnly: !B.full && !!light.light, counts: light.tab_counts || null };
   }
 
   function tabs(m) {
     const t = $('board-tabs');
     if (!t) return;
-    const nRun = m.run.length + m.paused.length, nWait = m.wait.length + m.waitingAsks.length;
+    const c = m.lightOnly && m.counts ? m.counts
+      : { run: m.run.length + m.paused.length, wait: m.wait.length + m.waitingAsks.length, done: m.closed.length + m.sent.length + m.resolved.length };
     const fresh = m.need.filter(x => !x.old).length;
-    t.innerHTML = [['bs-need', 'Needs you', fresh, 'need'], ['bs-run', 'In progress', nRun, ''], ['bs-wait', 'Waiting', nWait, ''],
-      ['bs-done', 'Done', m.closed.length + m.sent.length + m.resolved.length, '']]
+    t.innerHTML = [['bs-need', 'Needs you', fresh, 'need'], ['bs-run', 'In progress', c.run, ''], ['bs-wait', 'Waiting', c.wait, ''],
+      ['bs-done', 'Done', c.done, '']]
       .map(([id, l, n, cls]) => '<button class="btab ' + cls + '" data-tab="' + id + '">' + esc(l) + ' <b>' + n + '</b></button>').join('');
     t.hidden = !!B.q;
   }
 
-  function searchView(d) {
+  function searchView(light) {
     const q = B.q;
     const isGoal = /^g\d+$/.test(q);
+    // A goal id comes with the light board (/api/board/needs?goal=, any status), so it never needs the whole
+    // board; a light board fetched for another goal is still on its way. Any other search needs the whole one.
+    if (isGoal && light.goal !== q && !(light.goals || []).some(g => String(g.id).toLowerCase() === q) && !B.full) {
+      return '<div class="bsearch-h"><span>Looking up <b>' + esc(q) + '</b>…</span><button class="linkish" data-clearq="1">Clear search</button></div>';
+    }
+    const seen = new Set();
+    const d = isGoal ? Object.assign({}, B.full || {}, light, { goals: (light.goals || []).concat((B.full && B.full.goals) || [])
+      .filter(g => !seen.has(g.id) && seen.add(g.id)) }) : B.full;
+    if (!isGoal && !B.full) {
+      ensureFull();
+      return '<div class="bsearch-h"><span>Searching the whole board…</span><button class="linkish" data-clearq="1">Clear search</button></div>';
+    }
     const goals = (d.goals || []).filter(g => isGoal ? String(g.id).toLowerCase() === q
       : (g.id + ' ' + g.title + ' ' + (g.progress || '') + ' ' + (g.owner || '')).toLowerCase().includes(q));
     const asks = (d.inbox || []).filter(r => r.status === 'open' && Filter.hay(r).includes(q))
@@ -568,6 +631,7 @@
     const head = '<div class="bsearch-h"><span>' + (goals.length + asks.length + rows.length) + ' for <b>' + esc(q) + '</b></span>'
       + '<button class="linkish" data-clearq="1">Clear search</button></div>';
     if (!goals.length && !asks.length && !rows.length) {
+      if (!B.full) return head + '<div class="empty">Looking it up…</div>';
       return head + '<div class="empty">' + (isGoal ? esc(q) + ' is not in the goal register.' : 'Nothing matches.') + '</div>';
     }
     return head + goals.slice(0, 30).map(g => goalCard(g, d)).join('')
@@ -597,7 +661,8 @@
       + (fresh.length > shown.length ? '<button class="bolder" data-more="need">Show ' + (fresh.length - shown.length) + ' more</button>' : '')
       + (old.length ? '<details class="bold-fold" id="bs-old"' + (B.oldOpen ? ' open' : '') + '><summary>' + old.length + ' older than a week — still open, probably stale</summary>'
           + (oldIds.length > 1 ? '<button class="linkish" data-bulk="old">Mark all ' + oldIds.length + ' done</button>' : '')
-          + old.map(needCard).join('') + '</details>' : '')
+          + old.filter(x => !x.stub).map(needCard).join('')
+          + (old.some(x => x.stub) && B.oldOpen ? '<div class="empty">Loading…</div>' : '') + '</details>' : '')
       + '</section>');
 
     // IN PROGRESS — open goals by lane, the lanes with stale goals first; then paused sessions.
@@ -606,9 +671,10 @@
     const staleN = (gs) => gs.filter(g => STALE.has(g.condition)).length;
     const laneList = [...lanes.entries()].sort((a, b) => (staleN(b[1]) - staleN(a[1])) || (b[1].length - a[1].length) || a[0].localeCompare(b[0]));
     const nStale = m.run.filter(g => STALE.has(g.condition)).length;
-    html.push(section('bs-run', 'In progress', m.run.length + m.paused.length,
+    const lazy = m.lightOnly ? '<div class="empty">Loading…</div>' : '';
+    html.push(section('bs-run', 'In progress', m.lightOnly && m.counts ? m.counts.run : m.run.length + m.paused.length,
       nStale ? '<em class="st-stale-t">' + nStale + ' stale</em>' : '',
-      laneList.map(([lane, gs]) => {
+      lazy + laneList.map(([lane, gs]) => {
         gs.sort((a, b) => STALE.has(b.condition) - STALE.has(a.condition));
         const s = staleN(gs);
         return '<details class="lane"' + (B.laneOpen[lane] ? ' open' : '') + ' data-lane="' + esc(lane) + '"><summary><span class="lane-t">' + esc(lane) + '</span>'
@@ -620,8 +686,8 @@
       B.goalsOpen));
 
     // WAITING ON OTHERS
-    html.push(section('bs-wait', 'Waiting on others', m.wait.length + m.waitingAsks.length, '',
-      m.wait.map(g => '<div class="grow" data-goalrow="' + esc(g.id) + '"><button class="grow-h" data-gexp="' + esc(g.id) + '"><span class="bnum">' + esc(g.id) + '</span>'
+    html.push(section('bs-wait', 'Waiting on others', m.lightOnly && m.counts ? m.counts.wait : m.wait.length + m.waitingAsks.length, '',
+      lazy + m.wait.map(g => '<div class="grow" data-goalrow="' + esc(g.id) + '"><button class="grow-h" data-gexp="' + esc(g.id) + '"><span class="bnum">' + esc(g.id) + '</span>'
           + '<span class="grow-t">' + esc(plain(g.title, 110)) + '</span></button>'
           + '<div class="grow-p">Waiting on: ' + esc(plain(String(g.blocked_on || STATUS[g.condition] || '').replace(/^\W*on\s+/i, ''), 140)) + '</div>'
           + (B.gexp[g.id] ? goalCard(g, d) : '') + '</div>').join('')
@@ -630,8 +696,8 @@
       B.waitOpen));
 
     // DONE — folded
-    html.push(section('bs-done', 'Done', m.closed.length + m.sent.length + m.resolved.length, '',
-      (m.sent.length ? '<h4 class="bsub">Your taps, sent</h4>' + m.sent.map(r => r.n != null ? needCard({ type: 'inbox', id: '#' + r.n, kind: r.ask_kind || 'ask', age: Filter.ageOf(r), r }) : sessionCard(r)).join('') : '')
+    html.push(section('bs-done', 'Done', m.lightOnly && m.counts ? m.counts.done : m.closed.length + m.sent.length + m.resolved.length, '',
+      lazy + (m.sent.length ? '<h4 class="bsub">Your taps, sent</h4>' + m.sent.map(r => r.n != null ? needCard({ type: 'inbox', id: '#' + r.n, kind: r.ask_kind || 'ask', age: Filter.ageOf(r), r }) : sessionCard(r)).join('') : '')
       + (m.closed.length ? '<h4 class="bsub">Closed in the last ' + (Number(d.finished_keep_days) || 3) + ' days</h4>' + m.closed.map(g =>
           '<div class="grow done"><button class="grow-h" data-gexp="' + esc(g.id) + '"><span class="bnum">' + esc(g.id) + '</span><span class="grow-t">' + esc(plain(g.title, 110)) + '</span>'
           + pill('st-done', g.status) + '</button>' + (B.gexp[g.id] ? goalCard(g, d) : '') + '</div>').join('') : '')
@@ -640,7 +706,7 @@
           + '<div class="bmeta"><span class="bnum">#' + r.n + '</span><span class="blane">' + esc(r.why || '') + '</span></div>'
           + '<div class="gc-title">' + esc(plain(r.ask || r.text)) + '</div>'
           + '<div class="bfoot">' + actionsHtml('#' + r.n, ['reopen'], r.acted, r.handled) + openBtn(r.openable && r.session) + '</div></div>').join('') : ''),
-      false));
+      B.doneOpen));
 
     $('board-list').innerHTML = html.join('');
     markClamped();
@@ -870,6 +936,8 @@
     if (t.id === 'bs-run') B.goalsOpen = t.open;
     if (t.id === 'bs-wait') B.waitOpen = t.open;
     if (t.id === 'bs-old') B.oldOpen = t.open;
+    if (t.id === 'bs-done') B.doneOpen = t.open;
+    if (t.open && ['bs-run', 'bs-wait', 'bs-done', 'bs-old'].includes(t.id) && !B.full) ensureFull();
     if (t.dataset.lane) { if (t.open) B.laneOpen[t.dataset.lane] = true; else delete B.laneOpen[t.dataset.lane]; }
   }, true);
 
@@ -880,6 +948,7 @@
     if (!t) return;
     const sec = $(t.dataset.tab);
     if (!sec) return;
+    if (t.dataset.tab !== 'bs-need') ensureFull();
     if (sec.tagName === 'DETAILS') sec.open = true;
     sec.scrollIntoView({ block: 'start', behavior: 'smooth' });
   });

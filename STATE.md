@@ -15,6 +15,33 @@ Ashwar (via Conductor): "API session ... should not show up ... as having the re
   at `applyFold`.
 - Release: the updater locked-file fix (tray.ps1 -Watchdog holding tray.png) is NOT committed yet. Ship 93ce223 only
   after it, or stop the watchdog (`stop-relaymote.ps1`) before `update --apply`. Coordinating with local_2d3c486f.
+  **Update (g1881 lane, ~22:45 IST):** the fix is f566499 and is tagged v0.2.104. That tag includes 93ce223 and 11ad791.
+
+## Updater: a locked file can no longer empty the install folder (13-Oct-2026, ~22:45 IST) — f566499, v0.2.104
+**Root cause of the 21:32–21:45 IST outage (corrects "rollback left the folder gutted").**
+- `relaymote.iss` `[InstallDelete]` removes bin, lib, mcp, mobile, scripts, hooks, assets, runtime and node_modules
+  BEFORE files are copied. The locked `assets\tray.png` then aborted the silent setup.
+- Inno's rollback cannot restore what `[InstallDelete]` removed. It also deletes the files it had just copied, since they count as new.
+- `stopped-by-user.json` came from the installer's own `relaymote stop`. `relaymote start` clears it, but `start` could not run from the emptied folder.
+**Fix.**
+- `PrepareToInstall` runs BEFORE `[InstallDelete]`. It executes the NEW `stop-relaymote.ps1 -ForUpdate -Root {app}` (taken from setup via `dontcopy`).
+  - That script stops the tray powershell, its run-hidden wscript wrappers and node.
+  - It then opens every file with FileShare None, retrying for 20 s, to prove nothing holds it.
+  - If a file is still held, it exits 3 and names the file. Setup then aborts with the old install intact.
+- The apply script (`lib/updater.js`):
+  - retries setup once after stopping again;
+  - always deletes the stop marker;
+  - runs `start` again if it fails. `relaymote start` now exits 1 when the daemon does not answer.
+**Tests.** `test/update-lock.js` (in `npm test`) uses real fixtures: a fake tray holding tray.png with no sharing → exit 0
+and the folder freed; a watchdog restarting it → stopped again; an outside holder → exit 3 naming tray.png, all files kept.
+**DEPLOYED and proven on the incident's own precondition (22:13–22:14 IST).** Release CI compiled the `.iss` (run 38431119258, success).
+Before the install, the live tray held `assets\tray.png` (a FileShare-None open failed: "tray.png LOCKED").
+`relaymote update --apply` was run from 0.2.102, using its old apply script.
+- `setup-0.2.104.log`: "Extracting temporary file … stop-relaymote.ps1", then "stop-relaymote -ForUpdate exit 0" at
+  22:13:16, then "Installation process succeeded".
+- `apply.log`: installer exit 0, then "Relaymote started.", then "Tray icon started."
+- `relaymote.log`: "updated 0.2.102 -> 0.2.104" at 16:44:02Z.
+- The install folder has all 28 entries. No `stopped-by-user.json` is left. `:8799` answers.
 
 ## g1881 — Board opens on "Needs you"; a tapped gNNNN always shows its goal (13-Oct-2026, ~22:30 IST)
 
@@ -34,6 +61,20 @@ goal card below unfiltered drawers (197 "For you" asks, 135 of them older than a
   - Day and bucket chips are removed. `Filter` (server-side) is unchanged.
 - Tests: `test/board-live-goals.js`, new and in `npm test`, with a control check that board.json alone lacks the new
   goal. `test/board-queue.js` was moved to the new layout.
+- **Ashwar 14-Oct ~01:30 IST: "slowly loaded … said the goal does not exist".** That was 0.2.102: g1881 (created 16:16Z)
+  was not yet in board.json. Also `/api/board` was **4.27 MB**: 3.3 MB was the full texts of ~1,770 finished goals, and
+  0.68 MB was `goals_health.events24`, which nothing on the phone reads.
+  - The view now sends finished goals slim (title ≤140, outcome ≤160; no progress, checks or detail) and `goals_health`
+    as counts only, giving 1.6 MB before gzip.
+  - The server work is fast: the register fold takes 185 ms once, then 1 ms while cached; `readBoardLive` 86 ms.
+  - The phone renders its last board at once on open.
+  - An id not in the register gets the toast "gN is not in the goal register yet".
+  - Harness taps: g1881 388 ms, g1880 195 ms, g730 192 ms, each showing its open card. Shipped in 9001a45 (v0.2.103) and in v0.2.104.
+**LIVE in 0.2.104 (22:14 IST).** The installed code's `view()` on real data took 275 ms and returned 1.49 MB, 1,883 goals, 112 open.
+- g1881, g1880 and g1874 are each open, with their owner session titles.
+- The installed `board-ui.js` and `index.html` carry the new tabs.
+**Not proven:** a tap on his actual phone. adb was not used (his phone, not mine to drive). The phone loads the new
+bundle on its next open, or from the "ready, Reload" banner. v0.2.103 was tagged but never installed; 0.2.104 superseded it.
 **Proof (live data, harness on the working tree, 375×812, no real token).** The live view held 1,882 goals, including g1877–g1881
 named after the 30-min snapshot. Tabs read Needs you 71 · In progress 93 · Waiting 54 · Done 9.
 - `openBoardAt({goal:'g1881'})` (fresh) and `{goal:'g1874'}` each showed the goal card first.

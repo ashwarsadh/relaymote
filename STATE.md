@@ -26,6 +26,27 @@ Gotcha: Python `open(...,'w')` on Windows writes CRLF. That broke the tests that
 (mobile-session-search, mobile-burst-tts-held). Write with `newline='
 '`.
 
+**Deployed and LIVE (0.2.102, 21:45 IST 13-Oct).** Checked through the live daemon at :8799 `/api/sessions`:
+- The Sagar phone (`X-Relaymote-As: sagar`) gets **1 of 674** sessions: Sagar Conductor.
+- Ashwar's list keeps all of them, with Sagar Conductor tagged `by: Sagar, othersOnly: true`.
+
+The ledger file exists and is being read from Sagar Conductor's transcript (b3530bbb…jsonl).
+I did not prove a live "message → appears" round trip: the wake gate held the test send because the Conductor is cold (~200k tokens to wake).
+I withdrew that send from wake_hold.json. `test/principal-touch.js` covers the round trip instead.
+
+**🔴 INCIDENT: Relaymote was DOWN ~21:32–21:45 IST during the 0.2.102 update.**
+`update --apply` ran the installer, which hit `assets	ray.png` "in use (32)".
+The old tray watchdog (`powershell … scripts	ray.ps1 -Watchdog`, pid 39352, plus 2 wscript wrappers) was still alive.
+The installer aborted (exit 5) and its rollback left the install folder with no `bin/ lib/ mobile/ runtime/ node_modules`, so the daemon could not restart
+(apply.log: "The system cannot find the path specified").
+Recovery:
+1. Ran `stop-relaymote.ps1`; the tray then stopped.
+2. Re-ran the verified `Relaymote-Setup-0.2.102-x64.exe` with the updater's own arguments; exit 0, 0 locks (log `setup-0.2.102-retry.log`).
+3. `relaymote start` and `relaymote tray`; `/api/principals` returned 200.
+
+**Open defect:** the installer's pre-upgrade stop did not keep the tray down long enough. Either it missed the tray or the tray came back.
+A failed upgrade must never leave the folder gutted.
+
 ## g1870 — Sagar Conductor: one Conductor per principal on the same account (13-Oct-2026, ~21:00 IST)
 
 **Built.** `principals.json` sits in the Conductor folder (`~/.claude/conductor`, the same folder as board.json):

@@ -154,13 +154,10 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
       <button id="btn-board-refresh" class="icon-btn board-refresh" title="Refresh" aria-label="Refresh the board">&#x21bb;</button>
     </div>
     <div id="board-conductor" class="board-conductor"></div>
-    <nav class="chips" id="board-buckets" aria-label="Buckets"></nav>
-    <div class="board-filters">
-      <div class="search-row board-search">
-        <input id="board-q" type="search" placeholder="Search…" autocomplete="off" enterkeyhint="search" aria-label="Search title, ask, project">
-      </div>
-      <nav class="chips board-days" id="board-days" aria-label="Age"></nav>
+    <div class="search-row board-search">
+      <input id="board-q" type="search" placeholder="Search, or a goal like g1874" autocomplete="off" enterkeyhint="search" aria-label="Search the board or type a goal number">
     </div>
+    <nav class="board-tabs" id="board-tabs" aria-label="Sections"></nav>
     <div id="board-list" class="board-list"><div class="empty">Loading…</div></div>
     <div id="board-pending" class="board-pending hidden" role="status" aria-live="polite">
       <span id="board-pending-n">0 replies pending</span>

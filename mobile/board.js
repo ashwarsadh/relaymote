@@ -74,6 +74,57 @@ function registryRow(sessionId) {
   return best;
 }
 
+/* The goal register (goals.jsonl, append-only: one row per change, folded by id) is the source of truth for
+   goals; board.json is a snapshot the Conductor rebuilds every 30 min. A goal the Conductor has just
+   named in a chat was therefore missing for up to half an hour, and a tapped gNNNN found nothing (g1881).
+   Every read of the board folds the register in: rows newer than the snapshot win, new goals are added. */
+const GOALS_JSONL = path.join(CONDUCTOR_DIR, 'goals.jsonl');
+const GOAL_FIELDS = ['title', 'status', 'session', 'blocked_on', 'progress', 'outcome', 'due', 'checks', 'detail', 'principal'];
+let goalCache = { mtime: 0, size: -1, map: new Map() };
+function liveGoals() {
+  let st;
+  try { st = fs.statSync(GOALS_JSONL); } catch { return goalCache.map; }
+  if (st.mtimeMs === goalCache.mtime && st.size === goalCache.size) return goalCache.map;
+  const map = new Map();
+  let text;
+  try { text = fs.readFileSync(GOALS_JSONL, 'utf8'); } catch { return goalCache.map; }
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let o; try { o = JSON.parse(line); } catch { continue; }
+    if (!o || !/^g\d+$/.test(String(o.id || ''))) continue;
+    const g = map.get(o.id) || { id: o.id };
+    for (const k of GOAL_FIELDS) if (o[k] !== undefined) g[k] = o[k];
+    if (o.closed_ts) g.closed_at = o.closed_ts;
+    if (o.reopened_ts) g.closed_at = null;
+    if (o.ts && (!g.ts || o.ts > g.ts)) g.ts = o.ts;
+    map.set(o.id, g);
+  }
+  goalCache = { mtime: st.mtimeMs, size: st.size, map };
+  return map;
+}
+/** board.json with the register's newer goal rows folded in (same object shape; the snapshot is not modified). */
+function withLiveGoals(board) {
+  const live = liveGoals();
+  if (!live.size) return board;
+  const built = Date.parse(board.built_at || '') || 0;
+  const byId = new Map((board.goals || []).map(g => [g.id, g]));
+  const goals = (board.goals || []).slice();
+  for (const [id, g] of live) {
+    const t = Date.parse(g.ts || '') || 0;
+    const had = byId.get(id);
+    // Unchanged since the snapshot: keep it, but carry the register's last-change time (the card's age).
+    if (had && t <= built) { goals[goals.indexOf(had)] = Object.assign({}, had, { ts: g.ts || had.ts || null }); continue; }
+    const merged = Object.assign({}, had || { condition: g.status === 'open' || !g.status ? 'FRESH' : null }, g, { fresh: true });
+    if (!merged.status) merged.status = 'open';
+    if (had) goals[goals.indexOf(had)] = merged; else goals.push(merged);
+  }
+  return Object.assign({}, board, { goals });
+}
+function readBoardLive() {
+  const raw = readBoard();
+  return raw.ok ? withLiveGoals(raw) : raw;
+}
+
 const INBOX_JSONL = path.join(CONDUCTOR_DIR, 'inbox.jsonl');
 let noteCache = { mtime: 0, size: -1, map: new Map() };
 /** n -> the item's CURRENT note, from the folded ledger (a later row that carries no note keeps the earlier one). */
@@ -151,6 +202,14 @@ function lineFor(board, kind, id, text) {
     return { ok: true, line: composeLine('answer', '#' + item.n, title, text), target: 'inbox', title };
   }
 
+  // A goal (g1881): Done closes it, Yes = go ahead as the owner proposed, Answer carries his words, Reinstate reopens.
+  const goal = /^g\d+$/i.test(raw) && (board.goals || []).find(g => String(g.id).toLowerCase() === raw.toLowerCase());
+  if (goal) {
+    if (kind === 'answer' && !String(text || '').trim()) return { ok: false, error: 'no-text', detail: 'answer needs text' };
+    const cmd = { done: 'close', reopen: 'reopen', yes: 'go', skip: 'skip', answer: 'answer' }[kind];
+    return { ok: true, line: composeLine(cmd, goal.id, goal.title, kind === 'answer' ? text : ''), target: 'goal', title: goal.title };
+  }
+
   const row = (board.rows || []).find(r => r.id === raw);
   if (!row) return { ok: false, error: 'unknown-id', detail: raw + ' is not on the current board' };
   if (kind === 'done' || kind === 'reopen') return { ok: false, error: 'bad-kind', detail: 'Done and Reinstate are for inbox items; a session takes yes / skip / answer' };
@@ -211,7 +270,7 @@ function audit(rec) {
 }
 
 async function act({ kind, id, text, who, as }) {
-  const raw = readBoard();
+  const raw = readBoardLive();
   if (!raw.ok) return { code: 503, body: { ok: false, error: raw.error, detail: raw.detail } };
   const p = principalOf(as);
   const board = boardFor(raw, p);     // Sagar's taps reach only Sagar's items, and go to Sagar Conductor
@@ -278,7 +337,7 @@ const BATCHES = new Map();
 async function actBatch({ items, bid, who, as } = {}) {
   bid = bid ? String(bid).slice(0, 80) : null;
   if (bid && BATCHES.has(bid)) return { code: 200, body: { ...BATCHES.get(bid), repeat: true } };
-  const raw = readBoard();
+  const raw = readBoardLive();
   if (!raw.ok) return { code: 503, body: { ok: false, error: raw.error, detail: raw.detail } };
   const p = principalOf(as);
   const board = boardFor(raw, p);
@@ -324,7 +383,7 @@ async function actBatch({ items, bid, who, as } = {}) {
 }
 
 async function view({ as } = {}) {
-  const raw = readBoard();
+  const raw = readBoardLive();
   if (!raw.ok) return { code: 503, body: raw };
   const p = principalOf(as);
   const board = boardFor(raw, p);
@@ -338,6 +397,13 @@ async function view({ as } = {}) {
       .filter(r => r && r.result !== 'refused' && r.kind !== 'batch')
       .map(r => ({ at: r.at, id: String(r.id), kind: r.kind, result: r.result }));
   } catch {}
+  const titles = new Map();
+  /** A session's sidebar title: the lane a goal or ask belongs to, in his words rather than an id. */
+  const titleOf = (sid) => {
+    if (!sid) return null;
+    if (!titles.has(sid)) { let t = null; try { const s = sessions.get(sid); t = s && s.title || null; } catch {} titles.set(sid, t); }
+    return titles.get(sid);
+  };
   const actedMap = readActed();
   const mark = (row, key) => {
     const a = actedMap[String(key)];
@@ -355,7 +421,7 @@ async function view({ as } = {}) {
     if (r.session) { try { openable = !!sessions.get(r.session); } catch {} }
     const live = notes.get(String(r.n));
     const note = live === undefined ? (r.note || '') : live;
-    return mark(Object.assign({}, r, { openable, note }), '#' + r.n);
+    return mark(Object.assign({}, r, { openable, note, lane: titleOf(r.session) }), '#' + r.n);
   });
 
   // The SAME predicate the app's chips use (mobile/public/board-ui.js Filter), with no age cut-off:
@@ -364,7 +430,7 @@ async function view({ as } = {}) {
   for (const b of ['buried', 'decide', 'nudge', 'un', 'open']) counts[b] = rows.filter(r => Filter.matches(r, { bucket: b })).length;
   counts.inbox = inbox.filter(r => Filter.matches(r, { bucket: 'inbox' })).length;
   const openable = (sid) => { if (!sid) return false; try { return !!sessions.get(sid); } catch { return false; } };
-  const inboxSide = (list) => (list || []).map(r => mark(Object.assign({}, r, { openable: openable(r.session) }), '#' + r.n));
+  const inboxSide = (list) => (list || []).map(r => mark(Object.assign({}, r, { openable: openable(r.session), lane: titleOf(r.session) }), '#' + r.n));
 
   return {
     code: 200,
@@ -373,17 +439,26 @@ async function view({ as } = {}) {
       labels: board.labels, hints: board.hints, rows, inbox,
       inbox_waiting: inboxSide(board.inbox_waiting), inbox_resolved: inboxSide(board.inbox_resolved),
       owner_name: board.owner_name || 'you',
-      goals: (board.goals || []).map(g => ({
-        id: g.id, title: g.title, status: g.status || 'open', due: g.due || null,
-        session: g.session || null, blocked_on: g.blocked_on || null,
-        checks: Array.isArray(g.checks) ? g.checks : [],
-        progress: g.progress || null, outcome: g.outcome || null,
-        detail: String(g.detail || '').slice(0, 400),
-        project: g.project || '', condition: g.condition || null, closed_at: g.closed_at || null,
-        principal: g.principal || null,
-      })),
+      // g1881: the phone shows one card per goal, never the whole history. The full texts of ~1,800 finished
+      // goals made this response 4.3 MB, so a tapped goal took seconds to appear on a phone.
+      goals: (board.goals || []).map(g => {
+        const fin = Filter.FINISHED.includes(g.status);
+        const cut = (s, n) => s ? String(s).slice(0, n) : null;
+        return {
+          id: g.id, title: cut(g.title, fin ? 140 : 400), status: g.status || 'open', due: g.due || null,
+          session: g.session || null, owner: titleOf(g.session), fresh: !!g.fresh, ts: g.ts || null,
+          blocked_on: fin ? null : cut(g.blocked_on, 600),
+          checks: !fin && Array.isArray(g.checks) ? g.checks.slice(0, 2).map(c => String(c).slice(0, 300)) : [],
+          progress: cut(g.progress, fin ? 0 : 600), outcome: cut(g.outcome, fin ? 160 : 300),
+          detail: fin ? '' : String(g.detail || '').slice(0, 400),
+          project: g.project || '', condition: g.condition || null, closed_at: g.closed_at || null,
+          principal: g.principal || null,
+        };
+      }).map(g => mark(g, g.id)),
+      goals_waiting: board.goals_waiting || [],
       finished_older: board.finished_older || 0, finished_keep_days: board.finished_keep_days || 3,
-      goals_health: board.goals_health || null, hygiene: board.hygiene || null,
+      goals_health: board.goals_health ? { at: board.goals_health.at || null, counts: board.goals_health.counts || null } : null,
+      hygiene: board.hygiene || null,
       conductor: { id: st.id, ok: st.ok, reason: st.reason, at: st.at || null },
       principal: { key: p.key, name: p.name, own: p.own, conductor: p.conductor || st.id || null },
       principals: Principals.list(CONDUCTOR_DIR),
@@ -392,4 +467,4 @@ async function view({ as } = {}) {
   };
 }
 
-module.exports = { CONDUCTOR_DIR, view, act, actBatch, principalOf, _setSender, _setConductorState, unhide, readActed, readBoard, liveNotes, conductorId, conductorState, composeLine, lineFor, BOARD_JSON, AUDIT };
+module.exports = { CONDUCTOR_DIR, GOALS_JSONL, liveGoals, withLiveGoals, readBoardLive, view, act, actBatch, principalOf, _setSender, _setConductorState, unhide, readActed, readBoard, liveNotes, conductorId, conductorState, composeLine, lineFor, BOARD_JSON, AUDIT };

@@ -1,3 +1,8 @@
+## 0.2.101
+
+- Session links in chat now open the session in the app. A Conductor message that says "open [some session](#local_…) and allow X" is a tap away; a bare `local_…` id works too. Links to other in-page targets (e.g. a terminal) show as plain text instead of a dead file link.
+- Goal ids (g1867), board card numbers (#1783) and the word "board" are tappable in chat. A goal opens the board searched for it: its goal card plus every question that mentions it. A card number opens that card expanded, with its Answer box already up. "PR #12" and file paths are left alone.
+
 ## 0.2.100
 
 - The phone no longer says "A box on the PC is blocking sends" for Claude Desktop's Usage popover. Desktop leaves closed popups in the page; those, and small popovers that don't block anything, are now ignored.

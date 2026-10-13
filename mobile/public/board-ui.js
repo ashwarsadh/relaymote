@@ -219,6 +219,52 @@
     await loadBoard();
   }
 
+  /* A tap on a goal id / card number in a chat (g1869). { goal: 'g1867' } opens the board searched for
+     that goal: its register card plus every ask and session row that names it. { card: '1783' } opens
+     that card, expanded, with its Answer sheet up when it still wants an answer. */
+  async function openBoardAt(t) {
+    t = t || {};
+    Object.assign(B, { bucket: 'all', days: null, project: 'all', showHandled: false });
+    B.q = t.goal ? String(t.goal).toLowerCase() : '';
+    if (t.goal) B.goalsOpen = true;
+    if ($('board-q')) $('board-q').value = B.q;
+    await openBoard();
+    const d = B.data;
+    if (!d) return;
+    const list = $('board-list');
+    const flash = (el) => {
+      if (!el) return;
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('bflash');
+      setTimeout(() => el.classList.remove('bflash'), 2400);
+    };
+    if (t.goal) {
+      const g = (d.goals || []).find(x => String(x.id).toLowerCase() === B.q);
+      const asks = (d.inbox || []).filter(r => Filter.matches(r, filt())).length;
+      if (!g && !asks) toast(t.goal + ' is not on the board (closed more than ' + (d.finished_keep_days || 3) + ' days ago, or not registered yet)');
+      flash(list.querySelector('[data-goal="' + B.q + '"]'));
+      return;
+    }
+    if (t.card) {
+      const n = String(t.card), k = '#' + n;
+      const r = (d.inbox || []).find(x => String(x.n) === n);
+      if (!r) {
+        const w = (d.inbox_waiting || []).find(x => String(x.n) === n) ? 'is waiting on someone else'
+          : (d.inbox_resolved || []).find(x => String(x.n) === n) ? 'looks handled already' : 'is not an open card on the board';
+        toast(k + ' ' + w);
+        return;
+      }
+      if (r.acted || r.handled) { B.showHandled = true; render(); }
+      const card = [...list.querySelectorAll('.bcard')].find(c => c.dataset.id === k);
+      if (!card) { toast(k + ' is on the board but hidden by a filter'); return; }
+      const exp = card.querySelector('[data-expand]');
+      if (exp && !exp.classList.contains('open')) exp.click();
+      flash(card);
+      if (!r.acted && !r.handled && r.ask_kind !== 'fyi' && !queued(k)) openAnswer(k, cardTitle(card), cardAsk(card));
+    }
+  }
+  window.openBoardAt = openBoardAt;
+
   async function loadBoard() {
     B.busy = Object.create(null);
     let d;
@@ -258,8 +304,11 @@
     const c = (B.data && B.data.conductor) || {};
     const el = $('board-conductor');
     el.className = 'board-conductor ' + (c.ok ? 'ok' : 'bad');
+    const p = (B.data && B.data.principal) || {};
+    const h = document.querySelector('#view-board .board-head h2');
+    if (h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.nodeValue = p.own ? p.name + "'s board " : 'Board ';
     el.innerHTML = c.ok
-      ? '<b>Conductor ready</b><span>' + esc(c.reason || '') + '</span>'
+      ? '<b>' + esc(p.own ? p.name + ' Conductor ready' : 'Conductor ready') + '</b><span>' + esc(c.reason || '') + '</span>'
       : '<b>Buttons will not send</b><span>' + esc(c.reason || 'The Conductor session is not available.') + '</span>';
   }
 
@@ -304,9 +353,6 @@
       const b = document.createElement('button');
       b.className = 'chip' + (B.days === n && !B.showHandled ? ' on' : '');
       b.textContent = n === null ? 'All' : n + 'd';
-    const p = (B.data && B.data.principal) || {};
-    const h = document.querySelector('#view-board .board-head h2');
-    if (h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.nodeValue = p.own ? p.name + "'s board " : 'Board ';
       b.onclick = () => { B.days = n; B.showHandled = false; render(); };
       dw.appendChild(b);
     }
@@ -449,8 +495,11 @@
     const now = Date.now();
     const dueMs = (g) => { const t = g.due ? Date.parse(g.due) : NaN; return isNaN(t) ? Infinity : t; };
     const overdue = (g) => dueMs(g) < now;
-    const open = goals.filter(g => !FINISHED.includes(g.status) && (B.project === 'all' || (g.project || '') === B.project));
-    const done = goals.filter(g => FINISHED.includes(g.status) && (B.project === 'all' || (g.project || '') === B.project));
+    // Searched for one goal id (a g1867 tapped in a chat): that goal alone, finished or not, shown open.
+    const one = /^g\d+$/.test(B.q) ? B.q : null;
+    const open = goals.filter(g => one ? String(g.id).toLowerCase() === one
+      : !FINISHED.includes(g.status) && (B.project === 'all' || (g.project || '') === B.project));
+    const done = one ? [] : goals.filter(g => FINISHED.includes(g.status) && (B.project === 'all' || (g.project || '') === B.project));
     open.sort((a, b) => (overdue(b) - overdue(a)) || (dueMs(a) - dueMs(b)));
 
     const days = (g) => {
@@ -465,8 +514,8 @@
       const checks = (g.checks || []).length
         ? '<ul class="gchecks">' + g.checks.map(c => '<li>' + esc(String(c)) + '</li>').join('') + '</ul>'
         : '';
-      return '<div class="gcard' + (overdue(g) ? ' gcard-over' : '') + '"' + tap + '>'
-        + '<div class="gtitle">' + esc(g.title || g.id) + '</div>'
+      return '<div class="gcard' + (overdue(g) ? ' gcard-over' : '') + '" data-goal="' + esc(String(g.id).toLowerCase()) + '"' + tap + '>'
+        + '<div class="gtitle"><span class="gid">' + esc(g.id) + '</span> ' + esc(g.title || '') + '</div>'
         + '<div class="gmeta">' + (g.condition ? '<span class="gcond c-' + esc(g.condition) + '">' + esc(COND_LABEL[g.condition] || g.condition) + '</span> ' : '')
         + (FINISHED.includes(g.status) ? '<span class="gcond">' + esc(g.status) + (g.closed_at ? ' ' + esc(fmtWhen(g.closed_at)) : '') + '</span> ' : days(g))
         + (g.blocked_on ? ' <em class="gblocked">blocked: ' + esc(String(g.blocked_on)) + '</em>' : '')

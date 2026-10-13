@@ -21,7 +21,7 @@ function load(src) {
   vm.runInContext(src + '\n;globalThis.md = md;', ctx);
   return ctx.md;
 }
-const parts = [/^function esc\(/m, /^const CODE_PATH_RX = /m, /^const FILE_RX = /m, /^const URL_RX = /m, /^function renderTables\(/m, /^function md\(/m].map(grab);
+const parts = [/^function esc\(/m, /^const SESS_RX = /m, /^const BOARD_RX = /m, /^function boardLinks\(/m, /^const CODE_PATH_RX = /m, /^const FILE_RX = /m, /^const URL_RX = /m, /^function renderTables\(/m, /^function md\(/m].map(grab);
 check(parts.every(Boolean), 'esc, CODE_PATH_RX, FILE_RX, URL_RX, renderTables and md are found in app.js', parts.map(p => p.length));
 const md = load(parts.join('\n'));
 const hrefs = (h) => [...h.matchAll(/<a class="weblink" href="([^"]*)"[^>]*>([^<]*)<\/a>/g)].map(m => [m[1], m[2]]);

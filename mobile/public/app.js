@@ -275,9 +275,19 @@ function md(src, doc) {
   // A markdown link's target may hold spaces: [plan](memento mcp/docs/x.md) or [plan](<a b/x.md>).
   h = h.replace(/\[([^\]\n]+)\]\((?:&lt;([^\n]+?)&gt;|([^)\n]+?))\)/g, (_, label, angle, plain) => {
     const t = (angle || plain).trim().replace(/&amp;/g, '&').replace(/"/g, '&quot;');
-    links.push(/^https?:/i.test(t)
+    // [title](#local_<uuid>) is how a Desktop session names another session (g1869): open it in the app.
+    // Any other in-page target (#terminal/3, #board) is not a file, so it stays plain text.
+    const sid = /^#?(local_[0-9a-f-]{36})$/i.exec(t);
+    links.push(sid ? `<a class="sesslink" data-sid="${sid[1]}">${label}</a>`
+      : t[0] === '#' ? label
+      : /^https?:/i.test(t)
       ? `<a href="${t}" target="_blank" rel="noreferrer">${label}</a>`
       : `<a class="fileref" data-p="${t}">${label}</a>`);
+    return `\u0000L${links.length - 1}\u0000`;
+  });
+  // A bare session id opens that session too; shown short, as the full uuid is noise on a phone.
+  h = h.replace(SESS_RX, (m) => {
+    links.push(`<a class="sesslink" data-sid="${m}" title="${m}">${m.slice(0, 14)}…</a>`);
     return `\u0000L${links.length - 1}\u0000`;
   });
   // Bare http(s) URLs open in a new tab. Parked like a markdown link BEFORE FILE_RX, so a URL's path is
@@ -306,8 +316,22 @@ function md(src, doc) {
   // done before the bullet and table passes, it pulled the next line off line-start, so a list
   // right under a heading kept its raw "- " and a table there would not render.
   if (doc) h = h.replace(/^(#{1,6})[ \t]+(.+)$\n?/gm, (_, l, t) => { const n = Math.min(l.length + 1, 5); return `<h${n} class="mdh">${t}</h${n}>`; });
+  h = boardLinks(h);
   h = h.replace(/\u0000L(\d+)\u0000/g, (_, i) => links[Number(i)]);
   return h.replace(/\u0000(\d+)\u0000/g, (_, i) => fences[Number(i)]);
+}
+
+// Board words in prose become taps (g1869): a goal id (g1867) opens the board on that goal and the asks
+// that name it, a card number (#1783) opens that card ready to answer, and the word "board" opens the board.
+// Runs on TEXT only, outside every tag, after the file and URL passes, so a path or URL holding
+// "g1822-x.md" or "#123" is never re-linked. "PR #12" / "issue #12" are not board cards.
+const SESS_RX = /\blocal_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+const BOARD_RX = /(?<![\w./\\-])(g\d{3,5})(?![\w-]|\.\w)|(?<![\w&#/]|(?:PR|PRs|pull|issue|issues) )#(\d{3,5})(?!\w)|(?<![\w-])([Bb]oard)(?![\w-])/g;
+function boardLinks(h) {
+  return h.split(/(<a\b[\s\S]*?<\/a>|<[^>]*>|\u0000L?\d+\u0000)/).map((part, i) => (i % 2) ? part : part.replace(BOARD_RX, (m, g, n) =>
+    g ? `<a class="boardlink" data-goal="${g}">${m}</a>`
+      : n ? `<a class="boardlink" data-card="${n}">${m}</a>`
+      : `<a class="boardlink" data-board="1">${m}</a>`)).join('');
 }
 
 const URL_RX = /\bhttps?:\/\/(?:(?!&quot;|&lt;|&gt;)[^\s<>`"'])+/gi;
@@ -1523,31 +1547,6 @@ function currentPlace() {
 function savePlace() {
   try { localStorage.setItem(PLACE_KEY, JSON.stringify({ ...currentPlace(), at: Date.now() })); } catch {}
 }
-/** The rule itself, pure: place = what savePlace() stored (or null), list = the session rows. */
-function pickFirstScreen(place, list, { now = Date.now(), board = true } = {}) {
-  const live = (list || []).filter(s => s && !s.archived);
-  if (place && typeof place.at === 'number' && now - place.at <= RESUME_MS) {
-    if (place.kind === 'board' && board) return { kind: 'board', why: 'resume' };
-    if (place.kind === 'list') return { kind: 'list', why: 'resume' };
-    if (place.kind === 'chat' && live.some(s => s.id === place.id)) return { kind: 'chat', id: place.id, why: 'resume' };
-  }
-  const pc = live.find(s => s.active);
-  if (pc) return { kind: 'chat', id: pc.id, why: 'pc' };
-  const newest = live.slice().sort((a, b) => (b.at || 0) - (a.at || 0))[0];
-  if (newest) return { kind: 'chat', id: newest.id, why: 'recent' };
-  return { kind: 'list', why: 'empty' };
-}
-async function firstScreen(touched0 = navTouched) {
-  const untouched = () => !state.open && !visibleSheetId() && !$('drawer').classList.contains('open') && navTouched === touched0;
-  if (!untouched()) return 'user';
-  let place = null;
-  try { place = JSON.parse(localStorage.getItem(PLACE_KEY) || 'null'); } catch {}
-  try { await syncPrincipal(); } catch {}
-  const p = pickFirstScreen(place, state.rawSessions || state.sessions || [], { board: typeof window.openBoard === 'function', home: principalHome() });
-  if (p.kind === 'board') window.openBoard();
-  else if (p.kind === 'chat') openChat(p.id);
-  else drawer(true);
-  return p.kind + ':' + p.why;
 // g1870: who holds THIS phone. Ashwar 13-Oct: Sagar uses the same account, "just that he gets one more
 // conductor ... Maybe his board should also be dedicated." A ?as=sagar link (read here, before boot strips
 // the query) or Settings › This phone sets it; the phone then opens on that principal's Conductor and the
@@ -1579,6 +1578,33 @@ window.relaymoteSetPrincipal = (key) => {
   setPrincipal(p && !p.isDefault ? p.key : '', p && !p.isDefault ? (p.conductor || '') : '');
   toast(p && !p.isDefault ? 'This phone is now ' + p.name + "'s: it opens on " + p.name + ' Conductor' : 'This phone shows everything');
 };
+/** The rule itself, pure: place = what savePlace() stored (or null), list = the session rows. */
+function pickFirstScreen(place, list, { now = Date.now(), board = true, home = '' } = {}) {
+  const live = (list || []).filter(s => s && !s.archived);
+  if (place && typeof place.at === 'number' && now - place.at <= RESUME_MS) {
+    if (place.kind === 'board' && board) return { kind: 'board', why: 'resume' };
+    if (place.kind === 'list') return { kind: 'list', why: 'resume' };
+    if (place.kind === 'chat' && live.some(s => s.id === place.id)) return { kind: 'chat', id: place.id, why: 'resume' };
+  }
+  // A phone that belongs to a principal with their own Conductor (Sagar) opens there, not on the PC's session.
+  if (home && live.some(s => s.id === home)) return { kind: 'chat', id: home, why: 'principal' };
+  const pc = live.find(s => s.active);
+  if (pc) return { kind: 'chat', id: pc.id, why: 'pc' };
+  const newest = live.slice().sort((a, b) => (b.at || 0) - (a.at || 0))[0];
+  if (newest) return { kind: 'chat', id: newest.id, why: 'recent' };
+  return { kind: 'list', why: 'empty' };
+}
+async function firstScreen(touched0 = navTouched) {
+  const untouched = () => !state.open && !visibleSheetId() && !$('drawer').classList.contains('open') && navTouched === touched0;
+  if (!untouched()) return 'user';
+  let place = null;
+  try { place = JSON.parse(localStorage.getItem(PLACE_KEY) || 'null'); } catch {}
+  try { await syncPrincipal(); } catch {}
+  const p = pickFirstScreen(place, state.rawSessions || state.sessions || [], { board: typeof window.openBoard === 'function', home: principalHome() });
+  if (p.kind === 'board') window.openBoard();
+  else if (p.kind === 'chat') openChat(p.id);
+  else drawer(true);
+  return p.kind + ':' + p.why;
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') savePlace(); });
 window.addEventListener('pagehide', savePlace);
@@ -1587,8 +1613,6 @@ async function openChat(id) {
   if (!navQuiet && id !== state.open) navRecord();
   if (state.openingId === id) return;
   state.openingId = id;
-  // A phone that belongs to a principal with their own Conductor (Sagar) opens there, not on the PC's session.
-  if (home && live.some(s => s.id === home)) return { kind: 'chat', id: home, why: 'principal' };
   try { return await openChatInner(id); } finally { if (state.openingId === id) state.openingId = null; }
 }
 
@@ -1897,6 +1921,25 @@ $('log').addEventListener('click', (e) => {
   const sys = e.target.closest('.msg.system');
   if (sys) sys.classList.toggle('open');
 });
+
+// Session, goal, card and "board" links written by md() (g1869). On the document, not the log, so they work
+// wherever md() renders (chat, queued and pending bubbles, the file viewer).
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a.sesslink, a.boardlink');
+  if (!a) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (a.dataset.sid) {
+    const sid = a.dataset.sid;
+    const known = (state.rawSessions || state.sessions || []).some(x => x.id === sid);
+    if (!known) toast('Opening ' + sid.slice(0, 14) + '… — it is not in your session list (archived or not synced yet)');
+    for (const s of document.querySelectorAll('.sheet:not(.hidden)')) hideSheet(s);
+    navOpenFrom(sid);
+    return;
+  }
+  if (typeof window.openBoardAt !== 'function') { toast('The board is turned off in this app', true); return; }
+  window.openBoardAt(a.dataset.goal ? { goal: a.dataset.goal } : a.dataset.card ? { card: a.dataset.card } : {});
+}, true);
 
 $('log').addEventListener('click', (e) => {
   const sentA = e.target.closest('a[data-sent]');

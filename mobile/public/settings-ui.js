@@ -140,10 +140,24 @@
   }
   function getPath(obj, dotted) { return dotted.split('.').reduce(function (o, k) { return o == null ? o : o[k]; }, obj); }
 
+  // g1870: which principal holds THIS phone. Stored on the phone only (localStorage), never in settings.json.
+  function thisPhone() {
+    var ps = window.__relaymotePrincipals || [];
+    if (ps.length < 2) return '';
+    var cur = ''; try { cur = localStorage.getItem('baton.principal') || ''; } catch (e) {}
+    return '<h3>This phone</h3><label class="set-field"><span><b>This phone is</b><small>Same account and sessions either way. ' +
+      'Someone other than the owner opens on their own Conductor, and their Board shows only their goals and questions.</small></span>' +
+      '<select onchange="relaymoteSetPrincipal(this.value)">' + ps.map(function (p) {
+        var on = p.isDefault ? !cur : cur === p.key;
+        return '<option value="' + esc(p.key) + '"' + (on ? ' selected' : '') + '>' + esc(p.name + (p.isDefault ? ' (everything)' : '')) + '</option>';
+      }).join('') + '</select></label>';
+  }
+
   function renderGeneral() {
     var m = S.modules || {};
     return '<p class="set-lead">Turn features on or off. Changes apply within a minute; the app module needs a restart.</p>' +
       moduleGroups(m) +
+      thisPhone() +
       '<h3>While you work</h3>' +
       field('idleGateSeconds', 'Idle gate (seconds)', S.idleGateSeconds, 'Relaymote drives the Claude Desktop window. It waits until you have not touched keyboard or mouse for this long. 0 = never wait.', 'number');
   }

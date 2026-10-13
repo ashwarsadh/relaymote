@@ -1542,11 +1542,43 @@ async function firstScreen(touched0 = navTouched) {
   if (!untouched()) return 'user';
   let place = null;
   try { place = JSON.parse(localStorage.getItem(PLACE_KEY) || 'null'); } catch {}
-  const p = pickFirstScreen(place, state.rawSessions || state.sessions || [], { board: typeof window.openBoard === 'function' });
+  try { await syncPrincipal(); } catch {}
+  const p = pickFirstScreen(place, state.rawSessions || state.sessions || [], { board: typeof window.openBoard === 'function', home: principalHome() });
   if (p.kind === 'board') window.openBoard();
   else if (p.kind === 'chat') openChat(p.id);
   else drawer(true);
   return p.kind + ':' + p.why;
+// g1870: who holds THIS phone. Ashwar 13-Oct: Sagar uses the same account, "just that he gets one more
+// conductor ... Maybe his board should also be dedicated." A ?as=sagar link (read here, before boot strips
+// the query) or Settings › This phone sets it; the phone then opens on that principal's Conductor and the
+// Board shows only their goals and asks. Not a security boundary: the key is the same.
+const PRINCIPAL_KEY = 'baton.principal', PRINCIPAL_HOME = 'baton.principalHome';
+function setPrincipal(key, home) {
+  try {
+    if (key) localStorage.setItem(PRINCIPAL_KEY, key); else localStorage.removeItem(PRINCIPAL_KEY);
+    if (home) localStorage.setItem(PRINCIPAL_HOME, home); else localStorage.removeItem(PRINCIPAL_HOME);
+  } catch {}
+}
+function principalHome() { try { return localStorage.getItem(PRINCIPAL_KEY) ? (localStorage.getItem(PRINCIPAL_HOME) || '') : ''; } catch { return ''; } }
+try {
+  const as0 = new URLSearchParams(location.search).get('as');
+  if (as0 != null) setPrincipal(as0.trim().toLowerCase(), '');
+} catch {}
+/** Refresh this phone's principal from the server's list: its home session, or forget an unknown/default key. */
+async function syncPrincipal() {
+  let key = ''; try { key = localStorage.getItem(PRINCIPAL_KEY) || ''; } catch {}
+  let r; try { r = await api('/api/principals'); } catch { return; }
+  window.__relaymotePrincipals = (r && r.principals) || [];
+  if (!key) return;
+  const p = window.__relaymotePrincipals.find(x => x.key === key);
+  if (!p || p.isDefault) setPrincipal('', '');
+  else setPrincipal(p.key, p.conductor || '');
+}
+window.relaymoteSetPrincipal = (key) => {
+  const p = (window.__relaymotePrincipals || []).find(x => x.key === key);
+  setPrincipal(p && !p.isDefault ? p.key : '', p && !p.isDefault ? (p.conductor || '') : '');
+  toast(p && !p.isDefault ? 'This phone is now ' + p.name + "'s: it opens on " + p.name + ' Conductor' : 'This phone shows everything');
+};
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') savePlace(); });
 window.addEventListener('pagehide', savePlace);
@@ -1555,6 +1587,8 @@ async function openChat(id) {
   if (!navQuiet && id !== state.open) navRecord();
   if (state.openingId === id) return;
   state.openingId = id;
+  // A phone that belongs to a principal with their own Conductor (Sagar) opens there, not on the PC's session.
+  if (home && live.some(s => s.id === home)) return { kind: 'chat', id: home, why: 'principal' };
   try { return await openChatInner(id); } finally { if (state.openingId === id) state.openingId = null; }
 }
 

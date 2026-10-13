@@ -41,6 +41,10 @@
   if (typeof module === 'object' && module.exports) module.exports = Filter;
   if (typeof document === 'undefined') return;
 
+  // g1870: who holds this phone (Settings › This phone is, or a ?as=sagar link). A non-default principal sees
+  // only their own goals and asks, and their taps go to their own Conductor; Ashwar's board shows all.
+  const asP = () => { try { return localStorage.getItem('baton.principal') || ''; } catch { return ''; } };
+  const asQ = () => (asP() ? '?as=' + encodeURIComponent(asP()) : '');
   const B = {
     data: null, bucket: 'all', days: null, q: '', project: 'all',
     showHandled: false,
@@ -151,7 +155,7 @@
     try {
       const r = await api('/api/board/act-batch', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bid: batchId(batch), why, items: batch.map(q => ({ kind: q.kind, id: q.id, text: q.text })) }),
+        body: JSON.stringify({ bid: batchId(batch), why, as: asP() || undefined, items: batch.map(q => ({ kind: q.kind, id: q.id, text: q.text })) }),
       });
       // Remove exactly what went: a tap made while this was in flight stays queued.
       const went = new Set(batch.map(q => q.id + '@' + q.at));
@@ -218,7 +222,7 @@
   async function loadBoard() {
     B.busy = Object.create(null);
     let d;
-    try { d = await api('/api/board'); }
+    try { d = await api('/api/board' + asQ()); }
     catch (e) {
       $('board-list').innerHTML = '<div class="empty">Could not load the board: ' + esc(e.message)
         + ' <button class="linkish" onclick="openBoard()">retry</button></div>';
@@ -300,6 +304,9 @@
       const b = document.createElement('button');
       b.className = 'chip' + (B.days === n && !B.showHandled ? ' on' : '');
       b.textContent = n === null ? 'All' : n + 'd';
+    const p = (B.data && B.data.principal) || {};
+    const h = document.querySelector('#view-board .board-head h2');
+    if (h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.nodeValue = p.own ? p.name + "'s board " : 'Board ';
       b.onclick = () => { B.days = n; B.showHandled = false; render(); };
       dw.appendChild(b);
     }
@@ -374,7 +381,8 @@
           : '<span class="b-kind k-none" title="The session never said what it needs from you">NO QUESTION</span> ')
         + (new RegExp('^#' + r.n + '\\b').test(String(r.ask || r.text || '')) ? '' : '#' + r.n + ' ') + esc(String(r.ask || r.text || '')) + '</div>'
       + '<span class="bgo"></span></div>'
-      + '<div class="bcard-m"><span class="b-tag">' + esc(KIND_HINT[r.ask_kind] || 'For ' + ((B.data && B.data.owner_name) || 'you')) + '</span><span>' + esc((r.ts || '').slice(5, 16)) + '</span>'
+      + '<div class="bcard-m"><span class="b-tag">' + esc(KIND_HINT[r.ask_kind] || 'For ' + ((B.data && B.data.owner_name) || 'you')) + '</span>'
+      + (r.principal && !(B.data && B.data.principal && B.data.principal.own) ? '<span class="b-tag">' + esc(r.principal.charAt(0).toUpperCase() + r.principal.slice(1)) + "'s</span>" : '') + '<span>' + esc((r.ts || '').slice(5, 16)) + '</span>'
       + (r.project ? '<span>' + esc(r.project) + '</span>' : '') + (r.pinned ? '<span title="Reinstated by you; never auto-resolved">pinned</span>' : '')
       + (tap ? '<button class="bopen" data-open="' + esc(r.session) + '">Open session ›</button>' : '')
       + '</div></div>'

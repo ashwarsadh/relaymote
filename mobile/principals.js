@@ -17,7 +17,9 @@ function load(dir) {
   let j = {};
   try { j = JSON.parse(fs.readFileSync(path.join(dir, 'principals.json'), 'utf8')) || {}; } catch {}
   const def = String(j.default || 'ashwar').toLowerCase();
-  const principals = Object.assign({}, j.principals || {});
+  // g1878: a template the admin has not switched on yet (enabled: false, e.g. Ajay) is not offered anywhere.
+  const principals = {};
+  for (const [k, r] of Object.entries(j.principals || {})) if (!(r && r.enabled === false)) principals[k] = r;
   if (!principals[def]) principals[def] = { name: 'Ashwar', conductor: null, sees: 'all' };
   return { default: def, principals };
 }

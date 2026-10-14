@@ -81,7 +81,7 @@ async function boot(w, extraEnv = {}) {
     /** Open an SSE stream; events land in the returned array as { event, data }. */
     stream(clientId, o = {}) {
       const got = [];
-      const q = clientId ? '?client=' + encodeURIComponent(clientId) : '';
+      const q = (clientId ? '?client=' + encodeURIComponent(clientId) : '') + (o.as ? (clientId ? '&' : '?') + 'as=' + encodeURIComponent(o.as) : '');
       const r = http.request({ host: '127.0.0.1', port: APP, path: '/api/stream' + q,
         headers: { Authorization: 'Bearer ' + (o.token || token), Accept: 'text/event-stream' } }, resp => {
           got.status = resp.statusCode;

@@ -1,3 +1,7 @@
+## 0.2.107
+
+- Sagar's Relaymote lists only his own sessions again: his Conductor and the sessions he or his Conductor started or messaged in the last week. The live update that refreshes the list was sending every session to every phone, so his list filled up with everyone's on the first change. Ashwar's list is unchanged.
+
 ## 0.2.106
 
 - Share files into Relaymote from any app. In Android's share menu pick Relaymote: the files (photos, PDFs, Word/Excel and other documents) open in the session you last had open on that phone, attached in the message box with any shared text. Check them and tap send; nothing is sent by itself.

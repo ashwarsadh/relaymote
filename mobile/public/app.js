@@ -1832,7 +1832,9 @@ function connectStream(watch) {
   if (state.es) { state.es.close(); state.es = null; }
   const es = new EventSource('/api/stream?client=' + encodeURIComponent(CLIENT_ID) +
                              (BUILD ? '&build=' + encodeURIComponent(BUILD) : '') +
-                             (watch ? '&watch=' + encodeURIComponent(watch) : ''));
+                             (watch ? '&watch=' + encodeURIComponent(watch) : '') +
+                             // g1940: EventSource sends no headers, so the stream is told who holds this phone here.
+                             (() => { try { const who = localStorage.getItem('baton.principal'); return who ? '&as=' + encodeURIComponent(who) : ''; } catch { return ''; } })());
   state.es = es;
   state.esWatch = watch || null;
   state.esLastEvent = Date.now();

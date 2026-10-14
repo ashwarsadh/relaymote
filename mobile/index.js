@@ -516,9 +516,23 @@ async function poll() {
     const key = listKey(all);
     if (key !== lastListKey) {
       lastListKey = key;
-      const slim = all.filter(s => !s.archived).slice(0, 80).map(slimSession);
+      // g1940 (Ashwar 14-Oct: "sagar relaymopte was showing all sessions instead of his sesion or sessions he
+      // started or invoked"): this push replaced Sagar's filtered list with everyone's on the first change. Each
+      // stream now gets the list its principal sees (/api/sessions' view), Ashwar's rows keep their `by` marks.
+      const live = all.filter(s => !s.archived);
+      const touch = require('./principal-touch');
+      try { touch.refresh(board.CONDUCTOR_DIR, (id) => sessions.transcriptPath(sessions.get(id))); } catch (e) { log('principal touch scan failed: ' + e.message); }
+      const byKey = new Map();
       for (const c of clients) {
-        const payload = isSubuser(c.identity) ? slim.filter(s => c.identity.sessions.has(s.id)) : slim;
+        const base = isSubuser(c.identity) ? live.filter(s => c.identity.sessions.has(s.id)) : live;
+        const k = (isSubuser(c.identity) ? 'sub:' + c.client : 'p:') + ((c.principal && c.principal.key) || '');
+        let payload = byKey.get(k);
+        if (!payload) {
+          let seen = base;
+          try { seen = touch.view(base, c.principal, board.CONDUCTOR_DIR); } catch (e) { if (c.principal && c.principal.own) seen = []; }
+          payload = seen.slice(0, 80).map(slimSession);
+          byKey.set(k, payload);
+        }
         sseSend(c, 'sessions', { sessions: payload });
       }
     }
@@ -1631,7 +1645,7 @@ async function handle(req, res) {
     res.write(': connected\n\n');
     let watch = url.searchParams.get('watch') || null;
     if (watch && isSubuser(identity) && !identity.sessions.has(watch)) watch = null;
-    const c = { res, watch, stamp: null, identity,
+    const c = { res, watch, stamp: null, identity, principal: principalOf(req, url),
                 client: (url.searchParams.get('client') || '').slice(0, 64) || null };
     noteClientBuild(c.client, url.searchParams.get('build'));
     clients.add(c);

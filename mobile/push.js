@@ -64,13 +64,17 @@ function keys() {
 
 function publicKey() { return keys().vapid.publicKey; }
 
-function subscribe(sub) {
+// g1940: `as` = whose phone this is (principal key; '' = the default, Ashwar). undefined (the service
+// worker's re-subscribe, which cannot read the phone's setting) keeps what the endpoint had.
+function subscribe(sub, as) {
   if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
     throw new Error('invalid subscription');
   }
   const d = keys();
+  const had = (d.subs || []).find(s => s.endpoint === sub.endpoint);
+  const who = as === undefined ? (had && had.as) || '' : String(as || '').toLowerCase();
   d.subs = (d.subs || []).filter(s => s.endpoint !== sub.endpoint);
-  d.subs.push({ endpoint: sub.endpoint, keys: sub.keys, at: new Date().toISOString() });
+  d.subs.push(Object.assign({ endpoint: sub.endpoint, keys: sub.keys, at: new Date().toISOString() }, who ? { as: who } : {}));
   save(d);
   return d.subs.length;
 }
@@ -171,9 +175,10 @@ function post(endpoint, payload) {
 // Returns what ACTUALLY happened to each subscription. Callers log sent / pruned / failed from this,
 // never from count() taken before the send: that is how a push that pruned the last phone was once
 // logged as delivered, and every alert after it went nowhere without a word.
-async function send(data) {
+// `only(sub)` limits the send to some phones (g1940: each principal hears only about their own sessions).
+async function send(data, { only } = {}) {
   const d = keys();
-  const subs = d.subs || [];
+  const subs = (d.subs || []).filter(s => !only || only(s));
   if (!subs.length) return { sent: 0, gone: 0, failed: 0, results: [] };
   const text = JSON.stringify(data);
   let sent = 0, gone = 0, failed = 0;

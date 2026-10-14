@@ -144,17 +144,17 @@ async function sendBackup(evt, opts = {}) {
  * Deliver an alert: web push to every subscribed phone, then the backup channel when push reached
  * nobody (or on every alert if backup.always). Returns what happened on each leg.
  */
-async function deliver(evt, log = () => {}) {
+async function deliver(evt, log = () => {}, { only, backup: backupOk = true } = {}) {
   let pushed = { sent: 0, gone: 0, subscribed: 0 };
   let subscribed = 0;
-  try { subscribed = push.count(); } catch {}
+  try { subscribed = only ? ((push.keys().subs || []).filter(only)).length : push.count(); } catch {}
   if (subscribed) {
-    try { pushed = { ...(await push.send(evt)), subscribed }; }
+    try { pushed = { ...(await push.send(evt, only ? { only } : undefined)), subscribed }; }
     catch (e) { pushed = { sent: 0, gone: 0, subscribed, error: e.message }; log('push failed: ' + e.message); }
   }
   const s = settings();
   let backup = null;
-  if (s.kind !== 'off' && (pushed.sent === 0 || s.always)) {
+  if (backupOk && s.kind !== 'off' && (pushed.sent === 0 || s.always)) {
     backup = await sendBackup(evt);
     if (backup.skipped) log(`backup alert (${s.kind}) skipped: ${backup.skipped}`);
     else if (!backup.ok) log(`backup alert (${s.kind}) failed: ${backup.error || 'HTTP ' + backup.status}`);
@@ -254,10 +254,12 @@ function accountSwitchText(cfg = config.get(), who = {}) {
    is delayed. Sliding window from the last finish; a new burst gets a new tag, so it never replaces
    an older unread one. Only 'done' is coalesced: 'awaiting' needs him, every one of them buzzes. */
 const BURST_MS = 60 * 1000;
-let burst = { tag: null, last: 0, titles: [] };
-function coalesceDone(evt, now = Date.now()) {
+// One burst per audience (g1940): Sagar's finishes never fold into the notification on Ashwar's phone.
+const bursts = new Map();
+function coalesceDone(evt, now = Date.now(), group = '') {
   if (!evt || evt.kind !== 'done') return evt;
-  if (!burst.tag || now - burst.last > BURST_MS) burst = { tag: 'done-' + now, last: now, titles: [] };
+  let burst = bursts.get(group);
+  if (!burst || !burst.tag || now - burst.last > BURST_MS) { burst = { tag: 'done-' + (group ? group + '-' : '') + now, last: now, titles: [] }; bursts.set(group, burst); }
   burst.last = now;
   burst.titles.push(evt.title);
   const n = burst.titles.length;
@@ -270,4 +272,4 @@ function coalesceDone(evt, now = Date.now()) {
 
 module.exports = { deliver, sendBackup, settings, route, outcome, alarm, alarmChannel, underCap, accountSwitchText, KINDS, WINDOW_MS, DEFAULT_CAP,
                    _setPush: (p) => { push = p; }, _resetCap: () => { recent.length = 0; },
-                   coalesceDone, BURST_MS, _resetBurst: () => { burst = { tag: null, last: 0, titles: [] }; } };
+                   coalesceDone, BURST_MS, _resetBurst: () => { bursts.clear(); } };

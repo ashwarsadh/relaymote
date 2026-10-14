@@ -1,3 +1,7 @@
+## 0.2.108
+
+- Notifications follow whose phone it is. Sagar's phone is notified only about his own sessions (his Conductor and the sessions he or his Conductor started or messaged). Ashwar's phone is no longer notified about sessions Sagar started. A session they both work in notifies both. The "N sessions finished" summary is kept separately for each phone.
+
 ## 0.2.107
 
 - Sagar's Relaymote lists only his own sessions again: his Conductor and the sessions he or his Conductor started or messaged in the last week. The live update that refreshes the list was sending every session to every phone, so his list filled up with everyone's on the first change. Ashwar's list is unchanged.

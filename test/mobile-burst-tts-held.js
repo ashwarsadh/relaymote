@@ -27,7 +27,7 @@ const many = []; alerts._resetBurst();
 for (let i = 0; i < 6; i++) many.push(alerts.coalesceDone(ev('s' + i), T + i * 1e3));
 check(/^… s2 · s3 · s4 · s5$/.test(many[5].body) && many[5].title === '6 sessions finished', 'a long burst shows the latest four and says there were more', many[5].body);
 check(/renotify: d\.renotify !== false/.test(H.src('mobile/public/sw.js')), 'the service worker honours renotify:false');
-check(/alerts\.deliver\(pushEvt, log\)/.test(H.src('mobile/index.js')) && /sseSend\(c, 'alert', evt\)/.test(H.src('mobile/index.js')),
+check(/alerts\.deliver\(pushEvt, log[,)]/.test(H.src('mobile/index.js')) && /sseSend\(c, 'alert', evt\)/.test(H.src('mobile/index.js')),
   'the phone push goes through the coalescer; the in-app alert keeps its own session link');
 
 console.log('--- g757: read aloud ---');

@@ -1660,6 +1660,7 @@ function setPrincipal(key, home) {
     if (key) localStorage.setItem(PRINCIPAL_KEY, key); else localStorage.removeItem(PRINCIPAL_KEY);
     if (home) localStorage.setItem(PRINCIPAL_HOME, home); else localStorage.removeItem(PRINCIPAL_HOME);
   } catch {}
+  try { if (window.Notification && Notification.permission === 'granted') subscribePush(true).catch(() => {}); } catch {}   // g1940: pushes follow the new holder
 }
 function principalHome() { try { return localStorage.getItem(PRINCIPAL_KEY) ? (localStorage.getItem(PRINCIPAL_HOME) || '') : ''; } catch { return ''; } }
 try {
@@ -3406,7 +3407,8 @@ async function subscribePush(quiet) {
     : await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(key) });
 
   await api('/api/push/subscribe', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub.toJSON()),
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign(sub.toJSON(), { as: (() => { try { return localStorage.getItem('baton.principal') || ''; } catch { return ''; } })() })),
   });
   const bell = $('btn-bell'); if (bell) bell.classList.add('on');
   return { ok: true, endpoint: sub.endpoint };

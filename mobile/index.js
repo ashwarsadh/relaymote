@@ -120,6 +120,19 @@ function principalList(req, url, list) {
   try { touch.refresh(board.CONDUCTOR_DIR, (id) => sessions.transcriptPath(sessions.get(id))); } catch (e) { log('principal touch scan failed: ' + e.message); }
   return touch.view(list, principalOf(req, url), board.CONDUCTOR_DIR);
 }
+// g1940: whose phones hear about session s — principal keys. An own principal (Sagar): the sessions his list
+// shows. The default (Ashwar): every session except one another principal started (his list marks those).
+function alertAudience(s) {
+  const P = require('./principals'), touch = require('./principal-touch');
+  const J = P.load(board.CONDUCTOR_DIR), out = new Set();
+  for (const key of Object.keys(J.principals)) {
+    const p = P.resolve(board.CONDUCTOR_DIR, key);
+    const seen = touch.view([s], p, board.CONDUCTOR_DIR);
+    if (seen.length && !(p.isDefault && seen[0].othersOnly)) out.add(key);
+  }
+  return { keys: out, def: J.default };
+}
+const subPrincipal = (sub, def) => String((sub && sub.as) || def).toLowerCase();
 function notePrincipalTouch(req, url, sid, started) {
   try {
     const p = principalOf(req, url);
@@ -446,15 +459,21 @@ async function notifyAttention(all) {
       tag: 'sess-' + s.id,
       url: '/?s=' + encodeURIComponent(s.id),
     };
-    const pushEvt = alerts.coalesceDone(evt);   // a burst of finishes = one phone notification (g770)
-    const label = `${st} "${String(s.title || s.id).slice(0, 48)}"`;
+    let aud = null;
+    try { require('./principal-touch').refresh(board.CONDUCTOR_DIR, (id) => sessions.transcriptPath(sessions.get(id))); aud = alertAudience(s); }
+    catch (e) { log('notify: audience failed, sending to every phone: ' + e.message); }
+    const group = aud ? [...aud.keys].sort().join('+') : '';
+    const pushEvt = alerts.coalesceDone(evt, Date.now(), group);   // a burst of finishes = one phone notification (g770), per audience
+    const label = `${st} "${String(s.title || s.id).slice(0, 48)}"` + (aud && !aud.keys.has(aud.def) ? ' [to ' + [...aud.keys].join(',') + ']' : '');
 
     for (const c of clients) {
       if (isSubuser(c.identity) && !c.identity.sessions.has(s.id)) continue;
+      if (aud && c.principal && !aud.keys.has(c.principal.key)) continue;
       sseSend(c, 'alert', evt);
     }
 
-    logAlert(label, await alerts.deliver(pushEvt, log));
+    if (aud && !aud.keys.size) { log(`notify: ${label} has no principal to tell`); continue; }
+    logAlert(label, await alerts.deliver(pushEvt, log, aud ? { only: (sub) => aud.keys.has(subPrincipal(sub, aud.def)), backup: aud.keys.has(aud.def) } : {}));
   }
   for (const s of all) wasRunning.set(s.id, !!s.running);
 }
@@ -1908,7 +1927,13 @@ async function handle(req, res) {
       return uiJob(res, 'chipdismiss', () => desktop.dismissTask(body), { id: body.sessionId });
     }
     if (p === '/api/push/subscribe') {
-      const n = push.subscribe(body);
+      const n = push.subscribe(body, (() => {
+        // undefined = the service worker's re-subscribe (no idea whose phone): keep what the endpoint had.
+        const said = body && 'as' in body ? body.as : (req.headers['x-relaymote-as'] || url.searchParams.get('as') || undefined);
+        if (said === undefined) return undefined;
+        const pr = require('./principals').resolve(board.CONDUCTOR_DIR, said);
+        return pr.isDefault ? '' : pr.key;
+      })());
       let host = '?'; try { host = new URL(body.endpoint).host; } catch {}
       log(`push: subscribed ${host} (${n} now)`);
       return json(res, 200, { ok: true, subs: n });

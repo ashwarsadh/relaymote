@@ -1604,7 +1604,44 @@ function renderHeader(meta) {
 // place is saved whenever the app is hidden or closed, and when a session opens. Anything you opened
 // while the app loaded wins.
 const RESUME_MS = 30 * 60000;
-const PLACE_KEY = 'baton.lastPlace';
+const PLACE_KEY = 'baton.lastPlace', LAST_CHAT_KEY = 'baton.lastChat';
+
+/* Share into Relaymote (Android share sheet → manifest share_target → sw.js keeps the files → /?share=<id>).
+   The files are attached in the session last open on this phone (else the one the first screen picks) and
+   wait in the composer: he reviews them and taps send. Text or a link shared with them goes in the box. */
+const SHARE_ID = (() => { try { return new URLSearchParams(location.search).get('share') || ''; } catch { return ''; } })();
+function shareTarget(list) {
+  const live = (list || []).filter(s => s && !s.archived);
+  let last = ''; try { last = localStorage.getItem(LAST_CHAT_KEY) || ''; } catch {}
+  if (last && live.some(s => s.id === last)) return { id: last, why: 'last' };
+  const f = pickFirstScreen(null, live, { board: false, home: principalHome() });
+  return f && f.kind === 'chat' ? { id: f.id, why: f.why } : null;
+}
+async function receiveShare(id, list) {
+  history.replaceState(history.state, '', location.pathname + location.hash);
+  if (id === 'missed' || id === 'failed') {
+    return toast(id === 'missed' ? 'The share arrived before Relaymote was ready on this phone — please share it again' : 'Could not read that share — please share it again', true);
+  }
+  let c, meta;
+  try { c = await caches.open('relaymote-share-v1'); meta = await (await c.match('/__share/' + id + '/meta')).json(); }
+  catch { return toast('That share is no longer here — please share it again', true); }
+  const files = [];
+  for (const f of meta.files || []) {
+    const r = await c.match('/__share/' + id + '/' + f.i);
+    if (r) files.push(new File([await r.blob()], f.name, { type: f.type }));
+  }
+  const t = shareTarget(list);
+  if (!t) { toast('Open a session first, then share again', true); return; }
+  await openChat(t.id);
+  const words = [meta.title, meta.text, meta.url].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join('\n');
+  if (words) { $('input').value = ($('input').value ? $('input').value + '\n' : '') + words; autosize(); saveDraft(state.open, $('input').value); }
+  if (files.length) uploadFiles(files);
+  const row = (state.sessions || []).find(s => s.id === t.id);
+  toast((files.length ? files.length + ' file' + (files.length > 1 ? 's' : '') : 'Text') + ' attached to “' + ((row && row.title) || 'this session')
+    + '” — check it, then tap send');
+  for (const f of meta.files || []) c.delete('/__share/' + id + '/' + f.i).catch(() => {});
+  c.delete('/__share/' + id + '/meta').catch(() => {});
+}
 function currentPlace() {
   if (visibleSheetId() === 'view-board') return { kind: 'board' };
   if (state.open) return { kind: 'chat', id: state.open };
@@ -1687,6 +1724,7 @@ async function openChatInner(id) {
   if (state.open && state.open !== id) saveDraft(state.open, $('input').value);
   state.open = id;
   try { localStorage.setItem(PLACE_KEY, JSON.stringify({ kind: 'chat', id, at: Date.now() })); } catch {}
+  try { localStorage.setItem(LAST_CHAT_KEY, id); } catch {}   // where a share from another app lands (no time limit)
   state.liveSuggestion = null;
   if (state.pending && state.pending.sid !== id) state.pending = null;
   state.attachments = []; renderAttachments();
@@ -3926,7 +3964,8 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
     const want = new URLSearchParams(location.search).get('s');
     if (want) history.replaceState(history.state, '', location.pathname + location.hash);
     const userMoved = navTouched !== bootTouched || !!visibleSheetId() || !!state.open;
-    if (userMoved) { /* their navigation stands */ }
+    if (SHARE_ID) receiveShare(SHARE_ID, state.rawSessions || state.sessions || []).catch(e => toast('Could not attach the share: ' + e.message, true));
+    else if (userMoved) { /* their navigation stands */ }
     else if (want) openChat(want);
     else firstScreen(bootTouched).then(r => { window.__relaymoteFirstScreen = r; });
     watchForUpdates();

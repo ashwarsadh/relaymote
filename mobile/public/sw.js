@@ -8,6 +8,35 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 // last good load; the network always wins when it answers, and nothing under /api/ is ever cached.
 const SHELL = 'relaymote-shell-v1';
 const SHELL_FILES = /^\/(app\.js|style\.css|manifest\.webmanifest|(icon|badge)(-\d+)?\.(svg|png))$/;
+// Ashwar 14-Oct: "In the share menu, I want to receive files from relay mode, and preferably attach in the session
+// I was last using." Android's share sheet POSTs the files here (manifest share_target). They are kept in Cache
+// Storage under /__share/<id>/ and the app opens with ?share=<id>: it takes them, attaches them in the session
+// last open on this phone, and deletes them. Nothing is sent until he taps send.
+const SHARE = 'relaymote-share-v1';
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'POST' || new URL(req.url).pathname !== '/share-target') return;
+  event.respondWith((async () => {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    try {
+      const form = await req.formData();
+      const files = form.getAll('files').filter(f => f && typeof f === 'object' && f.size != null);
+      const c = await caches.open(SHARE);
+      const names = [];
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        names.push({ i, name: f.name || ('shared-' + i), type: f.type || 'application/octet-stream', size: f.size });
+        await c.put('/__share/' + id + '/' + i, new Response(f, { headers: { 'Content-Type': f.type || 'application/octet-stream' } }));
+      }
+      const meta = { id, at: Date.now(), files: names, title: String(form.get('title') || ''), text: String(form.get('text') || ''), url: String(form.get('url') || '') };
+      await c.put('/__share/' + id + '/meta', new Response(JSON.stringify(meta), { headers: { 'Content-Type': 'application/json' } }));
+    } catch (e) {
+      return Response.redirect('/?share=failed', 303);
+    }
+    return Response.redirect('/?share=' + id, 303);
+  })());
+});
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;

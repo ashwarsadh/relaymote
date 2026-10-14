@@ -354,3 +354,15 @@ open (or via the "ready, Reload" banner).
 **Shared-checkout note.** e7b7512 (g1870) was applied as a zero-context patch and misplaced app.js hunks (the
 principal line landed inside `openChat()`). 2afc051 carries the correct layout. 4afc0d5 widens the board-queue
 `bid` regex for g1870's `as:` field.
+
+## 13-Oct-2026 ~23:55 IST: Sagar login on the public domain
+Cloudflare Access app "Baton" (baton.scarvesmanufacturers.org), allow policy "Ashwar, India": include = ashwarsadh@gmail.com + sagar@kkfashionexports.com (added on Ashwar's "Yes", read back via API). Sagar opens https://baton.scarvesmanufacturers.org/?as=sagar, gets an email PIN, then pairs with Ashwar's pair link + &as=sagar.
+
+## 14-Oct-2026: Share into Relaymote (Android share target), 0.2.106
+Ashwar: "In the share menu, I want to receive files from relay mode, and preferably attach in the session I was last using."
+- `manifest.webmanifest` `share_target` POST multipart → `/share-target`, field `files` (image/*, PDF, Word/Excel, text/audio/video, */*), plus title/text/url.
+- `sw.js` (cache `relaymote-share-v1`) keeps each file at `/__share/<id>/<i>` + `/meta`, then 303 → `/?share=<id>` (`failed` if unreadable).
+- `index.js`: a POST reaching the server (worker not running) → 303 `/?share=missed`, before auth, reading nothing.
+- `app.js` `receiveShare`: opens `localStorage baton.lastChat` (set on every openChat, no expiry; else the first-screen pick), puts shared text in the box, `uploadFiles` → attachment chips, toast "N files attached to “title” — check it, then tap send", deletes the cache. Never sends.
+- Proven: Chrome with the real SW + harness: 3 files (pdf/jpg/docx) POSTed → landed in last-open "Tally lane" (not the first-screen pick "Conductor"), full bytes uploaded, text in box, cache emptied. Phone size 375×812 (pane; its SW registration is refused, so the cache was seeded the way sw.js writes it) → 2 chips in last-open "WhatsApp keeper". `test/share-target.js` 12 checks.
+- Android caveat: the installed WebAPK learns share_target only when Chrome refreshes its manifest; if Relaymote is missing from the share menu, remove and re-add the home-screen icon.

@@ -875,6 +875,11 @@ async function handle(req, res) {
   res.on('finish', () => { const d = Date.now() - _h0; if (d > 700) log(`slow ${p} ${d}ms (auth ${_hAuth}ms)`); });
   let _hAuth = 0;
 
+  // Android's share sheet POSTs to /share-target; the service worker keeps the files and never lets it reach
+  // here. Only a phone whose worker is not running yet gets this far (and its cookie may not come along on a
+  // POST from another app): send it home, reading nothing, and the app asks for the share again.
+  if (p === '/share-target') { res.writeHead(303, { Location: '/?share=missed', 'Cache-Control': 'no-store' }); return res.end(); }
+
   const open = p === '/sw.js' || p === '/manifest.webmanifest' ||
                /^\/(icon|badge)(-\d+)?\.(svg|png)$/.test(p);
 

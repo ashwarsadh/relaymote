@@ -1,3 +1,8 @@
+## 0.2.106
+
+- Share files into Relaymote from any app. In Android's share menu pick Relaymote: the files (photos, PDFs, Word/Excel and other documents) open in the session you last had open on that phone, attached in the message box with any shared text. Check them and tap send; nothing is sent by itself.
+- If Relaymote does not appear in the share menu, remove the Relaymote icon from the home screen and add it again from Chrome (menu > Add to Home screen), so Android learns the new share option.
+
 ## 0.2.105
 
 - The Board opens fast on a phone. Its first screen ("Needs you") now comes from a small download (about 20 KB instead of about 420 KB) and shows at once from the phone's last copy while the fresh one loads. In progress, Waiting, Done, search and the week-old fold load the rest only when you open them.

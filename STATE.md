@@ -377,3 +377,9 @@ Ashwar: "sagar relaymopte was showing all sessions instead of his sesion or sess
 - Open: principals.json names Sagar's Conductor `local_e2e162ac…` ("Sagar Conductor"), but the Conductor calls `local_2e263960…` ("Sagar Conductor · second conductor + own board", the g1870 builder lane) his. Only e2e162ac is in his list. principals.json is Ashwar's admin file, so it was left unchanged.
 - Not covered: web-push notifications still go to every subscribed phone regardless of principal (alerts.deliver).
 - LIVE 14-Oct 20:58 IST: "updated 0.2.106 -> 0.2.107", stop -ForUpdate exit 0, Installation succeeded; installed code (real data) gives Sagar 3 of 698 sessions.
+
+## 14-Oct-2026: g1940 follow-up, push notifications per principal (0.2.108)
+Conductor's decision: "each phone gets pushes only for its own principal's sessions, so Ashwar's never reach Sagar's phone, nor the reverse". principals.json stays as is (Sagar's Conductor = local_e2e162ac; 2e263960 is Ashwar's builder lane).
+- `push.json` subs carry `as` (principal key; absent = Ashwar). The phone sends `as` in /api/push/subscribe and re-subscribes when Settings › This phone changes; the SW's pushsubscriptionchange (no `as`) keeps what the endpoint had.
+- index.js `alertAudience(s)`: Sagar if the session is on his list (touch.view); Ashwar unless another principal STARTED it (`othersOnly`). Push (`push.send(evt,{only})`), the in-app SSE alert, and the "N finished" burst (`coalesceDone(evt, now, group)`) all follow the audience. The backup channel (Ashwar's) is used only when Ashwar is in the audience.
+- Proof (headless, real server.js + https stub, `test/principal-push.js`): Sagar's Conductor → sagar only; Ashwar session → ashwar only; Sagar-started → sagar only; Ashwar session Sagar messaged → both; SSE alerts match. Control on the old code: 6 checks FAIL.

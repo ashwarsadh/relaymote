@@ -376,3 +376,4 @@ Ashwar: "sagar relaymopte was showing all sessions instead of his sesion or sess
 - Live view at fix time (real data): of 698 sessions, Sagar sees 3 (his Conductor local_e2e162ac + 2 he touched).
 - Open: principals.json names Sagar's Conductor `local_e2e162ac…` ("Sagar Conductor"), but the Conductor calls `local_2e263960…` ("Sagar Conductor · second conductor + own board", the g1870 builder lane) his. Only e2e162ac is in his list. principals.json is Ashwar's admin file, so it was left unchanged.
 - Not covered: web-push notifications still go to every subscribed phone regardless of principal (alerts.deliver).
+- LIVE 14-Oct 20:58 IST: "updated 0.2.106 -> 0.2.107", stop -ForUpdate exit 0, Installation succeeded; installed code (real data) gives Sagar 3 of 698 sessions.

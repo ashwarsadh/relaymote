@@ -506,6 +506,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && u.pathname === '/api/task') {
       const body = JSON.parse(await readBody(req) || '{}');
       if (!body.prompt) return json(res, 400, { ok: false, error: 'prompt required' });
+      if (body.dispatch === 'headless') return json(res, 400, { ok: false, error: 'HEADLESS_RETIRED', message: require('./lib/gui-worker').HEADLESS_RETIRED });
       // Settings › New session is the default for every spawn: nothing starts on a model or effort nobody chose.
       const ns = config.get().newSession || {};
       const t = orch.enqueue(body.prompt, {

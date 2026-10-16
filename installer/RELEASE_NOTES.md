@@ -1,3 +1,7 @@
+## 0.2.109
+
+- Works with Claude Desktop's new folder-wise start screen (16-Oct). Starting a session in a chosen folder picks it from the new folder control under the composer (searching the list when the folder is not among the recent few), and effort is set from its new place inside the model menu. Suggested-task cards, which now sit inside the conversation with Start and Dismiss buttons, can be started and dismissed again. The phone's model list no longer shows a stray "Effort" entry.
+
 ## 0.2.108
 
 - Notifications follow whose phone it is. Sagar's phone is notified only about his own sessions (his Conductor and the sessions he or his Conductor started or messaged). Ashwar's phone is no longer notified about sessions Sagar started. A session they both work in notifies both. The "N sessions finished" summary is kept separately for each phone.

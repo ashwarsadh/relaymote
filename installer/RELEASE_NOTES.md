@@ -1,3 +1,7 @@
+## 0.2.110
+
+- The headless Claude CLI worker route is retired. A spawn that asks for it is refused with a message naming the two routes to use instead: a subagent inside your own session for background work, or a task chip (a visible Desktop session) for anything you should see. Relaymote no longer checks the CLI login or suggests logging in to it.
+
 ## 0.2.109
 
 - Works with Claude Desktop's new folder-wise start screen (16-Oct). Starting a session in a chosen folder picks it from the new folder control under the composer (searching the list when the folder is not among the recent few), and effort is set from its new place inside the model menu. Suggested-task cards, which now sit inside the conversation with Start and Dismiss buttons, can be started and dismissed again. The phone's model list no longer shows a stray "Effort" entry.

@@ -2,6 +2,17 @@
 
 What is TRUE now, with evidence. Requests live in the goal register; this file is where things stand.
 
+## Claude Desktop new UI (16-Oct-2026) — GUI dispatch, effort, chips — 0.2.109
+**Symptom.** AGO GUI spawns t1434/t1435 failed `GUI_NO_FOLDER_PICKER: menu-never-opened after clicking "Choose environment"`. Same code here.
+**What changed in Desktop (read off the live DOM via :9229).**
+- New-session view: no "Select folder" trigger. Folder = `[data-testid=environment-bar-folder]` (aria-label "Folder: Choose folder…" / "Folder: <FULL path>"); its role=menu radios carry the full path in `title`; a search <input> filters past the ~8 MRU rows. "Choose environment" (`start-card-choose`) is the ENVIRONMENT menu — the old denylist fallback clicked it.
+- Effort: no button/slider. It is `role=menuitem[aria-haspopup=menu]` "Effort<Level>" inside the model menu (`[data-testid=environment-row-model]`), submenu radios Low|Medium|High|Extra|Max|Ultracode. Trigger aria-label ends with the level ("Model: Opus 5.5 High").
+- Suggestion chips: the floating `.epitaxy-notification-enter` card is gone. Inline `.epitaxy-card-outline` cards with buttons Start / Do it here / Options / "Dismiss suggestion <title>". No queue arrows; no task id on the card (mapped by title via `backgroundTaskSuggestions`).
+- listModels counted the "Effort" submenu item as a model (now skips aria-haspopup items).
+**Unaffected (bridge, verified live):** setModel/setEffort on existing sessions (`LocalSessions.setModel/setEffort`, both confirmed on local_a23a8bd7), phone new session (`LS.start`), sidebar scrape, chip listing, blockedSessions.
+**Proof.** AGO (same fix): t1439 GUI-dispatched end-to-end → running as local_a23a8bd7 (tally, Opus 5.5, Low) → done "pong". Chip Start via AGO: task_33008f24 → local_821e6d14. This repo's code live: dismissTask(task_fb1ee5e8) ok, no session started. `npm test` all pass.
+**Not live-tested here:** this repo's own GUI dispatch end-to-end (its orchestrator modules are OFF; AGO dispatches), and the effort DOM *fallback* in desktop.setEffort (the bridge is primary and works).
+
 ## g1885 — the Board opened slowly on his phone (14-Oct-2026, ~23:45 IST) — 0.2.105
 **Measured on his path.** relaymote.log for his 0.2.104 open at 22:39 IST: `slow /api/board 4174ms`. That timer runs
 until the last byte has left through cloudflared. Where the time went:

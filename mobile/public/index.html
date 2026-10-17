@@ -11,11 +11,11 @@
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="stylesheet" href="/style.css">
-<!-- Text size and density, applied before first paint so the page never jumps. Per device
+<!-- Text size, density and theme, applied before first paint so the page never jumps. Per device
      (localStorage). The Display sheet (display-ui.js) changes them live. -->
 <script>(function(){try{var r=document.documentElement,z=parseFloat(localStorage.getItem('baton.zoom'))||1,
-d=localStorage.getItem('baton.density')||'compact';if(z<.7||z>1.5)z=1;r.style.setProperty('--z',z);
-if(z!==1)r.style.zoom=z;r.setAttribute('data-density',d);}catch(e){}})();</script>
+d=localStorage.getItem('baton.density')||'compact',t=localStorage.getItem('baton.theme');if(z<.7||z>1.5)z=1;r.style.setProperty('--z',z);
+if(z!==1)r.style.zoom=z;r.setAttribute('data-density',d);if(t==='light'||t==='dark')r.setAttribute('data-theme',t);}catch(e){}})();</script>
 <!-- The app manifest only where the page can be installed. Over plain http (a Tailscale or LAN address)
      the page is not a secure context: no service worker, so Chrome cannot install it, and with a manifest
      present its Install / Create shortcut both end in "This app cannot be installed". Without one, Chrome's
@@ -33,7 +33,6 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
   <div class="drawer-head">
     <h1>Sessions</h1>
     <button id="btn-board" class="icon-btn" title="Board — pending work" aria-label="Board">📋</button>
-    <button id="btn-goals" class="icon-btn" title="Goals" aria-label="Goals" style="display:none">🎯</button>
     <button id="btn-routines" class="icon-btn" title="Routines" aria-label="Routines">⏱</button>
     <button id="btn-accounts" class="icon-btn" title="Accounts — keep your Claude accounts looking the same" aria-label="Accounts">👤</button>
     <button id="btn-bell" class="icon-btn" title="Notifications" aria-label="Enable notifications">🔔</button>
@@ -59,8 +58,7 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
 
   <div class="drawer-foot">
     <button id="btn-new" class="ghost primary">＋ New session</button>
-    <button id="btn-tasks" class="ghost">Task queue</button>
-    <button id="btn-display" class="ghost display-btn" title="Text size and density" aria-label="Display: text size and density">Aa</button>
+    <button id="btn-display" class="ghost display-btn" title="Text size, theme and density" aria-label="Display: text size, theme and density">Aa</button>
   </div>
   
   <div id="buildline" class="buildline" hidden></div>
@@ -125,12 +123,18 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
       <input id="zoom-range" type="range" min="70" max="150" step="5" value="100" aria-label="Text size">
       <button id="zoom-plus" class="ghost" aria-label="Larger text">A+</button>
     </div>
+    <span class="lbl">Theme</span>
+    <div class="seg" id="theme-seg">
+      <button data-t="">System</button>
+      <button data-t="light">Light</button>
+      <button data-t="dark">Dark</button>
+    </div>
     <span class="lbl">Density</span>
     <div class="seg" id="density-seg">
       <button data-d="compact">Compact</button>
       <button data-d="comfortable">Comfortable</button>
     </div>
-    <p class="display-note">Saved on this device only. Smaller text fits more sessions, cards and messages on the screen.</p>
+    <p class="display-note">Saved on this device only. System follows the phone’s light/dark setting. Smaller text fits more sessions, cards and messages on the screen.</p>
     <div class="sheet-actions"><button id="zoom-reset" class="ghost">Reset</button><button id="btn-close-display" class="ghost">Done</button></div>
   </div>
 </section>
@@ -181,15 +185,6 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
       <button id="answer-send" class="ghost primary">Send</button>
       <button id="answer-cancel" class="ghost">Cancel</button>
     </div>
-  </div>
-</section>
-<section id="view-tasks" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Task queue">
-  <div class="sheet-body">
-    <div class="grab"></div>
-    <h2>Task queue</h2>
-    <div class="stats" id="task-sub"></div>
-    <ul class="sessions" id="tasks"></ul>
-    <div class="sheet-actions"><button id="btn-close-tasks" class="ghost">Done</button></div>
   </div>
 </section>
 
@@ -297,7 +292,6 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
 <script src="/app.js"></script>
 <script src="/routines-ui.js"></script>
 <script src="/board-ui.js"></script>
-<script src="/goals-ui.js"></script>
 <script src="/accounts-ui.js"></script>
 <script src="/settings-ui.js"></script>
 <script src="/display-ui.js"></script>

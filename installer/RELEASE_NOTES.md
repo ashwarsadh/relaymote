@@ -1,3 +1,23 @@
+## 0.2.111
+
+- Settings opens on a new **Now** page that shows what is set right now. Every value is read from the file that holds it each time you look, never from a default:
+  - model tiers;
+  - the Conductor's goal chaser, including full-speed and pace;
+  - the wake gate, with 24-hour counts;
+  - the Conductor and each person's own Conductor;
+  - how work is dispatched;
+  - every module switch.
+- The **Now** page also shows who changed each value and when. A change made from a phone, by a session's tool, or by editing a file directly shows on the next refresh, without an app update.
+- A smaller menu.
+  - Removed:
+    - the Goals and Task queue entries (both unused; the Board covers goals);
+    - the headless-worker and Claude-CLI engine options (retired);
+    - a Finish-the-task switch that did nothing.
+  - The notifications bell leaves the menu once the phone is subscribed. **Settings › Notifications** keeps a "Turn on / test" button.
+  - Settings has six tabs instead of nine: **Now, Models, Features, Connection, Notifications, Advanced**.
+  - Relaymote's own goal chaser is labelled as separate from the Conductor's, so it is not switched on by mistake.
+- Light mode: **Aa › Theme** chooses System, Light or Dark, separately on each phone.
+
 ## 0.2.110
 
 - The headless Claude CLI worker route is retired. A spawn that asks for it is refused with a message naming the two routes to use instead: a subagent inside your own session for background work, or a task chip (a visible Desktop session) for anything you should see. Relaymote no longer checks the CLI login or suggests logging in to it.

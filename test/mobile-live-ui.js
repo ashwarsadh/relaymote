@@ -154,7 +154,7 @@ const { check: chk, src } = H;
     chk(/Press back again to exit/.test(a) && /history\.pushState\(\{ ago: 0 \}, ''\)/.test(a), 'at the root the first Back warns and the second leaves');
     chk(/window\.navOpenFrom/.test(a), 'jumping from a sheet into a session records the sheet first');
     chk(/navOpenFrom\(el\.dataset\.sid\)/.test(src('mobile/public/routines-ui.js')), 'Back from a routine run returns to the routines');
-    for (const id of ['btn-close-sheet', 'btn-close-new', 'btn-close-tasks', 'btn-close-file', 'btn-close-chips'])
+    for (const id of ['btn-close-sheet', 'btn-close-new', 'btn-close-file', 'btn-close-chips'])
       chk(a.indexOf("$('" + id + "').onclick = () => navBack();") > 0, id + ' unwinds through history');
   }
 
@@ -208,10 +208,10 @@ const { check: chk, src } = H;
     const nSheets = h.split('class="sheet hidden"').length - 1, nGrabs = h.split('<div class="grab"></div>').length - 1;
     chk(nSheets > 0 && nGrabs === nSheets, `every sheet draws a grab handle (${nGrabs} for ${nSheets})`);
     chk(src('mobile/public/style.css').indexOf('overscroll-behavior:contain') > 0, 'the sheet body contains its overscroll');
-    // The roster is index.html's own script tags: a hand list once missed goals-ui.js, so its
+    // The roster is index.html's own script tags: a hand list once missed a file, so its
     // controls were never checked, and a new file would silently escape this check too.
     const roster = [...h.matchAll(/<script src="\/([\w.-]+\.js)"><\/script>/g)].map(m => m[1]);
-    chk(roster.includes('app.js') && roster.includes('display-ui.js') && roster.includes('goals-ui.js'), `the JS roster comes from index.html (${roster.length} files)`, roster);
+    chk(roster.includes('app.js') && roster.includes('display-ui.js') && roster.includes('settings-ui.js'), `the JS roster comes from index.html (${roster.length} files)`, roster);
     const jsAll = roster.map(f => src('mobile/public/' + f)).join('\n');
     chk(jsAll.indexOf('SHEET_IDS') < 0, 'no hand-maintained SHEET_IDS list');
     chk(a.indexOf("querySelectorAll('.sheet:not(.hidden)')") > 0 && a.indexOf('open[open.length - 1]') > 0, 'the open sheet is asked of the DOM, topmost last');

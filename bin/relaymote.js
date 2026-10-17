@@ -268,7 +268,7 @@ async function accountsCmd() {
     case 'frozen': return Object.entries(sync.core.frozenIds()).forEach(([id, why]) => console.log('  ' + id + '  ' + C.d(why)));
     case 'first-run': {
       if (!['baseline', 'archived-wins'].includes(args[2])) return console.log(C.r('first-run baseline|archived-wins'));
-      config.set({ accounts: { firstRunMode: args[2] } }); return console.log(C.g('First-run mode: ' + args[2]));
+      config.set({ accounts: { firstRunMode: args[2] } }, 'cli'); return console.log(C.g('First-run mode: ' + args[2]));
     }
     case 'groups-backups': return sync.groupBackups().forEach(b => console.log('  ' + b.stamp + '  ' + C.d((b.store || '1p') + ' ' + (b.reason || '') + ' ' + (b.at || ''))));
     case 'groups-restore': return say(await sync.restoreGroups(args[2] || 'latest'));
@@ -404,8 +404,8 @@ async function accountsCmd() {
     case 'tunnel': {
       const tunnel = require('../lib/tunnel');
       const sub = (args[1] || 'status').toLowerCase();
-      if (sub === 'quick') { config.set({ remote: { mode: 'cloudflare-quick' } }); console.log('Remote access: Cloudflare quick tunnel. Restart Relaymote (`relaymote restart`), then `relaymote pair`.'); return; }
-      if (sub === 'off') { config.set({ remote: { mode: 'off' } }); return console.log('Remote access off. `relaymote restart` to apply.'); }
+      if (sub === 'quick') { config.set({ remote: { mode: 'cloudflare-quick' } }, 'cli'); console.log('Remote access: Cloudflare quick tunnel. Restart Relaymote (`relaymote restart`), then `relaymote pair`.'); return; }
+      if (sub === 'off') { config.set({ remote: { mode: 'off' } }, 'cli'); return console.log('Remote access off. `relaymote restart` to apply.'); }
       if (sub === 'login') { const r = await tunnel.login(); if (r.loginUrl) { console.log('Opening: ' + r.loginUrl); openBrowser(r.loginUrl); } else console.log(r); return; }
       if (sub === 'setup') { const r = await tunnel.setupNamed(args[2], args[3]); tunnel.stop(); console.log(r.ok ? C.g(`Ready: https://${r.hostname} — run \`relaymote restart\`, then \`relaymote pair\`.`) : C.r(r.error + (r.detail ? '\n' + r.detail : ''))); return; }
       const st = await get(config.get().appPort, '/api/tunnel?k=' + encodeURIComponent(token() || ''));

@@ -238,7 +238,7 @@ const TOOLS = [
       if (cur && cur !== ME && !a.takeover) {
         return { error: 'ALREADY_CLAIMED', message: `Session ${cur} is the Conductor. There is only one. Ask the user before taking over, then retry with takeover:true.`, currentConductor: cur };
       }
-      config.set({ conductorSession: ME });
+      config.set({ conductorSession: ME }, 'mcp:' + ME + ' (become conductor)');
       audit(`CONDUCTOR CLAIMED by ${ME} takeover=${!!a.takeover}${cur && cur !== ME ? ' from ' + cur : ''} instruction="${String(a.user_instruction).slice(0, 500)}"`);
       const projects = require(path.join(Relaymote, 'lib', 'projects.js'));
       let ix = null, indexError;
@@ -259,7 +259,7 @@ const TOOLS = [
     slaveSafe: true,
     handler: async () => {
       if (!isConductor()) return { ok: true, note: 'This session is not the Conductor; nothing to release.', currentConductor: conductor() };
-      config.set({ conductorSession: '' });
+      config.set({ conductorSession: '' }, 'mcp:' + ME + ' (release conductor)');
       audit(`CONDUCTOR RELEASED by ${ME}`);
       return { ok: true, role: isMaster() ? 'MASTER' : 'SLAVE', note: 'Conductor role released.' };
     },

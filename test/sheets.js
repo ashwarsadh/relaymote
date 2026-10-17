@@ -39,7 +39,7 @@ check(bootSafe(app), 'boot never opens the drawer over a sheet that is already o
   // The bar is built from a .grab that is the body's FIRST child; one nested deeper would get a second grab.
   const bodies = [...html.matchAll(/<div class="sheet-body[^"]*"[^>]*>\s*(<[^>]+>)/g)].map(m => m[1]);
   const bad = bodies.filter(t => t !== '<div class="grab">');
-  check(bodies.length >= 10 && bad.length === 0, `every sheet body in index.html starts with its grab (${bodies.length})`, bad);
+  check(bodies.length >= 9 && bad.length === 0, `every sheet body in index.html starts with its grab (${bodies.length})`, bad);
 }
 
 console.log(failed ? `\n${failed} check(s) failed` : '\nall sheet checks passed');

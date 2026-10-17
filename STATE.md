@@ -2,6 +2,62 @@
 
 What is TRUE now, with evidence. Requests live in the goal register; this file is where things stand.
 
+## Menu cleanup + live Settings › Now (17-Oct-2026) — 0.2.111
+
+Owner (17-Oct): many menu options were unbuilt, redundant or unused, and settings that agents changed (the goal chaser, model tiers) did not show in the menu.
+
+**Main defect.** Settings › Modules showed "Goal chaser" OFF. That switch is Relaymote's own chaser (`modules.goalChaser`). The chaser that actually runs is the Conductor's, from `conductor/goals-config.json`. At the time it had `auto_chase:true` and `full_speed_until 2026-10-18T10:00Z`, and that file's `_full_speed_note` still said "until 13-Oct".
+
+**Usage evidence.** `state/relaymote.log` logs only slow requests, so the counts below are a lower bound:
+- `/api/tasks` returned 0 tasks.
+- `/api/goals` returned `module disabled`.
+- Over 3 weeks of slow-request lines: `/api/board` 48, `/api/new` 14, `/api/account-switch` 2, `/api/settings` 1.
+
+**Inventory** (phone = mobile/public; the desktop is the same web app in a browser, plus the tray menu and the loopback dashboard).
+
+| Where | Entry | Verdict | Action |
+|---|---|---|---|
+| Drawer head | 📋 Board | works, used | kept |
+| Drawer head | 🎯 Goals | stub: hidden, its API was off, duplicates the Board | **removed** (goals-ui.js deleted) |
+| Drawer head | ⏱ Routines | works (/api/routines answers) | kept |
+| Drawer head | 👤 Accounts | works, used | kept |
+| Drawer head | 🔔 Bell | works, one-time action; its row overflowed (✕ wrapped) | **hidden once subscribed**; Settings › Notifications has "Turn on / test" |
+| Drawer head | ⚙ Settings | works | kept; opens on **Now** |
+| Drawer foot | ＋ New session | works, used | kept |
+| Drawer foot | Task queue | unused: headless queue, 0 tasks, headless retired 16-Oct | **removed** (sheet, openTasks) |
+| Drawer foot | Aa Display | works | kept; **Theme System/Light/Dark added** |
+| Chat bar | ☰, 🔍 Find, ▣ Background tasks, ⋯ / subtitle → session sheet | works (⋯ and subtitle open the same sheet: kept as two tap targets) | kept |
+| Session sheet | Model, Effort, Fast, Working steps, Folder, Usage, Diagnostics, Stop, Archive | works | kept |
+| Settings tabs | Modules, Desktop connection, Models, Remote access, Pair a phone, Notifications, Model engine, Advanced, About | 9 tabs, too many | **6 tabs**: Now, Models, Features, Connection (Desktop / Remote / Pair), Notifications, Advanced (Ports & Conductor / Model engine / About) |
+| Features | goalChaser, cacheKeeper | misleading (looked like THE chaser) | relabelled, own folded group "off while the Conductor's runs" |
+| Features | finishHook | broken: the switch did nothing (the hook is installed by `relaymote hooks install`) | **removed** from switches; state shown in Now |
+| Model engine | Claude CLI, Relaymote worker | retired (no CLI login) | **removed** from picker (backend kept) |
+| Advanced | Headless workers at once, Trusted folders (headless) | retired 16-Oct | **removed** |
+| Advanced | Conductor behaviour (goals.*, cacheKeeper.*) | stale: Relaymote-chaser fields shown while it was off | shown only while that chaser is on; otherwise a pointer to Now |
+| Tray | Open, Pair, Settings, Connect Claude Desktop, Restart, Quit | works | unchanged (Settings → Now) |
+| Dashboard :8798 | Submit a task, Tasks, Sessions | Submit/Tasks unused here (AGO dispatches) | unchanged (loopback only, generic product) |
+
+**Settings › Now** (`GET /api/live-settings`, `lib/live-settings.js`). Read from the source files on every open and refreshed every 20 s. No defaults are passed off as set values: an absent key is tagged "default", and a missing file says so. Sections:
+- Models (settings.json `newSession` / `levels`).
+- The Conductor's goal chaser (goals-config.json, plus full speed, pace.jsonl, heartbeat).
+- The wake gate (hook present in ~/.claude/settings.json, `wake_gate.config.json`, 24 h decision counts, held queue).
+- The Conductor (last-conductor.txt, the override) and the principals (name, enabled, sees, own Conductor only).
+- Auto-dispatch (route, headless retired, AGO spawns and chip auto-starts in the last 24 h from master-audit.log).
+- The modules and other switches.
+
+**Who and when.**
+- `config.set(patch, by)` appends to `state/settings-audit.jsonl`:
+  - the phone (as its principal);
+  - `mcp:<session>` for become/release conductor;
+  - `cli`;
+  - `tunnel setup`;
+  - `accounts`.
+- Direct edits to settings.json, goals-config.json, wake_gate.config.json, principals.json or last-conductor.txt are caught by a snapshot diff (`state/settings-seen.json`). They are logged as "edited on disk", at the file's mtime.
+- History starts at install. There is no record of changes made before it.
+- Test: `test/live-settings.js`, 22 checks.
+
+**Worth building (his call):** none. A possible later step is attributing on-disk edits to the session that made them, which needs the Conductor's scripts to write a `by` field.
+
 ## Headless CLI route retired (16-Oct-2026) — 0.2.110
 Owner decision: no Claude CLI workers. `chooseDispatch` returns `refused` for dispatch:"headless" (passed, or the workers.dispatch setting) and `gui` otherwise, with no CLI auth probe. Refused at three layers: `relaymote_spawn` handler, `POST /api/task` (400 HEADLESS_RETIRED), `orchestrator.enqueue` (throws); the pump fails any already-queued headless task with the same message instead of spawning. `heal.checkAuth` reports retired (RELAYMOTE_CHECK_CLI_AUTH=1 restores the probe). Master protocol and tool descriptions now send background work to in-session subagents and visible work to chips.
 

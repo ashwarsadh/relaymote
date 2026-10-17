@@ -1308,11 +1308,20 @@ async function handle(req, res) {
   if (p === '/api/settings') {
     if (req.method === 'POST') {
       let body; try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { return json(res, 400, { ok: false, error: 'bad json' }); }
-      const next = config.set(body || {});
+      const as = String(url.searchParams.get('as') || '').replace(/[^\w-]/g, '').slice(0, 32);
+      const next = config.set(body || {}, 'phone' + (as ? ' (' + as + ')' : ''));
       if (body && body.remote) { try { tunnel.apply(); } catch (e) { log('tunnel apply: ' + e.message); } }
       return json(res, 200, { ok: true, settings: next, defaults: config.DEFAULTS, dataDir: config.DATA });
     }
     return json(res, 200, { ok: true, settings: config.get(), defaults: config.DEFAULTS, dataDir: config.DATA, version: require('../package.json').version });
+  }
+  // Settings › Now: every setting read live from the file that holds it, with who/when (lib/live-settings.js).
+  if (p === '/api/live-settings') {
+    if (!isOwner(identity)) return json(res, 403, { ok: false, error: 'OWNER_ONLY' });
+    const titles = new Map((sessions.index().list || []).map(s => [s.id, s.title || '']));
+    const titleOf = id => titles.get(id) || titles.get(String(id || '').replace(/^local_/, '')) || '';
+    try { return json(res, 200, require('../lib/live-settings').read({ titleOf, principal: url.searchParams.get('as') || '' })); }
+    catch (e) { return json(res, 500, { ok: false, error: 'LIVE_SETTINGS_FAILED', message: e.message }); }
   }
   if (p === '/api/send/status') {
     const v = cmidStore().get(url.searchParams.get('cmid') || '');
@@ -1438,7 +1447,7 @@ async function handle(req, res) {
       const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
       const patch = {};
       for (const k of ['enabled', 'awaiting', 'done']) if (k in body) patch[k] = !!body[k];
-      const next = config.set({ notifications: patch }).notifications;
+      const next = config.set({ notifications: patch }, 'phone (notifications)').notifications;
       return json(res, 200, { ok: true, push: push.count(), notifications: next, route: alerts.route(), contact: push.subjectStatus() });
     }
     return json(res, 200, { ok: true, push: push.count(), notifications: config.get().notifications, route: alerts.route(), contact: push.subjectStatus() });

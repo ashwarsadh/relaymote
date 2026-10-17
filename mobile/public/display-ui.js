@@ -32,17 +32,32 @@
     root.setAttribute('data-density', density());
     document.querySelectorAll('#density-seg button').forEach(b => b.classList.toggle('on', b.dataset.d === density()));
   }
+  // Theme: '' = follow the phone (prefers-color-scheme), else html[data-theme] forces light or dark.
+  function theme() { const t = get('baton.theme', ''); return t === 'light' || t === 'dark' ? t : ''; }
+  function applyTheme() {
+    const t = theme();
+    if (t) root.setAttribute('data-theme', t); else root.removeAttribute('data-theme');
+    document.querySelectorAll('meta[name=theme-color]').forEach(m => {
+      if (!m.dataset.media) m.dataset.media = m.getAttribute('media') || '';
+      if (t) { m.removeAttribute('media'); m.setAttribute('content', t === 'light' ? '#faf9f7' : '#12110f'); }
+      else { m.setAttribute('media', m.dataset.media); m.setAttribute('content', /light/.test(m.dataset.media) ? '#faf9f7' : '#12110f'); }
+    });
+    document.querySelectorAll('#theme-seg button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  }
   function setZoom(z) { put('baton.zoom', String(clampZ(z))); applyZoom(); }
 
   const $ = id => document.getElementById(id);
-  $('btn-display').onclick = () => { applyZoom(); applyDensity(); showSheet($('view-display')); };
+  $('btn-display').onclick = () => { applyZoom(); applyDensity(); applyTheme(); showSheet($('view-display')); };
   $('btn-close-display').onclick = () => navBack();
   $('zoom-minus').onclick = () => setZoom(zoom() - STEP);
   $('zoom-plus').onclick = () => setZoom(zoom() + STEP);
   $('zoom-range').oninput = e => setZoom(Number(e.target.value) / 100);
-  $('zoom-reset').onclick = () => { put('baton.zoom', '1'); put('baton.density', 'compact'); applyZoom(); applyDensity(); };
+  $('zoom-reset').onclick = () => { put('baton.zoom', '1'); put('baton.density', 'compact'); put('baton.theme', ''); applyZoom(); applyDensity(); applyTheme(); };
+  document.querySelectorAll('#theme-seg button').forEach(b => {
+    b.onclick = () => { put('baton.theme', b.dataset.t); applyTheme(); };
+  });
   document.querySelectorAll('#density-seg button').forEach(b => {
     b.onclick = () => { put('baton.density', b.dataset.d); applyDensity(); };
   });
-  applyZoom(); applyDensity();
+  applyZoom(); applyDensity(); applyTheme();
 })();

@@ -80,7 +80,7 @@ function run(action, opts = {}) {
     fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + '\n');
     fs.renameSync(tmp, file);
   }
-  config.set({ modules: { finishHook: action === 'install' } });
+  config.set({ modules: { finishHook: action === 'install' } }, 'cli: hooks ' + action);
   out.moduleOn = !!config.mod('finishHook');
   return out;
 }

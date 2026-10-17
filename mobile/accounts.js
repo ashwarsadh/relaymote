@@ -57,7 +57,7 @@ function saveSettings(body = {}) {
     a.roles = {};
     for (const [k, v] of Object.entries(body.roles)) a.roles[k] = ROLES.includes(v) ? v : null;
   }
-  return config.set({ accounts: a }).accounts;
+  return config.set({ accounts: a }, 'accounts').accounts;
 }
 
 function setLabel(body = {}) {

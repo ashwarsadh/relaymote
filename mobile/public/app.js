@@ -3264,112 +3264,6 @@ async function setFast(m, want) {
   });
 }
 
-async function openTasks() {
-  showSheet($('view-tasks'));
-  $('tasks').innerHTML = '<div class="empty">Loading…</div>';
-  try {
-    const d = await api('/api/tasks');
-    const s = d.summary || {};
-    $('task-sub').innerHTML =
-      `<span style="color:var(--run)">${s.running || 0} running</span>` +
-      `<span class="muted">${s.queued || 0} queued</span>` +
-      `<span class="muted">${s.failed || 0} failed</span>` +
-      `<span class="muted">$${(s.costUsd || 0).toFixed(2)}</span>`;
-    const ul = $('tasks'); ul.innerHTML = '';
-    for (const t of d.tasks) {
-      const li = document.createElement('li');
-      li.className = 'row task' + (t.status === 'running' ? ' live' : '');
-      const cls = t.status === 'running' ? 'running'
-                : t.status === 'queued' ? 'awaiting'
-                : t.status === 'failed' ? 'err' : 'idle';
-      const when = t.status === 'running' && t.startedAt ? ageText(t.startedAt).replace(' ago', ' in')
-                 : t.endedAt ? ageText(t.endedAt) : t.createdAt ? ageText(t.createdAt) : '';
-      const bits = [t.status, shortModel(t.model), t.dispatch, when,
-                    t.costUsd ? '$' + t.costUsd.toFixed(2) : ''].filter(Boolean);
-      li.innerHTML = `<span class="dot ${cls}"></span><div class="row-main">` +
-        `<div class="row-title">${esc(t.id)} · ${esc(t.title || '')}</div>` +
-        `<div class="row-meta">${bits.map(x => `<span>${esc(x)}</span>`).join('')}</div>` +
-        `<div class="taskmore"></div></div>`;
-
-      li.onclick = () => {
-        const box = li.querySelector('.taskmore');
-        if (box.innerHTML) { box.innerHTML = ''; li.classList.remove('open'); return; }
-        li.classList.add('open');
-        const rows = [];
-        if (t.brief) rows.push(`<p class="tbrief">${esc(t.brief)}${t.brief.length >= 320 ? '…' : ''}</p>`);
-        const kv = [
-          ['where', t.cwd], ['route', [t.mode, t.dispatch].filter(Boolean).join(' · ')],
-          ['kind', [t.type, t.complexity].filter(Boolean).join(' · ')],
-          ['effort', t.effort],
-          ['attempt', t.attempt ? t.attempt + ' of ' + (t.maxAttempts || 1) : null],
-          ['started', t.startedAt ? new Date(t.startedAt).toLocaleString() : null],
-          ['ended', t.endedAt ? new Date(t.endedAt).toLocaleString() : null],
-          ['escalations', t.escalations || null],
-        ].filter(([, v]) => v !== null && v !== undefined && v !== '');
-        rows.push(kv.map(([k, v]) => `<div class="tkv"><span>${esc(k)}</span><b>${esc(String(v))}</b></div>`).join(''));
-        if (t.tags && t.tags.length) rows.push(`<div class="ttags">${t.tags.map(x => `<i>${esc(x)}</i>`).join('')}</div>`);
-        if (t.result) rows.push(`<p class="tresult">${esc(t.result)}</p>`);
-        if (t.error) rows.push(`<p class="terror">${esc(t.error)}</p>`);
-        const desktopSession = (t.guiSessionId && /^local_/.test(t.guiSessionId)) ? t.guiSessionId
-                             : (/^local_/.test(String(t.sessionId || '')) ? t.sessionId : null);
-        const acts = [];
-        acts.push('<button class="linkish tdetail">what is it doing?</button>');
-        if (desktopSession) acts.push('<button class="linkish tsess">open its session</button>');
-        if (t.status === 'running' || t.status === 'queued') acts.push('<button class="linkish tstop">stop it</button>');
-        rows.push(`<div class="tacts">${acts.join('')}</div><div class="tlive"></div>`);
-        box.innerHTML = rows.join('');
-
-        const live = box.querySelector('.tlive');
-        const b2 = box.querySelector('.tsess');
-        if (b2) b2.onclick = (ev) => { ev.stopPropagation(); navOpenFrom(desktopSession); hideSheet($('view-tasks')); };
-
-        box.querySelector('.tdetail').onclick = async (ev) => {
-          ev.stopPropagation();
-          live.innerHTML = '<div class="empty">Reading…</div>';
-          try {
-            const d = await api('/api/relaymote-task?id=' + encodeURIComponent(t.id));
-            const out = [];
-            if (d.events && d.events.length) {
-              out.push(`<div class="tsec">progress${d.streaming ? ' · live' : ''}</div>`);
-              out.push('<div class="tstream">' + d.events.map(e => e.kind === 'tool'
-                ? `<div class="tev tool"><b>${esc(e.name)}</b>${e.text ? ' ' + esc(e.text) : ''}</div>`
-                : `<div class="tev">${esc(e.text)}</div>`).join('') + '</div>');
-            }
-            if (d.result) {
-              const r = d.result;
-              const summary = r.summary || r.result || r.output || r.raw ||
-                              (typeof r === 'string' ? r : JSON.stringify(r));
-              out.push(`<div class="tsec">result</div><p class="tresult">${esc(String(summary).slice(0, 2000))}</p>`);
-            }
-            if (d.log && d.log.trim()) out.push(`<div class="tsec">log</div><pre class="tlog">${esc(d.log.slice(-3000))}</pre>`);
-            if (d.task && d.task.routeReason) out.push(`<div class="tsec">why this route</div><p class="tbrief">${esc(d.task.routeReason)}</p>`);
-            if (d.task && d.task.prompt) out.push(`<div class="tsec">full instruction</div><pre class="tlog">${esc(d.task.prompt)}</pre>`);
-            if (!out.length) {
-              out.push('<div class="empty">Nothing yet. Tasks started before streaming was added ' +
-                       'write nothing until they finish; ones started now stream as they go.</div>');
-            }
-            live.innerHTML = out.join('');
-          } catch (e) { live.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
-        };
-
-        const b3 = box.querySelector('.tstop');
-        if (b3) b3.onclick = async (ev) => {
-          ev.stopPropagation();
-          if (!confirm('Stop ' + t.id + '?\n\n' + (t.title || ''))) return;
-          b3.disabled = true; b3.textContent = 'stopping…';
-          try {
-            await api('/api/relaymote-task/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: t.id }) });
-            toast('Stopped ' + t.id); openTasks();
-          } catch (e) { toast('Stop failed: ' + e.message, true); b3.disabled = false; b3.textContent = 'stop it'; }
-        };
-      };
-      ul.appendChild(li);
-    }
-    if (!d.tasks.length) ul.innerHTML = '<div class="empty">No tasks.</div>';
-  } catch (e) { toast('Tasks failed: ' + e.message, true); }
-}
-
 function b64ToU8(b64) {
   const pad = '='.repeat((4 - (b64.length % 4)) % 4);
   const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
@@ -3514,7 +3408,6 @@ $('btn-cfg').onclick = openSheet;
 $('chat-sub').onclick = openSheet;
 $('btn-close-sheet').onclick = () => navBack();
 $('sheet').onclick = (e) => { if (e.target === $('sheet')) navBack(); };
-$('btn-tasks').onclick = () => { drawer(false); openTasks(); };
 $('btn-new').onclick = () => { drawer(false); openNew(); };
 $('btn-close-new').onclick = () => navBack();
 $('newsheet').onclick = (e) => { if (e.target === $('newsheet')) navBack(); };
@@ -3529,9 +3422,7 @@ $('btn-close-chips').onclick = () => navBack();
 $('chipsheet').onclick = (e) => { if (e.target === $('chipsheet')) hideSheet($('chipsheet')); };
 $('btn-chips').onclick = openChips;
 $('btn-create').onclick = createSession;
-$('btn-close-tasks').onclick = () => navBack();
 $('btn-close-file').onclick = () => navBack();
-$('view-tasks').onclick = (e) => { if (e.target === $('view-tasks')) hideSheet($('view-tasks')); };
 if ($('btn-accounts')) $('btn-accounts').onclick = () => {
   showSheet($('view-accounts'));
   if (window.AccountsUI) window.AccountsUI.mount($('accounts-slot'));

@@ -11,8 +11,8 @@
     ['routines', 'Routines', 'Show Claude Code scheduled tasks in the app.'],
     ['organizer', 'Organizer', 'Put each new session into its project\'s group automatically. Sessions you have grouped yourself are never moved.'],
     ['board', 'Board', 'A tappable to-do board read from board.json (for a Conductor session). See docs/BOARD.md.'],
-    ['goalChaser', 'Goal chaser', 'Keeps track of goals and nudges the owning session until each one is done.'],
-    ['cacheKeeper', 'Cache keeper', 'Nudges idle sessions before their 1-hour prompt cache expires, so work continues cheaply.'],
+    ['goalChaser', 'Relaymote’s own goal chaser', 'A second chaser, separate from the Conductor’s (whose state is under Now). Leave off while the Conductor chases, or sessions get nudged twice.'],
+    ['cacheKeeper', 'Cache keeper', 'Times Relaymote’s own chaser inside the 1-hour prompt cache. Only does anything with that chaser on.'],
     ['accounts', 'Accounts', 'Several Claude accounts on this computer: keep their sessions, groups and routines the same.'],
     ['summaries', 'Session overviews', 'Off by default. A 5-line card per changed session (goal, done, in progress, blocked on, last ask), written by the model engine (Settings › Model engine).'],
     ['roles', 'Roles for routing', 'Records what each session is for, so messages reach the right owner. Free (title, tags, project) unless a model engine is set.'],
@@ -26,7 +26,6 @@
     ['reaper', 'Idle-CLI reaper', 'Off by default. Frees the memory (~400 MB each) of sessions idle 3 h or more, using Claude’s own teardown; the next message resumes them. Only logs for its first 24 h. Never touches a session that is running, unread, waiting on you, on Remote Control, or owns a goal.'],
     ['autoCompact', 'Auto-compact', 'Off by default. Types /compact only in a session’s last warm cache cycle, when it is idle and has written its state down. Never cold, running or waiting on you.'],
     ['directives', 'Directives', 'Off by default. Daily, collects your own instructions per project into DIRECTIVES.md in that folder. Never overwrites a file you wrote.'],
-    ['finishHook', 'Finish-the-task hook', 'Off by default. After “relaymote hooks install”, a session may not end its turn on a question it can answer itself.'],
   ];
   var REMOTE = [
     ['off', 'This computer only', 'The app answers on 127.0.0.1. Nothing is exposed.'],
@@ -68,26 +67,39 @@
       var b = document.createElement('button');
       b.id = 'btn-settings'; b.className = 'icon-btn'; b.title = 'Settings'; b.setAttribute('aria-label', 'Settings');
       b.textContent = '⚙';
-      b.onclick = function () { open('general'); };
+      b.onclick = function () { open('now'); };
       var closeBtn = $('btn-close-drawer');
       head.insertBefore(b, closeBtn || null);
     }
   }
 
+  // 17-Oct cleanup: nine tabs became six. Now (live state) leads; Connection and Advanced keep their
+  // old pages as sub-chips, so #pair / #desktop and the tray menu still land on the right page.
+  var TABS = [['now', 'Now'], ['models', 'Models'], ['general', 'Features'], ['desktop', 'Connection'], ['notify', 'Notifications'], ['advanced', 'Advanced']];
+  var SUBS = { desktop: [['desktop', 'Claude Desktop'], ['remote', 'Remote access'], ['pair', 'Pair a phone']],
+    advanced: [['advanced', 'Ports & Conductor'], ['engine', 'Model engine'], ['about', 'About']] };
+  var GROUP = { remote: 'desktop', pair: 'desktop', engine: 'advanced', about: 'advanced' };
   function tabs() {
-    var list = [['general', 'Modules'], ['desktop', 'Desktop connection'], ['models', 'Models'], ['remote', 'Remote access'], ['pair', 'Pair a phone'], ['notify', 'Notifications'], ['engine', 'Model engine'], ['advanced', 'Advanced'], ['about', 'About']];
-    $('set-tabs').innerHTML = list.map(function (t) {
-      return '<button class="chip' + (t[0] === section ? ' on' : '') + '" data-sec="' + t[0] + '">' + t[1] + '</button>';
-    }).join('');
+    var g = GROUP[section] || section;
+    var chips = function (list, cur) {
+      return list.map(function (t) { return '<button class="chip' + (t[0] === cur ? ' on' : '') + '" data-sec="' + t[0] + '">' + t[1] + '</button>'; }).join('');
+    };
+    $('set-tabs').innerHTML = chips(TABS, g) + (SUBS[g] ? '<div class="set-subtabs">' + chips(SUBS[g], section) + '</div>' : '');
     Array.prototype.forEach.call($('set-tabs').querySelectorAll('button'), function (b) {
-      b.onclick = function () { section = b.dataset.sec; render(); };
+      b.onclick = function () {
+        section = b.dataset.sec;
+        if (section === 'pair' || section === 'remote') loadPair();
+        if (section === 'desktop') loadDesk();
+        render();
+      };
     });
   }
 
   // Modules shown in three groups so the list stays short: the everyday ones open, the rest folded away.
   var MODULE_GROUPS = [
-    ['Main features', ['app', 'autoResume', 'organizer', 'accounts', 'board', 'inbox', 'goalChaser', 'cacheKeeper', 'routines', 'autoUpdate'], true],
-    ['Orchestration — acts in your sessions', ['orchestrator', 'masterNotify', 'chipAutostart', 'autoCompact', 'reaper', 'inboxAutoResolve', 'finishHook'], false],
+    ['Main features', ['app', 'autoResume', 'organizer', 'accounts', 'board', 'inbox', 'routines', 'autoUpdate'], true],
+    ['Orchestration — acts in your sessions', ['orchestrator', 'masterNotify', 'chipAutostart', 'autoCompact', 'reaper', 'inboxAutoResolve'], false],
+    ['Relaymote’s own goal chaser — off while the Conductor’s runs', ['goalChaser', 'cacheKeeper'], false],
     ['Background reports — reads and writes files only', ['transcriptIndex', 'hygiene', 'roles', 'digests', 'summaries', 'osTasks', 'directives'], false],
   ];
   function moduleGroups(m) {
@@ -126,7 +138,8 @@
   function save(patch, quiet) {
     if (saving) return Promise.resolve();
     saving = true;
-    return req('/api/settings', patch).then(function (r) {
+    var as = principalKey();
+    return req('/api/settings' + (as ? '?as=' + encodeURIComponent(as) : ''), patch).then(function (r) {
       saving = false;
       if (r && r.ok) { S = r.settings; applyVisibility(); if (!quiet) note('Saved'); render(); }
       else note('Could not save: ' + ((r && r.error) || 'unknown error'), true);
@@ -153,11 +166,104 @@
       }).join('') + '</select></label>';
   }
 
+  // ---- Now: the live state, read from the files that hold it on every open (GET /api/live-settings,
+  // lib/live-settings.js). Nothing here comes from defaults: an absent key is marked "default", an
+  // unreadable file says so, and each value names who changed it and when when that is recorded.
+  var live = null, liveAt = 0, liveErr = '', liveTimer = null;
+  function principalKey() { try { return localStorage.getItem('baton.principal') || ''; } catch (e) { return ''; } }
+  function loadLive() {
+    return req('/api/live-settings?as=' + encodeURIComponent(principalKey())).then(function (r) {
+      if (r && r.ok) { live = r; liveErr = ''; } else liveErr = (r && (r.message || r.error)) || 'no answer';
+      liveAt = Date.now(); if (section === 'now') render();
+    }).catch(function (e) { liveErr = e.message; if (section === 'now') render(); });
+  }
+  function ist(iso, withDay) {
+    if (!iso) return '';
+    var d = new Date(iso); if (isNaN(d)) return String(iso);
+    var o = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false };
+    if (withDay !== false) { o.day = 'numeric'; o.month = 'short'; }
+    try { return d.toLocaleString('en-IN', o) + ' IST'; } catch (e) { return d.toISOString(); }
+  }
+  function ago(iso) {
+    var m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    return isNaN(m) ? '' : m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago';
+  }
+  function fmt(v, kind) {
+    if (v === true) return 'On';
+    if (v === false) return 'Off';
+    if (v == null || v === '') return '—';
+    if (kind === 'time') return ist(v);
+    if (kind === 'session') return String(v).replace(/^local_/, '').slice(0, 8);
+    if (Array.isArray(v)) return v.join(', ');
+    return String(v);
+  }
+  function who(c) {
+    if (!c) return '';
+    var by = String(c.by || '').replace(/^mcp:(local_)?([0-9a-f]{8})[0-9a-f-]*/, 'session $2');
+    by = by.replace(/^(local_)?([0-9a-f]{8})-[0-9a-f-]{20,}$/, 'session $2');
+    return esc(by) + (c.at ? ' · ' + esc(ist(c.at)) : '');
+  }
+  function liveRows(rows) {
+    return '<div class="live-rows">' + rows.map(function (x) {
+      return '<div class="live-row"><span class="live-k">' + esc(x.label) + '</span><span class="live-v">' + esc(fmt(x.value, x.kind)) +
+        (x.isDefault ? ' <i class="live-def">default</i>' : '') + '</span>' +
+        (x.changed ? '<small class="live-who">changed by ' + who(x.changed) + '</small>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function sid(id, title) { return id ? (title ? '<b>' + esc(title) + '</b> ' : '') + '<code>' + esc(String(id).replace(/^local_/, '').slice(0, 8)) + '</code>' : '—'; }
+  function liveStatus(sec) {
+    var st = sec.status || {}, h = '';
+    if (sec.id === 'chaser') {
+      h = st.on ? (st.fullSpeed ? '<b class="live-hot">ON · FULL SPEED</b> until ' + esc(ist(st.fullSpeedUntil)) : '<b class="live-ok">ON · paced</b>') : '<b class="live-off">OFF</b>';
+      if (st.pace) h += '<br>Pace ' + esc(st.pace.pace) + ' · ' + esc(st.pace.weeklyPct) + '% of the week used · ' + esc(st.pace.coldPerDay) + ' cold wakes/day · hold ' + esc(st.pace.holdHours) + ' h <small>(' + esc(ago(st.pace.at)) + ')</small>';
+      if (st.heartbeat) h += '<br>Last chase pass ' + esc(ist(st.heartbeat)) + ' <small>(' + esc(ago(st.heartbeat)) + ')</small>';
+    } else if (sec.id === 'wakegate') {
+      var c = st.last24h || {}, parts = Object.keys(c).sort(function (a, b) { return c[b] - c[a]; }).map(function (k) { return c[k] + ' ' + k; });
+      h = st.installed === true ? '<b class="live-ok">Installed</b> (Claude hook)' : st.installed === false ? '<b class="live-hot">NOT installed</b> in ~/.claude/settings.json' : 'Hook: unknown';
+      h += '<br>Last 24 h: ' + esc(parts.join(' · ') || 'nothing') + ' · held now: ' + esc(st.held);
+      if (st.last) h += '<br>Last: ' + esc(st.last.action) + ' → ' + sid(st.last.to, st.last.toTitle) + ' <small>' + esc(ist(st.last.at)) + ' — ' + esc(st.last.why || '') + '</small>';
+    } else if (sec.id === 'conductor') {
+      h = 'Conductor: ' + sid(st.conductor, st.conductorTitle) + (st.override ? '<br>Relaymote override: ' + sid(st.override) : '');
+      h += (st.principals || []).map(function (p) {
+        var mine = p.key === (st.principal || '');
+        return '<br>' + (mine ? '▶ ' : '') + esc(p.name) + (p.enabled ? '' : ' <i class="live-def">off</i>') + ' · sees ' + esc(p.sees) + (p.conductor ? ' · ' + sid(p.conductor, p.conductorTitle) : '');
+      }).join('');
+    } else if (sec.id === 'dispatch') {
+      h = 'Route: <b>' + esc(st.route) + '</b> · headless ' + esc(st.headless) + '<br>Last 24 h: ' + esc(st.spawns24h) + ' spawns, ' + esc(st.chips24h) + ' chips auto-started';
+      if (st.lastSpawn) h += '<br><small>Last spawn ' + esc(ist(st.lastSpawn.at)) + ': ' + esc(st.lastSpawn.text) + '</small>';
+      if (st.lastChip) h += '<br><small>Last chip ' + esc(ist(st.lastChip.at)) + ': ' + esc(st.lastChip.text) + '</small>';
+    }
+    return h ? '<div class="set-card live-status">' + h + '</div>' : '';
+  }
+  function renderNow() {
+    if (liveTimer == null) liveTimer = setInterval(function () {
+      var v = $('view-settings'); if (section === 'now' && v && !v.classList.contains('hidden')) loadLive();
+    }, 20000);
+    if (!live && !liveErr) { loadLive(); return thisPhone() + '<div class="empty">Reading the live settings…</div>'; }
+    var h = thisPhone() + '<p class="set-lead">What is set right now, read from the files that hold it' + (live ? ' at ' + esc(ist(live.at, false)) : '') +
+      '. Changes by any session show here on the next refresh. <a href="#" id="set-now-refresh">Refresh</a></p>';
+    if (liveErr) h += '<div class="set-card set-warn">Could not read the live settings: ' + esc(liveErr) + '</div>';
+    if (!live) return h;
+    live.sections.forEach(function (sec) {
+      var big = sec.id === 'other';
+      var body = liveStatus(sec) + (sec.error ? '<div class="set-card set-warn">' + esc(sec.error) + '</div>' : '') + liveRows(sec.rows || []) +
+        (sec.notes && sec.notes.length ? '<details class="live-notes"><summary>Notes in the file (' + sec.notes.length + ')</summary>' +
+          sec.notes.map(function (n) { return '<p><code>' + esc(n.key) + '</code> ' + esc(n.text) + '</p>'; }).join('') + '</details>' : '') +
+        (sec.source && sec.source.file ? '<small class="live-src">' + esc(sec.source.file) + (sec.source.mtime ? ' · saved ' + esc(ist(sec.source.mtime)) : '') + '</small>' : '');
+      h += big ? '<details class="set-group"><summary>' + esc(sec.title) + '</summary>' + body + '</details>' : '<h3>' + esc(sec.title) + '</h3>' + body;
+    });
+    var rc = live.recent || [];
+    h += '<h3>Recent changes</h3>' + (rc.length ? '<div class="live-rows">' + rc.map(function (a) {
+      return '<div class="live-row live-stack"><span class="live-k">' + esc(ist(a.at)) + ' · ' + who({ by: a.by }) + ' · ' + esc(a.file) + '</span><span class="live-v">' +
+        (a.changes || []).map(function (c) { return esc(c.k) + ': ' + esc(fmt(c.from)) + ' → ' + esc(fmt(c.to)); }).join('<br>') + '</span></div>';
+    }).join('') + '</div>' : '<p class="set-small">None recorded yet. From this version on, every change made from the phone, by an MCP tool or by editing these files is listed here.</p>');
+    return h;
+  }
+
   function renderGeneral() {
     var m = S.modules || {};
     return '<p class="set-lead">Turn features on or off. Changes apply within a minute; the app module needs a restart.</p>' +
       moduleGroups(m) +
-      thisPhone() +
       '<h3>While you work</h3>' +
       field('idleGateSeconds', 'Idle gate (seconds)', S.idleGateSeconds, 'Relaymote drives the Claude Desktop window. It waits until you have not touched keyboard or mouse for this long. 0 = never wait.', 'number');
   }
@@ -292,7 +398,8 @@
 
   function renderNotify() {
     var n = S.notifications || {};
-    return '<p class="set-lead">Push notifications need HTTPS (Cloudflare) or this computer. Tap 🔔 in the session list on each phone to subscribe.</p>' +
+    return '<p class="set-lead">Push notifications need HTTPS (Cloudflare) or this computer. Each phone subscribes once; the 🔔 in the session list disappears after that.</p>' +
+      '<div class="set-inline"><button class="ghost primary" id="set-push-here">Turn on / test on this phone</button></div>' +
       toggle('notifications.enabled', 'Notifications', 'Master switch.', n.enabled !== false) +
       toggle('notifications.awaiting', 'Needs your input', 'A session is waiting for an answer or a permission.', n.awaiting !== false) +
       toggle('notifications.done', 'Finished', 'A session finished its turn.', n.done !== false) +
@@ -333,15 +440,13 @@
       toggle('autoEnableDebugger', 'Re-enable the debugger automatically', 'Windows: when Claude Desktop starts and you are signed in, Relaymote shows a 3-2-1 countdown on the computer and switches the debugger on in a few seconds. The window keeps its size.', S.autoEnableDebugger !== false) +
       toggle('followClaude', 'Run Relaymote only while Claude Desktop is open', 'Windows, with the tray icon: Relaymote starts when Claude Desktop opens. When Desktop exits, Relaymote runs the account sync (if it is on) and then stops. It waits for running Relaymote tasks first.', S.followClaude === true) +
       '<h3>Workers</h3>' +
-      '<label class="set-field"><span><b>Trusted project folders</b><small>Headless workers may open any folder directly inside these without Claude Code’s trust prompt, e.g. your projects folder. One absolute path per line; a whole drive is refused. Empty = only Relaymote’s own folders and each task’s folder.</small></span>' +
-      '<textarea data-field="trustedRoots" data-list="1" rows="2" autocomplete="off">' + esc((S.trustedRoots || []).join('\n')) + '</textarea></label>' +
-      field('workers.concurrency', 'Headless workers at once', w.concurrency, '', 'number') +
-      field('workers.guiConcurrency', 'Desktop workers at once', w.guiConcurrency, '', 'number') +
+      field('workers.guiConcurrency', 'Desktop workers at once', w.guiConcurrency, 'Headless (CLI) workers were retired on 16-Oct; work starts in Claude Desktop.', 'number') +
       '<h3>Conductor</h3>' +
       field('conductorSession', 'Conductor session id', S.conductorSession || '', 'Set when a session calls relaymote_become_conductor: the one session above all projects. Masters report to it and the Board sends your taps to it.') +
       field('board.dir', 'Board folder', (S.board || {}).dir || '', 'Folder containing board.json. Blank = the default in Relaymote’s data folder.') +
       field('ownerIndex', 'Owner index folder', S.ownerIndex || '', 'Optional folder describing which session owns which topic.') +
-      '<h3>Conductor behaviour</h3>' +
+      (!(S.modules || {}).goalChaser ? '<p class="set-small">Chasing and wake pacing are run by the Conductor (goals-config.json, wake gate): see <a href="#" id="go-now">Now</a>. The fields for Relaymote’s own chaser appear here only while it is on (Features).</p>' :
+      '<h3>Relaymote’s own chaser</h3>' +
       '<p class="set-lead">How hard Relaymote chases and wakes your sessions. The defaults suit most people; your own numbers stay in settings.json on this computer.</p>' +
       toggle('goals.autoSpawn', 'Start a session for unowned goals', 'When no session owns a goal, start one in its project folder.', !!G.autoSpawn) +
       field('goals.quietHours', 'Chase after (hours without a report)', G.quietHours, 'A goal with no progress report for this long counts as stuck and its owner is asked for status.', 'number') +
@@ -353,7 +458,7 @@
       field('cacheKeeper.pingFromMinutes', 'Warm ping from (minutes idle)', C.pingFromMinutes, 'Warm-window sends: a nudge inside the cache window is cheap, one after it re-reads the whole context.', 'number') +
       field('cacheKeeper.pingUntilMinutes', 'Warm ping until (minutes idle)', C.pingUntilMinutes, 'Must end before the cache window (' + (C.windowMinutes || 60) + ' min).', 'number') +
       field('cacheKeeper.coldAfterHours', 'Wake a cold session after (hours)', C.coldAfterHours, 'Unless a goal is late.', 'number') +
-      toggle('cacheKeeper.keepConductorWarm', 'Keep the Conductor warm', 'At most twice in 3 hours, only while goal owners are working.', !!C.keepConductorWarm) +
+      toggle('cacheKeeper.keepConductorWarm', 'Keep the Conductor warm', 'At most twice in 3 hours, only while goal owners are working.', !!C.keepConductorWarm)) +
       '<p class="set-lead">Usage-limit resets are read from Claude itself for every signed-in account (Auto-resume), so there is nothing to enter here.</p>';
   }
 
@@ -361,7 +466,7 @@
     var e = S.engine || {}, o = e.openai || {}, k = e.kind || 'none', sm = S.summaries || {}, ro = S.roles || {};
     var plan = k === 'claude-cli' || k === 'baton-worker';
     return '<p class="set-lead">The model that writes session overviews and the roles database. Off by default: with <b>None</b>, nothing is ever sent to a model and roles use a free heuristic.</p>' +
-      sel('engine.kind', 'Engine', k, [['none', 'None (off)'], ['openai', 'OpenAI-compatible server'], ['claude-cli', 'Claude CLI (your Claude plan)'], ['baton-worker', 'Relaymote worker (your Claude plan)']]) +
+      sel('engine.kind', 'Engine', k, [['none', 'None (off)'], ['openai', 'OpenAI-compatible server']]) +
       (plan ? '<div class="set-card set-warn"><b>Uses your own Claude plan.</b> Every overview and role is a real request that counts toward your usage limits. Keep the caps below small and pick a small model.</div>' : '') +
       (k === 'none' ? '' : field('engine.model', 'Model', e.model || '', plan ? 'Blank = haiku. A small model is enough.' : 'The model id your server serves.')) +
       (k === 'openai' ? field('engine.openai.baseUrl', 'Server address', o.baseUrl || '', 'Base URL ending in /v1, e.g. http://127.0.0.1:8080/v1') +
@@ -401,7 +506,8 @@
     var body = $('set-body');
     $('set-title').textContent = section === 'welcome' ? 'Welcome' : 'Settings';
     $('set-tabs').style.display = section === 'welcome' ? 'none' : '';
-    body.innerHTML = section === 'general' ? renderGeneral()
+    body.innerHTML = section === 'now' ? renderNow()
+      : section === 'general' ? renderGeneral()
       : section === 'remote' ? renderRemote()
       : section === 'pair' ? renderPair()
       : section === 'notify' ? renderNotify()
@@ -435,6 +541,9 @@
     });
     // A handler must never touch `x` when clicked: by then it points at the last element bound here.
     var x;
+    if ((x = $('go-now'))) x.onclick = function (e) { e.preventDefault(); section = 'now'; render(); };
+    if ((x = $('set-now-refresh'))) x.onclick = function () { loadLive(); };
+    if ((x = $('set-push-here'))) x.onclick = function () { if (typeof window.enablePush === 'function') window.enablePush(); else note('Push is not available in this browser', true); };
     if ((x = $('go-remote'))) x.onclick = function (e) { e.preventDefault(); section = 'remote'; render(); };
     if ((x = $('set-recheck'))) x.onclick = function () { loadPair(); };
     if ((x = $('set-cf-login'))) x.onclick = function () {
@@ -521,16 +630,17 @@
 
   function applyVisibility() {
     var m = (S && S.modules) || {};
-    var map = { 'btn-board': 'board', 'btn-routines': 'routines', 'btn-accounts': 'accounts', 'btn-goals': 'goalChaser' };
+    var map = { 'btn-board': 'board', 'btn-routines': 'routines', 'btn-accounts': 'accounts' };
     Object.keys(map).forEach(function (id) { var b = $(id); if (b) b.style.display = m[map[id]] ? '' : 'none'; });
   }
 
   function open(sec) {
     ensureDom();
-    section = sec || 'general';
+    section = sec || 'now';
     if (section === 'pair') loadPair();
     if (section === 'remote') loadPair();
     if (section === 'desktop' || section === 'welcome') loadDesk();
+    if (section === 'now') { live = null; liveErr = ''; }
     var sheet = $('view-settings');
     if (typeof window.showSheet === 'function') window.showSheet(sheet); else sheet.classList.remove('hidden');
     load();
@@ -550,13 +660,13 @@
       loadDesk();
       setInterval(loadDesk, 60000);
       if (location.hash === '#pair') open('pair');
-      else if (location.hash === '#settings') open('general');
+      else if (location.hash === '#settings') open('now');
       else if (location.hash === '#desktop') open('desktop');
       else if (!s.onboarded) open('welcome');
     });
     window.addEventListener('hashchange', function () {
       if (location.hash === '#pair') open('pair');
-      else if (location.hash === '#settings') open('general');
+      else if (location.hash === '#settings') open('now');
       else if (location.hash === '#desktop') open('desktop');
     });
   }

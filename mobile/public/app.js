@@ -446,10 +446,19 @@ function stampHtml(m) {
 function tickStamps() {
   document.querySelectorAll('.stamp[data-ts]').forEach(el => {
     const t = ageText(el.getAttribute('data-ts'));
-    if (t && el.textContent !== t) el.textContent = t;
+    if (el.textContent !== t) el.textContent = t;
+  });
+  document.querySelectorAll('[data-at]').forEach(el => {
+    const t = ago(Number(el.getAttribute('data-at')));
+    if (el.textContent !== t) el.textContent = t;
   });
 }
 setInterval(tickStamps, 30000);
+// 17-Oct: after a minimise every stamp read "just now" until the next tick. Re-derive them synchronously,
+// before the first frame back and before any fetch, so the first thing on screen is already right.
+for (const ev of ['visibilitychange', 'pageshow', 'focus', 'resume']) {
+  (ev === 'visibilitychange' || ev === 'resume' ? document : window).addEventListener(ev, () => { if (!document.hidden) tickStamps(); });
+}
 
 setInterval(() => {
   if (document.hidden) return;
@@ -896,9 +905,12 @@ function renderLog(messages, force) {
         log.contains(sel.getRangeAt(0).commonAncestorContainer)) return;
   }
   lastSig = sig;
-  const stick = scrollToBottomNext || logAtBottom;
+  // A reload that resumes this chat puts back the row he was reading (savePlace), once, on its first render.
+  const back = state.restorePlace && state.restorePlace.id === state.open ? state.restorePlace.anchor : null;
+  state.restorePlace = null;
+  const stick = !back && (scrollToBottomNext || logAtBottom);
   scrollToBottomNext = false;
-  const anchor = stick ? null : readingAnchor(log);
+  const anchor = back || (stick ? null : readingAnchor(log));
   const keepTop = log.scrollTop;
   let html = '';
   const blks = blocks(messages);
@@ -1092,7 +1104,9 @@ function renderLog(messages, force) {
 
   if (htmlCache.size > 400) htmlCache.clear();
   if (stick) { logAtBottom = true; logNew = 0; setScrollTop(log, log.scrollHeight); }
-  else if (!restoreAnchor(log, anchor)) setScrollTop(log, keepTop);
+  else if (restoreAnchor(log, anchor)) { if (back) logAtBottom = nearBottom(log); }
+  else if (back) { logAtBottom = true; setScrollTop(log, log.scrollHeight); }
+  else setScrollTop(log, keepTop);
   heldAnchor = logAtBottom ? null : (anchor || readingAnchor(log));
   if (typeof observeLog === 'function') observeLog();
   findRemark();
@@ -1314,7 +1328,7 @@ function renderSessions(list, opts = {}) {
     const tag = s.folder || s.group;
     if (tag) meta.push(`<span class="tag">${esc(tag)}</span>`);
     if (s.by && s.by.length) meta.push(`<span class="tag tag-by">${esc(s.by.map(b => b.name).join(', '))}</span>`);
-    meta.push(`<span>${ago(s.at)}</span>`);
+    meta.push(`<span data-at="${Number(s.at) || 0}">${ago(s.at)}</span>`);
     if (s.model) meta.push(`<span>${esc(shortModel(s.model))}</span>`);
     if (s.awaiting) meta.push('<span style="color:var(--wait)">needs you</span>');
     if (s.stalled) meta.push(`<span class="muted">running · quiet ${Math.round(s.quietFor / 60000)}m</span>`);
@@ -1648,7 +1662,11 @@ function currentPlace() {
   return { kind: 'list' };
 }
 function savePlace() {
-  try { localStorage.setItem(PLACE_KEY, JSON.stringify({ ...currentPlace(), at: Date.now() })); } catch {}
+  const place = { ...currentPlace(), at: Date.now() };
+  if (place.kind === 'chat') {
+    try { place.atBottom = !!logAtBottom; if (!logAtBottom) place.anchor = readingAnchor($('log')); } catch {}
+  }
+  try { localStorage.setItem(PLACE_KEY, JSON.stringify(place)); } catch {}
 }
 // g1870: who holds THIS phone. Ashwar 13-Oct: Sagar uses the same account, "just that he gets one more
 // conductor ... Maybe his board should also be dedicated." A ?as=sagar link (read here, before boot strips
@@ -1706,7 +1724,10 @@ async function firstScreen(touched0 = navTouched) {
   try { await syncPrincipal(); } catch {}
   const p = pickFirstScreen(place, state.rawSessions || state.sessions || [], { board: typeof window.openBoard === 'function', home: principalHome() });
   if (p.kind === 'board') window.openBoard();
-  else if (p.kind === 'chat') openChat(p.id);
+  else if (p.kind === 'chat') {
+    if (p.why === 'resume' && place && place.id === p.id && !place.atBottom && place.anchor) state.restorePlace = { id: p.id, anchor: place.anchor };
+    openChat(p.id);
+  }
   else drawer(true);
   return p.kind + ':' + p.why;
 }
@@ -3655,29 +3676,7 @@ $('log').addEventListener('scroll', () => {
   if ($('log').scrollTop < 400) loadMore();
 }, { passive: true });
 
-let installEvent = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  installEvent = e;
-  if (localStorage.getItem('baton.noinstall') === '1') return;
-  if (window.matchMedia('(display-mode: standalone)').matches) return;
-  $('install').classList.remove('hidden');
-});
-window.addEventListener('appinstalled', () => {
-  $('install').classList.add('hidden');
-  toast('Installed — open Relaymote from your home screen');
-});
-$('btn-install').onclick = async () => {
-  if (!installEvent) return toast('Use the Chrome menu → Add to Home screen', true);
-  $('install').classList.add('hidden');
-  installEvent.prompt();
-  try { await installEvent.userChoice; } catch {}
-  installEvent = null;
-};
-$('btn-install-x').onclick = () => {
-  $('install').classList.add('hidden');
-  localStorage.setItem('baton.noinstall', '1');
-};
+// Installing: the shared install-helper.js (index.html) owns beforeinstallprompt, the pill and the per-browser guide.
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (e) => {

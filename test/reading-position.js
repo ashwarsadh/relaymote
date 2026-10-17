@@ -70,4 +70,15 @@ ok(/const anchorKey = \(el\) => el\.dataset\.key \? 'k:' \+ el\.dataset\.key/.te
 ok(/counts\.get\(key\) === 1/.test(app) && /el\.id !== 'log-top'/.test(app), 'ambiguous keys and the history sentinel are never anchors');
 const lm = app.slice(app.indexOf('async function loadMore()'), app.indexOf('const topSentinel'));
 ok(!/log\.scrollTop = top \+/.test(lm), 'loadMore leaves the position to renderLog (no stale second write)');
+
+{ // 17-Oct: after a minimise the stamps read "just now" and a reload lost the place he was reading.
+  const resume = app.slice(app.indexOf('function tickStamps('), app.indexOf('let resumeAt'));
+  ok(/for \(const ev of \['visibilitychange', 'pageshow', 'focus', 'resume'\]\)/.test(resume) && /tickStamps\(\)/.test(resume),
+    'stamps are re-derived synchronously when the page comes back, not on the frozen 30 s timer');
+  ok(/\[data-at\]/.test(resume) && /data-at="\$\{Number\(s\.at\) \|\| 0\}"/.test(app), 'session-list ages are refreshed the same way');
+  const sp = app.slice(app.indexOf('function savePlace('), app.indexOf('function savePlace(') + 400);
+  ok(/place\.atBottom = !!logAtBottom/.test(sp) && /place\.anchor = readingAnchor/.test(sp), 'savePlace keeps the reading anchor (message key + offset)');
+  ok(/state\.restorePlace = \{ id: p\.id, anchor: place\.anchor \}/.test(app) && /const back = state\.restorePlace/.test(app), 'a resumed chat puts that anchor back on its first render');
+}
+
 console.log(`\n${n}/${n} passed`);

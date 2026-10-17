@@ -2,7 +2,7 @@
 
 What is TRUE now, with evidence. Requests live in the goal register; this file is where things stand.
 
-## Menu cleanup + live Settings › Now (17-Oct-2026) — 0.2.111
+## Menu cleanup + live Settings › Now (17-Oct-2026) — 0.2.111, layout fix 0.2.112
 
 Owner (17-Oct): many menu options were unbuilt, redundant or unused, and settings that agents changed (the goal chaser, model tiers) did not show in the menu.
 

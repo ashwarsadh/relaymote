@@ -1,3 +1,7 @@
+## 0.2.112
+
+- Settings › Now: values no longer wrap one letter per line on a phone.
+
 ## 0.2.111
 
 - Settings opens on a new **Now** page that shows what is set right now. Every value is read from the file that holds it each time you look, never from a default:

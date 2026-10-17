@@ -1276,7 +1276,7 @@ mark.hit.cur{background:#f5a524; color:#000}
 .set-subtabs{display:flex; gap:6px; flex-wrap:wrap; width:100%; margin-top:6px}
 .set-subtabs .chip{font-size:13px; padding:3px 10px}
 .live-rows{display:flex; flex-direction:column; border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:6px 0}
-.live-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 10px; padding:7px 10px; border-top:1px solid var(--line)}
+.live-row{display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); gap:2px 10px; padding:7px 10px; border-top:1px solid var(--line)}
 .live-row:first-child{border-top:0}
 .live-k{color:var(--dim); min-width:0; overflow-wrap:anywhere}
 .live-v{text-align:right; font-weight:600; overflow-wrap:anywhere}
@@ -1289,6 +1289,5 @@ mark.hit.cur{background:#f5a524; color:#000}
 .live-notes p{font-size:12px; color:var(--dim); margin:4px 0}
 #set-tabs{flex-wrap:wrap; overflow-x:visible; row-gap:6px}
 .set-subtabs .chip{min-height:34px}
-.live-v{max-width:62%}
 .live-stack{grid-template-columns:1fr}
 .live-stack .live-v{text-align:left; max-width:none}

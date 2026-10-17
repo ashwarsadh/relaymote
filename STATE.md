@@ -2,6 +2,12 @@
 
 What is TRUE now, with evidence. Requests live in the goal register; this file is where things stand.
 
+## Ctrl/Cmd+Enter sends (17-Oct-2026) — 0.2.113
+Owner: "ctrl enter shud send msg in relaymote browser pc". One capture-phase keydown in app.js (`SEND_BY_BOX`) clicks the box's own send button. It covers: #input → btn-send, #answer-text → answer-send, #new-prompt → btn-create, .qother → q-send. Key repeat is ignored. Enter and Shift+Enter are unchanged (newline).
+**Proof:** Playwright against the live app, with the patched app.js and send buttons replaced by counters. In each of the 4 boxes, Enter and Shift+Enter gave `a
+b
+c` (`abc` in the one-line input). Ctrl+Enter gave exactly 1 send and Cmd+Enter 1 more, with the text unchanged.
+
 ## Menu cleanup + live Settings › Now (17-Oct-2026) — 0.2.111, layout fix 0.2.112
 
 Owner (17-Oct): many menu options were unbuilt, redundant or unused, and settings that agents changed (the goal chaser, model tiers) did not show in the menu.

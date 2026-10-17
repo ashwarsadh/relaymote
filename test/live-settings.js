@@ -74,6 +74,9 @@ const html = src('mobile/public/index.html'), ui = src('mobile/public/settings-u
 check(!/btn-tasks|btn-goals|view-tasks|goals-ui\.js/.test(html), 'Task queue and Goals are gone from the menu');
 check(/\['now', 'Now'\]/.test(ui) && /section = sec \|\| 'now'/.test(ui), 'Settings opens on Now');
 check(!/'claude-cli', 'Claude CLI/.test(ui) && !/Headless workers at once/.test(ui), 'no CLI engine or headless worker fields');
+{ const app = src('mobile/public/app.js');
+  check(/SEND_BY_BOX = \{ 'input': 'btn-send', 'answer-text': 'answer-send', 'new-prompt': 'btn-create' \}/.test(app)
+    && /e\.ctrlKey \|\| e\.metaKey/.test(app) && /e\.repeat/.test(app) && /qother/.test(app), 'Ctrl/Cmd+Enter sends from every box that sends, once per press'); }
 check(/id="theme-seg"/.test(html) && /data-theme/.test(src('mobile/public/style.css')), 'Display has a light/dark/system theme');
 
 try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}

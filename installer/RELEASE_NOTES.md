@@ -1,3 +1,8 @@
+## 0.2.114
+
+- An "Install app" pill on phones that have not installed Relaymote yet. On Chrome, Edge and Samsung it opens the real install dialog. On an iPhone, in Firefox, or in an in-app browser it shows the steps for that browser. It hides once installed, or for 14 days after you tap its x. Settings > About > Install on this device opens it any time. This replaces the old banner, which only appeared when Chrome offered a prompt.
+- Coming back to Relaymote after minimising it, message times are right at once. They no longer read "just now" for a moment. If the phone closed the app in the background, it reopens at the message you were reading instead of the end.
+
 ## 0.2.113
 
 - On a computer, Ctrl+Enter (Cmd+Enter on a Mac) sends the message. Enter and Shift+Enter still start a new line. It works in the message box, a Board answer, a new session's first message and a question's "Other" answer.

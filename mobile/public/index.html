@@ -266,11 +266,6 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
 </div>
 
 <div id="cmdlist" class="cmdlist hidden"></div>
-<div id="install" class="install hidden">
-  <div><b>Install Relaymote</b><span>Add it to your home screen for notifications and full screen.</span></div>
-  <button id="btn-install">Install</button>
-  <button id="btn-install-x" aria-label="Dismiss">✕</button>
-</div>
 
 <div id="fileview" class="sheet hidden" role="dialog" aria-modal="true" aria-label="File">
   <div class="sheet-body">
@@ -295,5 +290,7 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
 <script src="/accounts-ui.js"></script>
 <script src="/settings-ui.js"></script>
 <script src="/display-ui.js"></script>
+<!-- Shared KKFE install helper (pwa-install-helper, g2077): the Install pill, or a guide where the browser gives no prompt. -->
+<script src="/install-helper.js" defer data-app="Relaymote" data-bottom="84"></script>
 </body>
 </html>

@@ -2,6 +2,34 @@
 
 What is TRUE now, with evidence. Requests live in the goal register; this file is where things stand.
 
+## Resume after minimise: stamps and reading position (17-Oct-2026) — 0.2.114
+Owner: after a minimise, every message read "just now" and later corrected itself, and the scroll position was not where he left it.
+
+**Cause 1.** Stamp text is computed when a message is drawn. Only a 30 s `setInterval(tickStamps)` refreshes it, and the phone freezes that timer while the app is hidden, so the old text stayed until the next tick. The session-list ages had the same problem (they were never refreshed at all).
+
+**Cause 2.** When Android discards the page in the background, the reload resumed the chat via `lastPlace`. That place held only the chat id, so the chat opened at the end.
+
+**Fix.**
+- `tickStamps()` runs synchronously on visibilitychange, pageshow, focus and resume, before any fetch, and also refreshes `[data-at]` list ages.
+- `savePlace()` stores `atBottom` plus `readingAnchor()` (message key and offset). `firstScreen` hands that to the first `renderLog` of the resumed chat, which restores it; if the row is not loaded it falls back to the end.
+- A plain hide/show keeps the DOM, and the existing anchor logic already held the row.
+
+**Proof** (headless, Playwright fake clock, a long chat scrolled mid-way, test daemon):
+- Stamp rendered "just now", then 2 h passed with timers frozen. First paint after visibilitychange: **"2h ago"** (old build: "just now").
+- `pageshow{persisted}` after 40 min: **"40m ago"**.
+- Hide/show: same anchor row, ±1 px.
+- Hide then reload: same chat, same anchor row, **0 px**, not at the bottom.
+
+Source guards are in `test/reading-position.js`.
+
+## Shared install helper (17-Oct-2026) — 0.2.114
+Owner (via Conductor): every app gets the shared install helper, which shows an Install pill or the steps for the browser. `mobile/public/install-helper.js` is a copy of the master in development/pwa-install-helper; re-copy it when that one changes.
+- It is loaded at the end of index.html with `data-bottom=84`, so the pill sits above the composer. It is in the sw.js shell cache.
+- The old `#install` banner and its `beforeinstallprompt` handler are removed, so there is one owner of the prompt.
+- Settings > About > "Install on this device" calls `KKInstall.open()`.
+
+**Proof** (pwacheck.mjs plus the sign-in cookie, headless, on the build before release): `installabilityErrors []`, the manifest is correct, the SW controls the page, `KKInstall.state()` = android-chrome, Android pill 1. On the iPhone UA: pill 1, and the guide reads "Tap the Share button … Add to Home Screen".
+
 ## Ctrl/Cmd+Enter sends (17-Oct-2026) — 0.2.113
 Owner: "ctrl enter shud send msg in relaymote browser pc". One capture-phase keydown in app.js (`SEND_BY_BOX`) clicks the box's own send button. It covers: #input → btn-send, #answer-text → answer-send, #new-prompt → btn-create, .qother → q-send. Key repeat is ignored. Enter and Shift+Enter are unchanged (newline).
 **Proof:** Playwright against the live app, with the patched app.js and send buttons replaced by counters. In each of the 4 boxes, Enter and Shift+Enter gave `a

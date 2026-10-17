@@ -7,7 +7,7 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 // sent the moment it is back) instead of a dead page. The page and its own scripts are kept from the
 // last good load; the network always wins when it answers, and nothing under /api/ is ever cached.
 const SHELL = 'relaymote-shell-v1';
-const SHELL_FILES = /^\/(app\.js|style\.css|manifest\.webmanifest|(icon|badge)(-\d+)?\.(svg|png))$/;
+const SHELL_FILES = /^\/(app\.js|install-helper\.js|style\.css|manifest\.webmanifest|(icon|badge)(-\d+)?\.(svg|png))$/;
 // Ashwar 14-Oct: "In the share menu, I want to receive files from relay mode, and preferably attach in the session
 // I was last using." Android's share sheet POSTs the files here (manifest share_target). They are kept in Cache
 // Storage under /__share/<id>/ and the app opens with ?share=<id>: it takes them, attaches them in the session

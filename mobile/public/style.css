@@ -510,24 +510,6 @@ pre.code{
 .cmd b{color:var(--accent); font-weight:600}
 .cmd span{display:block; font-size:11.5px; color:var(--dim); margin-top:2px}
 
-.install{
-  position:fixed; left:10px; right:10px; bottom:calc(var(--safe-b) + 10px); z-index:55;
-  display:flex; align-items:center; gap:10px;
-  background:var(--panel-2); border:1px solid var(--line); border-radius:12px;
-  padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,.45);
-}
-.install > div{flex:1; min-width:0}
-.install b{display:block; font-size:14px}
-.install span{display:block; font-size:11.5px; color:var(--dim); margin-top:2px}
-.install #btn-install{
-  flex:none; padding:9px 16px; border-radius:9px; border:none;
-  background:var(--accent-ground); color:var(--on-accent); font-size:14px; cursor:pointer;
-}
-.install #btn-install-x{
-  flex:none; width:44px; height:44px; border:none; background:none;   
-  color:var(--dim); font-size:15px; cursor:pointer;
-}
-
 .suggbox{flex:none; padding:6px 10px 0; display:flex; gap:6px; align-items:stretch}
 .sugg{
   display:block; flex:1 1 auto; min-width:0; text-align:left; padding:9px 12px; border-radius:12px;

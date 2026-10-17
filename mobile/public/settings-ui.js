@@ -486,7 +486,7 @@
       '<p>Your Claude Code sessions, in your pocket.</p></div></div>' +
       '<p class="set-small">Data folder: <code>' + esc(S.__dataDir || '') + '</code></p>' +
       '<p class="set-small">Relaymote is an independent open-source project and is not affiliated with Anthropic. It drives the Claude Desktop app you are already signed in to; it never sees your password.</p>' +
-      '<p><button class="ghost" id="set-welcome">Show the welcome tour</button></p>';
+      '<p><button class="ghost" id="set-welcome">Show the welcome tour</button> <button class="ghost" id="set-install">Install on this device</button></p>';
   }
 
   function renderWelcome() {
@@ -592,6 +592,7 @@
         desk = null; render(); loadDesk();
       });
     };
+    if ((x = $('set-install'))) x.onclick = function () { if (window.KKInstall) window.KKInstall.open(); else note('Use the browser menu: Add to Home screen / Install app'); };
     if ((x = $('set-welcome'))) x.onclick = function () { section = 'welcome'; render(); };
     if ((x = $('set-backup-test'))) x.onclick = function () {
       var btn = this; btn.disabled = true;

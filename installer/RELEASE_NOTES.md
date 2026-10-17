@@ -1,3 +1,7 @@
+## 0.2.113
+
+- On a computer, Ctrl+Enter (Cmd+Enter on a Mac) sends the message. Enter and Shift+Enter still start a new line. It works in the message box, a Board answer, a new session's first message and a question's "Other" answer.
+
 ## 0.2.112
 
 - Settings › Now: values no longer wrap one letter per line on a phone.

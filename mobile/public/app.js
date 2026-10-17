@@ -3399,6 +3399,18 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (visibleSheetId() || $('drawer').classList.contains('open')) navBack();
 });
+// Ctrl+Enter (Cmd+Enter on a Mac) sends from any box that sends; plain and Shift+Enter keep their
+// newline (17-Oct, PC browser). One handler, by the box's own send button, so it can never send twice.
+const SEND_BY_BOX = { 'input': 'btn-send', 'answer-text': 'answer-send', 'new-prompt': 'btn-create' };
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.isComposing) return;
+  const t = e.target;
+  const btn = t && (SEND_BY_BOX[t.id] ? $(SEND_BY_BOX[t.id]) : t.classList && t.classList.contains('qother') ? $('q-send') : null);
+  if (!btn) return;
+  e.preventDefault(); e.stopPropagation();
+  if (e.repeat || btn.disabled) return;
+  btn.click();
+}, true);
 
 $('btn-menu').onclick = () => drawer(true);
 $('btn-close-drawer').onclick = () => navBack();

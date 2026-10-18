@@ -138,8 +138,8 @@ console.log('--- a model label is text only (29-Sep: a box beside "Sonnet 5.5") 
   check(d.sameModel('Sonnet 5.5', picked) && d.sameModel('claude-sonnet-5-5', picked), 'and the row still matches by name and by id (a switch can find it)');
   check(!d.sameModel('Sonnet 5', picked), 'control: Sonnet 5 is not Sonnet 5.5');
   check(d.cleanLabel('Opus\u200b 5.5') === 'Opus 5.5', 'zero-width marks go too');
-  check(/models\.map\(m => \(\{ \.\.\.m, name: cleanLabel\(m\.name\) \}\)\)/.test(H.src('lib/desktop.js')), 'the picker list is cleaned where it is read');
-  check(/j\.models\.map\(desktop\.cleanLabel\)/.test(H.src('mobile/index.js')), 'a list cached before the fix is cleaned on load');
+  check(/models = cleanModelList\(models\)/.test(H.src('lib/desktop.js')) && /name: cleanModelName\(m\.name\)/.test(H.src('lib/desktop.js')) && /let n = cleanLabel\(s\)/.test(H.src('lib/desktop.js')), 'the picker list is cleaned where it is read');
+  check(/desktop\.cleanModelList\(j\.models\)/.test(H.src('mobile/index.js')), 'a list cached before the fix is cleaned on load');
   check(/p\{Co\}/.test(app.slice(app.indexOf('const shortModel'), app.indexOf('const shortModel') + 300)), 'the phone strips them from any label it shows');
   // 29-Sep: labels must stay clean for models that ship later, with no code change.
   const cp = (x) => String.fromCodePoint(x);

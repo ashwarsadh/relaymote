@@ -646,9 +646,13 @@ let modelsVal = null, modelsAt = 0, modelsRefreshing = false;
 let modelIdsVal = {};   // picker label -> model id ("Sonnet 5.5" -> "claude-sonnet-5-5"), for New session
 try {
   const j = JSON.parse(fs.readFileSync(MODELS_FILE, 'utf8'));
-  if (j.ids && typeof j.ids === 'object') modelIdsVal = j.ids;
-  // A list saved before 0.2.39 can carry the picker's badge glyph ("Sonnet 5.5\uE08F").
-  if (Array.isArray(j.models) && j.models.length) { modelsVal = j.models.map(desktop.cleanLabel).filter(Boolean); modelsAt = j.at || 0; }
+  if (j.ids && typeof j.ids === 'object') modelIdsVal = Object.fromEntries(Object.entries(j.ids).map(([k, v]) => [desktop.cleanModelName(k), v]));
+  // A list saved before 0.2.39 can carry the picker's badge glyph ("Sonnet 5.5\uE08F"); one saved by 0.2.114
+  // and earlier, badge words and the Effort radios ("Sonnet 5.5Preset", "Low", "MediumRecommended").
+  if (Array.isArray(j.models) && j.models.length) {
+    modelsVal = desktop.cleanModelList(j.models).map(m => m.name);
+    modelsAt = modelsVal.length === j.models.length ? (j.at || 0) : 0;   // it was polluted: re-read the picker soon
+  }
 } catch {}
 
 function refreshModelsSoon(ttl) {

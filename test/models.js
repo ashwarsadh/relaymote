@@ -112,5 +112,39 @@ t('app: renderTier no longer toggles by family', () => {
   assert.ok(!/toggle\('on', modelFamily\(b\.textContent\) === modelFamily/.test(APP), 'family toggle still present');
 });
 
+// ---------------------------------------------------------------- 18-Oct picker (badges + efforts) --
+// Ashwar 18-Oct 21:47 IST, "model list broken in relay mote": the picker now holds the Effort radios
+// flat beside the models, and puts "Preset" / "Recommended" / "3.5x or more usage" inside the label
+// span as [data-cds=Badge]. 0.2.114 listed "Sonnet 5.5Preset", "Low", "MediumRecommended" as models.
+const POLLUTED = ['Opus 5.5', 'Fable 5.1', 'Sonnet 5.5Preset', 'Haiku 5.5', 'Low', 'MediumRecommended', 'High',
+  'Extra', 'Max', 'Max3.5× or more usage', 'Ultracode', 'Haiku 4.5', 'Sonnet 5', 'Opus 4.8'];
+t('cleanModelList: efforts dropped, badge words stripped, order kept', () => {
+  assert.deepStrictEqual(D.cleanModelList(POLLUTED).map(m => m.name),
+    ['Opus 5.5', 'Fable 5.1', 'Sonnet 5.5', 'Haiku 5.5', 'Haiku 4.5', 'Sonnet 5', 'Opus 4.8']);
+});
+t('cleanModelName: a real name is never cut', () => {
+  for (const n of ['Opus 5.5', 'Fable 5.1', 'Haiku 4.5', 'Sonnet 5', 'Opus 4.8']) assert.strictEqual(D.cleanModelName(n), n);
+  assert.strictEqual(D.cleanModelName('Opus 5.5Recommended'), 'Opus 5.5');
+});
+{
+  const DSRC = fs.readFileSync(path.join(__dirname, '..', 'lib', 'desktop.js'), 'utf8');
+  const GSRC = fs.readFileSync(path.join(__dirname, '..', 'lib', 'gui-worker.js'), 'utf8');
+  const lm = DSRC.slice(DSRC.indexOf('async function listModels'), DSRC.indexOf('async function sendMessage'));
+  t('listModels: effort radios ([data-effort-id]) go to efforts, never models', () => {
+    assert.ok(/hasAttribute\('data-effort-id'\)[\s\S]{0,200}efforts\.push/.test(lm), 'efforts not split out');
+    assert.ok(/return \{ ok: true, models, efforts/.test(lm), 'efforts not returned');
+  });
+  t('listModels, setModel picker and gui-worker label: badges cut before the name is read', () => {
+    assert.ok(/data-cds="Badge"/.test(lm), 'listModels reads badges into the name');
+    const at = DSRC.indexOf('var nameOf=function(e)');
+    assert.ok(at > 0 && /data-cds="Badge"/.test(DSRC.slice(at, at + 400)), 'setModel picker reads badges into the name');
+    assert.ok(/var label=function\(e\)[\s\S]{0,200}data-cds="Badge"/.test(GSRC), 'gui-worker pickRadio reads badges');
+  });
+  t('server: a saved polluted list is cleaned on load and re-read', () => {
+    const IDX = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
+    assert.ok(/desktop\.cleanModelList\(j\.models\)/.test(IDX) && /desktop\.cleanModelName\(k\)/.test(IDX));
+  });
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -1,3 +1,7 @@
+## 0.2.115
+
+- The model list is right again. Claude Desktop's picker now shows the effort choices and labels like "Recommended" or "Preset" in the same menu, and Relaymote had been reading them as models ("Sonnet 5.5Preset", "Low", "MediumRecommended"). The Model list now holds only models, and the Effort choices stay under Effort. A list saved by the old version is cleaned when Relaymote starts.
+
 ## 0.2.114
 
 - An "Install app" pill on phones that have not installed Relaymote yet. On Chrome, Edge and Samsung it opens the real install dialog. On an iPhone, in Firefox, or in an in-app browser it shows the steps for that browser. It hides once installed, or for 14 days after you tap its x. Settings > About > Install on this device opens it any time. This replaces the old banner, which only appeared when Chrome offered a prompt.

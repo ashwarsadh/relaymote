@@ -40,7 +40,9 @@ function resolveModel(model, ids = {}) {
 function savedModelIds() {
   try {
     const j = JSON.parse(fs.readFileSync(path.join(require('../lib/config').STATE, 'models.json'), 'utf8'));
-    return (j && j.ids && typeof j.ids === 'object') ? j.ids : {};
+    if (!(j && j.ids && typeof j.ids === 'object')) return {};
+    // Keys saved by 0.2.114 and earlier can carry the picker's badge words ("Sonnet 5.5Preset").
+    return Object.fromEntries(Object.entries(j.ids).map(([k, v]) => [desktop.cleanModelName(k), v]));
   } catch { return {}; }
 }
 

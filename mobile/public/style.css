@@ -544,6 +544,11 @@ a:visited{color:var(--accent)}
 .filebody .mdbody{font-size:14.5px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere}
 .filebody pre.code{max-height:none; font-size:12.5px}
 .fileimg{max-width:100%; border-radius:10px; display:block}
+.file-actions{flex:none; display:flex; gap:8px; margin-top:10px}
+.file-actions .ghost{padding:9px 10px}
+.pdfpages{display:flex; flex-direction:column; gap:10px; overflow-x:auto}
+.pdfpages canvas{display:block; background:#fff; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.35); flex:none}
+.filebody audio,.filebody video{width:100%; display:block}
 .direntry{
   display:block; width:100%; text-align:left; padding:10px 12px; min-height:44px;
   background:none; border:none; border-bottom:1px solid var(--line);

@@ -189,7 +189,7 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
   '.webmanifest': 'application/manifest+json; charset=utf-8', '.svg': 'image/svg+xml',
-  '.png': 'image/png', '.ico': 'image/x-icon',
+  '.png': 'image/png', '.ico': 'image/x-icon', '.mjs': 'text/javascript; charset=utf-8',
 };
 
 let assetVer = { at: 0, hash: '', key: '', since: 0 };
@@ -1058,8 +1058,16 @@ async function handle(req, res) {
     const roots = isSubuser(identity)
       ? [sess && sess.cwd].filter(Boolean)
       : [...new Set(sessions.index().list.map(x => x.cwd).filter(Boolean))].concat([UPLOADS, path.join(os.homedir(), '.claude')]);
+    const raw = url.searchParams.get('raw') === '1';
     const out = readFile(url.searchParams.get('path'), { roots, cwd: sess && sess.cwd, siblings: !isSubuser(identity),
-                                                          home: isSubuser(identity) ? null : os.homedir() });
+                                                          home: isSubuser(identity) ? null : os.homedir(), resolveOnly: raw });
+    // raw=1: the file's own bytes (a PDF, xlsx or image a reply named), for the viewer, Download and
+    // Share. Same scope and secret checks as the JSON read; HTML and SVG stream sandboxed.
+    if (raw && out.ok && out.kind === 'file') {
+      log('file raw: ' + path.basename(out.path));
+      return sentfiles.stream(req, res, out.path, out.bytes, out.mtimeMs,
+                              { name: path.basename(out.path), download: url.searchParams.get('dl') === '1' });
+    }
     // One line per open, so "a link did not open on the phone" can be answered from evidence.
     log('file ' + (out.ok ? 'ok' : (out.error || 'fail')) + ': ' + path.basename(String(url.searchParams.get('path') || '')));
     return json(res, out.ok ? 200 : 404, out);
@@ -1083,7 +1091,8 @@ async function handle(req, res) {
     if (!sent.has(file)) return json(res, 403, { ok: false, error: 'NOT_SENT', message: 'This session did not send that file.' });
     let st; try { st = await fs.promises.stat(file); } catch { st = null; }
     if (!st || !st.isFile()) return json(res, 404, { ok: false, error: 'GONE', message: 'The file is no longer on the desktop.' });
-    return sentfiles.stream(req, res, file, st.size, st.mtimeMs);
+    return sentfiles.stream(req, res, file, st.size, st.mtimeMs,
+                            { name: path.basename(String(want)), download: url.searchParams.get('dl') === '1' });
   }
 
   if (p === '/api/tts-audio') {

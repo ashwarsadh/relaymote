@@ -1,3 +1,12 @@
+## 0.2.116
+
+- Files a session sends you now open inside Relaymote, with **Download** and **Share** buttons.
+  - A PDF shows its pages right in the app, with a Zoom button.
+  - Images, audio, video and text files open the same way, and so does a file path written in a reply.
+  - Download saves the file under its own name.
+  - Share opens Android's share sheet with the file itself, for WhatsApp, Gmail, Drive and the rest.
+  - Excel, PowerPoint and Word files have no preview on the phone. Download opens them in Sheets, Slides or Docs. If the phone will not share one straight from the app (Chrome limits which file types a web app may share), Relaymote says so; share it from Files after downloading.
+
 ## 0.2.115
 
 - The model list is right again. Claude Desktop's picker now shows the effort choices and labels like "Recommended" or "Preset" in the same menu, and Relaymote had been reading them as models ("Sonnet 5.5Preset", "Low", "MediumRecommended"). The Model list now holds only models, and the Effort choices stay under Effort. A list saved by the old version is cleaned when Relaymote starts.

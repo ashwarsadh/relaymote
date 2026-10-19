@@ -699,9 +699,10 @@ function sentFileHtml(t) {
     if (/^(wav|mp3|ogg|oga|opus|m4a|aac|flac)$/.test(e)) out += `<audio controls preload="metadata" src="${esc(url)}"></audio>`;
     const d = mediaDims.get(url);
     if (/^(mp4|webm|mov)$/.test(e)) out += `<video controls playsinline preload="metadata"${d ? ` style="aspect-ratio:${d.w} / ${d.h}"` : ''} src="${esc(url)}"></video>`;
-    else if (/^(png|jpe?g|gif|webp|svg)$/.test(e)) out += `<a href="${esc(url)}" target="_blank" rel="noopener"><img loading="lazy" alt="${esc(name)}"${d ? ` width="${d.w}" height="${d.h}"` : ''} src="${esc(url)}"></a>`;
-    // A text file opens in Relaymote's own file viewer (a .md one formatted); the href stays as a fallback.
-    const view = /^(md|markdown|txt|log|json|csv|py|js|ts|sh|ps1|yml|yaml|xml|sql)$/.test(e) ? ` data-sent="${esc(url)}" data-p="${esc(f)}"` : '';
+    const view = ` data-sent="${esc(url)}" data-p="${esc(f)}"`;
+    if (/^(png|jpe?g|gif|webp|svg)$/.test(e)) out += `<a href="${esc(url)}"${view} target="_blank" rel="noopener"><img loading="lazy" alt="${esc(name)}"${d ? ` width="${d.w}" height="${d.h}"` : ''} src="${esc(url)}"></a>`;
+    // Every sent file opens in Relaymote's own viewer, with Download and Share (19-Oct: a PDF opened in a
+    // new tab, which an installed app on Android could neither show, save nor share). The href is a fallback.
     out += `<a class="sf-name" href="${esc(url)}"${view} target="_blank" rel="noopener">\ud83d\udcce ${esc(name)}</a></div>`;
   }
   return out + '</div>';
@@ -1997,11 +1998,116 @@ function connectStream(watch) {
   es.onerror = () => { paintConnDot(); };
 }
 
+/* The file viewer's own bytes: a sent file through /api/sent-file, any other through /api/file?raw=1
+   (same scope checks as the JSON read). They feed the PDF viewer, Download and Share. */
+const TEXT_VIEW_RX = /^(md|markdown|txt|log|json|csv|py|js|ts|sh|ps1|yml|yaml|xml|sql)$/;
+const extOf = (p) => ((String(p).match(/\.([a-z0-9]+)$/i) || [])[1] || '').toLowerCase();
+const fileRaw = { url: '', name: '', blob: null, seq: 0 };
+function rawUrlOf(p, sentUrl) {
+  return sentUrl || ('/api/file?raw=1&path=' + encodeURIComponent(p) + (state.open ? '&session=' + encodeURIComponent(state.open) : ''));
+}
+async function fileBlob() {
+  if (fileRaw.blob) return fileRaw.blob;
+  const url = fileRaw.url, r = await fetch(url, { credentials: 'include' });
+  if (!r.ok) { let m = 'HTTP ' + r.status; try { m = (await r.json()).message || m; } catch {} throw new Error(m); }
+  const b = await r.blob();
+  if (fileRaw.url === url) fileRaw.blob = b;
+  return b;
+}
+$('file-dl').onclick = () => {
+  if (!fileRaw.url) return;
+  const a = document.createElement('a');
+  a.href = fileRaw.url + '&dl=1'; a.download = fileRaw.name; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Downloading ' + fileRaw.name);
+};
+$('file-share').onclick = async () => {
+  if (!fileRaw.url) return;
+  const had = !!fileRaw.blob;
+  let f;
+  try { const b = await fileBlob(); f = new File([b], fileRaw.name, { type: b.type || 'application/octet-stream' }); }
+  catch (e) { toast('Could not fetch the file: ' + e.message, true); return; }
+  if (!navigator.canShare || !navigator.canShare({ files: [f] })) {
+    toast('This phone will not share a .' + (extOf(fileRaw.name) || 'file') + ' from an app. Download it, then share it from Files.', true);
+    return;
+  }
+  try { await navigator.share({ files: [f], title: fileRaw.name }); }
+  catch (e) {
+    if (e && e.name === 'AbortError') return;
+    // The share sheet needs a fresh tap; a slow fetch can outlive it. The bytes are held now.
+    toast(had ? 'Share failed: ' + ((e && e.message) || e) : 'Ready \u2014 tap Share again', had);
+  }
+};
+
+let pdfjsP = null;
+function pdfjs() {
+  return pdfjsP || (pdfjsP = import('/vendor/pdfjs/pdf.min.mjs').then(m => {
+    m.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
+    return m;
+  }).catch(e => { pdfjsP = null; throw e; }));
+}
+let pdfZoom = 1;
+async function renderPdf(seq) {
+  const body = $('file-body');
+  const [lib, blob] = await Promise.all([pdfjs(), fileBlob()]);
+  if (seq !== fileRaw.seq) return;
+  // isEvalSupported:false keeps pdf.js from compiling font code (CVE-2024-4367 class) whatever the file holds.
+  const doc = await lib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false }).promise;
+  if (seq !== fileRaw.seq) { doc.destroy(); return; }
+  const draw = async () => {
+    body.innerHTML = `<div class="empty">${doc.numPages} page${doc.numPages === 1 ? '' : 's'}</div><div class="pdfpages"></div>`;
+    const wrap = body.querySelector('.pdfpages');
+    const W = Math.max(240, (body.clientWidth || 360) - 2) * pdfZoom;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const io = new IntersectionObserver((es) => es.forEach(async (en) => {
+      if (!en.isIntersecting) return;
+      const c = en.target; io.unobserve(c);
+      const page = await doc.getPage(+c.dataset.n);
+      const vp = page.getViewport({ scale: (W / page.getViewport({ scale: 1 }).width) * dpr });
+      c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise.catch(() => {});
+    }), { root: body, rootMargin: '600px 0px' });
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      if (seq !== fileRaw.seq) return;
+      const v = page.getViewport({ scale: 1 });
+      const c = document.createElement('canvas');
+      c.dataset.n = n;
+      c.style.width = W + 'px'; c.style.height = Math.round(W * v.height / v.width) + 'px';
+      wrap.appendChild(c); io.observe(c);
+    }
+  };
+  await draw();
+  const z = $('file-zoom');
+  z.classList.remove('hidden');
+  z.textContent = pdfZoom === 1 ? 'Zoom' : 'Fit';
+  z.onclick = () => { pdfZoom = pdfZoom === 1 ? 2 : 1; z.textContent = pdfZoom === 1 ? 'Zoom' : 'Fit'; draw(); };
+}
+
 async function openFile(p, sentUrl) {
   showSheet($('fileview'));
-  $('file-name').textContent = p.split(/[\\/]/).pop() || p;
+  const name = p.split(/[\\/]/).pop() || p, e = extOf(name), seq = ++fileRaw.seq;
+  $('file-name').textContent = name;
   $('file-path').textContent = p;
   $('file-body').innerHTML = '<div class="empty">Opening\u2026</div>';
+  Object.assign(fileRaw, { url: rawUrlOf(p, sentUrl), name, blob: null });
+  $('file-actions').classList.toggle('hidden', !e);   // a folder has no bytes to save
+  $('file-zoom').classList.add('hidden');
+  if (e === 'pdf') {
+    try { await renderPdf(seq); }
+    catch (err) { if (seq === fileRaw.seq) $('file-body').innerHTML = `<div class="empty">${esc(err.message || String(err))}</div>`; }
+    return;
+  }
+  if (sentUrl && /^(png|jpe?g|gif|webp|svg)$/.test(e)) {
+    $('file-body').innerHTML = `<img class="fileimg" src="${esc(sentUrl)}" alt="${esc(name)}">`;
+    return;
+  }
+  if (sentUrl && /^(wav|mp3|ogg|oga|opus|m4a|aac|flac)$/.test(e)) { $('file-body').innerHTML = `<audio controls src="${esc(sentUrl)}"></audio>`; return; }
+  if (sentUrl && /^(mp4|webm|mov)$/.test(e)) { $('file-body').innerHTML = `<video controls playsinline src="${esc(sentUrl)}"></video>`; return; }
+  if (sentUrl && !TEXT_VIEW_RX.test(e)) {
+    $('file-body').innerHTML = `<div class="empty">No preview for .${esc(e || 'this file')} on the phone. Download opens it in the app that handles it (Sheets, Slides, Docs\u2026); Share sends it on.</div>`;
+    return;
+  }
   let d;
   try {
     if (sentUrl) {
@@ -2024,6 +2130,7 @@ async function openFile(p, sentUrl) {
       ? `<img class="fileimg" src="${src}" alt="${esc(d.path)}">`
       : '<div class="empty">That image could not be displayed.</div>';
   } else if (d.kind === 'dir') {
+    $('file-actions').classList.add('hidden');
     $('file-body').innerHTML = (d.entries || []).map(e =>
       `<button class="direntry" data-p="${esc((d.path + '/' + e.name))}">` +
       `${e.dir ? '\u{1F4C1}' : '\u{1F4C4}'} ${esc(e.name)}</button>`).join('') ||
@@ -2035,7 +2142,10 @@ async function openFile(p, sentUrl) {
       (isMd ? `<div class="mdbody">${md(d.text, true)}</div>`
             : `<pre class="code">${esc(d.text)}</pre>`);
   } else {
-    $('file-body').innerHTML = `<div class="empty">${esc(d.message || d.error || 'Cannot show this file.')}</div>`;
+    if (d.error !== 'UNSUPPORTED') $('file-actions').classList.add('hidden');   // nothing to save
+    $('file-body').innerHTML = d.error === 'UNSUPPORTED'
+      ? `<div class="empty">No preview for .${esc(e || 'this file')} on the phone. Download opens it in the app that handles it (Sheets, Slides, Docs…); Share sends it on.</div>`
+      : `<div class="empty">${esc(d.message || d.error || 'Cannot show this file.')}</div>`;
   }
 }
 

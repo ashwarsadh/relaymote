@@ -17,7 +17,12 @@ const TYPES = {
   '.mov': 'video/quicktime', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
   '.webp': 'image/webp', '.svg': 'image/svg+xml', '.pdf': 'application/pdf', '.html': 'text/html; charset=utf-8',
   '.htm': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.markdown': 'text/plain; charset=utf-8',
-  '.json': 'application/json; charset=utf-8', '.csv': 'text/plain; charset=utf-8', '.log': 'text/plain; charset=utf-8',
+  '.json': 'application/json; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.log': 'text/plain; charset=utf-8',
+  // Office files: the right type is what lets Android hand a download to Sheets, Slides or Docs.
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xls': 'application/vnd.ms-excel',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation', '.ppt': 'application/vnd.ms-powerpoint',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.doc': 'application/msword',
+  '.zip': 'application/zip',
 };
 const typeOf = (p) => TYPES[path.extname(p).toLowerCase()] || 'application/octet-stream';
 
@@ -58,17 +63,26 @@ async function sentFiles(transcript) {
   return c.files;
 }
 
+// Content-Disposition for a file: "inline" to view, "attachment" (opts.download) to save, under the
+// file's own name (norm() lowercases the path, so the caller passes the name as it was written).
+function disposition(name, download) {
+  const n = String(name || 'file');
+  const ascii = n.replace(/[^\w.\- ]/g, '_');
+  return (download ? 'attachment' : 'inline') + '; filename="' + ascii + '"' +
+         (ascii !== n ? "; filename*=UTF-8''" + encodeURIComponent(n) : '');
+}
+
 // Answer GET for one file, honouring a single Range. Returns nothing; writes the response.
-function stream(req, res, file, size, mtimeMs) {
+function stream(req, res, file, size, mtimeMs, opts = {}) {
   const type = typeOf(file);
   // g1695: a file can be rewritten under the same name; the browser must ask each time and get the new bytes.
   const etag = mtimeMs ? '"' + size.toString(36) + '-' + Math.floor(mtimeMs).toString(36) + '"' : null;
-  if (etag && req.headers['if-none-match'] === etag && !req.headers.range) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'private, no-cache' }); return res.end(); }
+  if (etag && !opts.download && req.headers['if-none-match'] === etag && !req.headers.range) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'private, no-cache' }); return res.end(); }
   const headers = {
     'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, no-cache',
     ...(etag ? { ETag: etag } : {}),
     'X-Content-Type-Options': 'nosniff',
-    'Content-Disposition': 'inline; filename="' + path.basename(file).replace(/[^\w.\- ]/g, '_') + '"',
+    'Content-Disposition': disposition(opts.name || path.basename(file), opts.download),
   };
   // A sent HTML page runs sandboxed: its scripts get an opaque origin, so they cannot read the
   // auth cookie or call the API as the user. SVG gets no scripts at all.
@@ -94,4 +108,4 @@ function stream(req, res, file, size, mtimeMs) {
   rs.pipe(res);
 }
 
-module.exports = { sentFiles, stream, typeOf, norm };
+module.exports = { sentFiles, stream, typeOf, norm, disposition };

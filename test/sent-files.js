@@ -72,7 +72,7 @@ const ok = (c, name) => { assert.ok(c, name); n++; console.log('ok ' + name); };
   ok(sf.typeOf('notes.markdown') === 'text/plain; charset=utf-8', '.markdown is served as text');
   // g1695: the same name sent again with new content showed the old picture on the phone.
   ok(/'&path=' \+ encodeURIComponent\(f\) \+ \(t\.id \? '&v=' \+ encodeURIComponent\(t\.id\) : ''\)/.test(app), 'each send has its own URL (its tool id), so a re-sent name never reuses the old image or its size');
-  ok(/'Cache-Control': 'private, no-cache'/.test(sfSrc) && /ETag: etag/.test(sfSrc) && /sentfiles\.stream\(req, res, file, st\.size, st\.mtimeMs\)/.test(idx), 'a sent file is revalidated by size+mtime, so a rewritten file is fetched fresh');
+  ok(/'Cache-Control': 'private, no-cache'/.test(sfSrc) && /ETag: etag/.test(sfSrc) && /sentfiles\.stream\(req, res, file, st\.size, st\.mtimeMs,/.test(idx), 'a sent file is revalidated by size+mtime, so a rewritten file is fetched fresh');
   {
     const img = path.join(os.tmpdir(), 'rm-etag-' + process.pid + '.png'); fs.writeFileSync(img, 'aaaa');
     const srv = http.createServer((req, res) => { const st = fs.statSync(img); sf.stream(req, res, img, st.size, st.mtimeMs); });
@@ -83,6 +83,28 @@ const ok = (c, name) => { assert.ok(c, name); n++; console.log('ok ' + name); };
     const b = await get({ 'if-none-match': a.e });
     srv.close(); fs.unlinkSync(img);
     ok(a.s === 200 && a2.s === 304 && b.s === 200 && b.d === 'bbbbbbbb' && b.e !== a.e, 'unchanged file answers 304; the rewritten file answers 200 with the new bytes', [a.s, a2.s, b.s, b.d]);
+  }
+  // 19-Oct (Ashwar): a PDF a session sent could be neither opened, downloaded nor shared from the
+  // installed app; it was a bare new-tab link. Now every file opens in the viewer with Download + Share.
+  {
+    ok(sf.disposition('Nature_Report.pdf', true) === 'attachment; filename="Nature_Report.pdf"', 'dl=1 is an attachment under the file\'s own (cased) name');
+    ok(/^inline; filename="a_b.pdf"; filename\*=UTF-8''a%E2%80%94b\.pdf$/.test(sf.disposition('a—b.pdf', false)), 'a non-ASCII name keeps its real name in filename*');
+    ok(/\.xlsx'/.test(fs.readFileSync(path.join(root, 'sentfiles.js'), 'utf8')) && /spreadsheetml/.test(sf.typeOf('x.xlsx')) && /presentationml/.test(sf.typeOf('x.pptx')),
+       'Office files carry their real type, so Android hands a download to Sheets or Slides');
+    const files = require(path.join(root, 'files.js'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-raw-')); const pdf = path.join(dir, 'r.pdf'); fs.writeFileSync(pdf, '%PDF-1.4');
+    const r1 = files.readFile(pdf, { roots: [dir], resolveOnly: true });
+    const r2 = files.readFile(path.join(os.tmpdir(), 'elsewhere.pdf'), { roots: [dir], resolveOnly: true });
+    const r3 = files.readFile(path.join(dir, 'credentials.json'), { roots: [dir], resolveOnly: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+    ok(r1.ok && r1.kind === 'file' && r1.bytes === 8, 'raw=1 resolves a file in scope');
+    ok(!r2.ok && !r3.ok, 'raw=1 keeps the scope and secret-file checks');
+    ok(/raw && out\.ok && out\.kind === 'file'/.test(idx) && /download: url\.searchParams\.get\('dl'\) === '1'/.test(idx), '/api/file?raw=1 and dl=1 are wired');
+    ok(!/data-sent="\$\{esc\(url\)\}" data-p="\$\{esc\(f\)\}"` : ''/.test(app) && /const view = ` data-sent=/.test(app), 'EVERY sent file (pdf, xlsx, image) opens in the viewer, not a raw tab');
+    ok(/import\('\/vendor\/pdfjs\/pdf\.min\.mjs'\)/.test(app) && /isEvalSupported: false/.test(app), 'PDFs render in-app with pdf.js, font eval off');
+    ok(fs.existsSync(path.join(root, 'public', 'vendor', 'pdfjs', 'pdf.min.mjs')) && fs.existsSync(path.join(root, 'public', 'vendor', 'pdfjs', 'pdf.worker.min.mjs')), 'pdf.js is vendored (no CDN behind Access)');
+    ok(/navigator\.canShare\(\{ files: \[f\] \}\)/.test(app) && /navigator\.share\(\{ files: \[f\]/.test(app) && /'&dl=1'/.test(app), 'Share sends the file itself through the share sheet; Download saves it');
+    ok(/'\.mjs': 'text\/javascript/.test(idx), '.mjs is served as JavaScript (module import)');
   }
   console.log(`\n${n}/${n} passed`);
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

@@ -5,7 +5,7 @@ const ROOT = path.join(__dirname, '..');
 const bad = [];
 (function walk(d) {
   for (const n of fs.readdirSync(d, { withFileTypes: true })) {
-    if (n.name === 'node_modules' || n.name.startsWith('.git') || n.name === 'dist' || n.name === 'runtime') continue;
+    if (n.name === 'node_modules' || n.name.startsWith('.git') || n.name === 'dist' || n.name === 'runtime' || n.name === 'vendor') continue;   // vendor: third-party minified builds (pdf.js)
     const p = path.join(d, n.name);
     if (n.isDirectory()) walk(p);
     else if (/\.(js|mjs|cjs|html|css|json|md|ps1|sh|iss|yml)$/.test(n.name)) {

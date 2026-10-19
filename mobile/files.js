@@ -77,7 +77,7 @@ function siblingMatches(bare, roots) {
 // Never shown on a phone, whatever folder it sits in: a sign-in or key file.
 const SECRET_RX = /(^|[._-])(credentials?|secrets?|tokens?)([._-]|$)|^\.env(\..*)?$|\.(pem|key|p12|pfx)$|^id_(rsa|ed25519|ecdsa)/i;
 
-function readFile(ref, { roots = [], cwd = null, siblings = false, home = null } = {}) {
+function readFile(ref, { roots = [], cwd = null, siblings = false, home = null, resolveOnly = false } = {}) {
   const raw = String(ref || '').trim().replace(/^['"`]|['"`]$/g, '');
   if (!raw) return { ok: false, error: 'NO_PATH' };
 
@@ -120,6 +120,8 @@ function readFile(ref, { roots = [], cwd = null, siblings = false, home = null }
   try { st = fs.statSync(target); }
   catch { return { ok: false, error: 'NOT_FOUND', path: target,
                    message: 'No such file. It may not have been written yet.' }; }
+  // resolveOnly: the caller streams the bytes itself (/api/file?raw=1); every check above still applied.
+  if (resolveOnly && st.isFile()) return { ok: true, kind: 'file', path: target, bytes: st.size, mtimeMs: st.mtimeMs };
   if (st.isDirectory()) {
     let entries = [];
     try {

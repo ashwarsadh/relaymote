@@ -100,13 +100,37 @@ self.addEventListener('push', (event) => {
     badge: '/badge-96.png',
     tag: d.tag || 'relaymote',
     renotify: d.renotify !== false,   // false = replace the burst's notification without buzzing again (g770)
-    data: { url: d.url || '/', id: d.id || null },
+    // 21-Oct: an approval (a PC dialog waiting for him) stays until he answers, with his Allow / Deny on it.
+    requireInteraction: !!d.requireInteraction,
+    actions: Array.isArray(d.actions) ? d.actions.slice(0, 2).map(a => ({ action: a.action, title: a.title })) : [],
+    data: { url: d.url || '/', id: d.id || null, kind: d.kind || null, title: d.title || '',
+            answers: Array.isArray(d.actions) ? Object.fromEntries(d.actions.map(a => [a.action, a.raw || a.title])) : {} },
   }));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
+  // 21-Oct: his tap on Allow / Deny answers the dialog on the PC (the exact button the PC showed). Nothing is
+  // answered without this tap; a failure says so and opens the session.
+  if ((event.action === 'allow' || event.action === 'deny') && data.kind === 'approval' && data.id) {
+    event.waitUntil((async () => {
+      let out = null;
+      try {
+        const r = await fetch('/api/permission/answer', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: data.id, kind: event.action, raw: (data.answers || {})[event.action] || '', wait: true, from: 'notification' }) });
+        out = await r.json().catch(() => ({ ok: false, error: 'HTTP ' + r.status }));
+      } catch (e) { out = { ok: false, error: 'the PC could not be reached' }; }
+      const done = out && out.ok;
+      await self.registration.showNotification(done ? (event.action === 'allow' ? 'Allowed' : 'Denied') + ' on the PC' : 'Not answered — open Relaymote', {
+        body: done ? String(data.title || '').replace(/^Approval needed · /, '') + ': ' + (out.chose || event.action)
+                   : String((out && (out.message || out.error)) || 'unknown error') + '. Tap to open the session.',
+        icon: '/icon-192.png', badge: '/badge-96.png', tag: 'approval-result-' + data.id,
+        data: { url: '/?s=' + encodeURIComponent(data.id), id: data.id },
+      });
+    })());
+    return;
+  }
   const url = data.url || '/';
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

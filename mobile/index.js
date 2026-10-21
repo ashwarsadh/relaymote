@@ -31,7 +31,7 @@ const pair = require('../lib/pair');
 const accountScope = require('../lib/account-scope');
 const { readUsage } = require('./usage');
 const board = require('./board');
-const { readPermission, answerPermission } = require('./permission');
+const { readPermission, answerPermission, peekPermission, approvalRisk } = require('./permission');
 const { pressDialogButton } = require('./dialog');
 const accounts = require('./accounts');
 const subusers = require('./subusers');
@@ -454,6 +454,31 @@ function logAlert(label, r) {
   try { pushHealth.noteDropped(); } catch (e) { log('push-health: ' + e.message); }
 }
 
+/** 21-Oct (Ashwar: "I want you to allow or show allow button on relaymote"): when the awaiting session is held by an
+ *  approval on screen (a computer-use "Allow Claude to use X?" card, or this session's own Allow/Deny prompt), the
+ *  push says WHAT is asked and carries his Allow / Deny. Read only, no navigation; only his tap answers. */
+async function approvalEvent(s, evt) {
+  let pk;
+  try { pk = await ui(() => peekPermission()); } catch (e) { log('approval peek failed: ' + e.message); return; }
+  if (!pk || !pk.ok || !pk.present || !(pk.card || pk.here === s.id)) return;
+  const ask = String(pk.request || '').replace(/\s+/g, ' ').trim();
+  const allow = (pk.options || []).filter(o => o.kind === 'allow');
+  const deny = (pk.options || []).find(o => o.kind === 'deny');
+  const risk = approvalRisk(ask + ' ' + (pk.options || []).map(o => o.label).join(' '));
+  // A one-tap Allow only for the narrowest allow choice (Desktop lists it first); never for a risky ask.
+  const actions = [];
+  if (!risk && allow[0]) actions.push({ action: 'allow', title: allow[0].label.slice(0, 30), raw: allow[0].raw || allow[0].label });
+  if (deny) actions.push({ action: 'deny', title: deny.label.slice(0, 30), raw: deny.raw || deny.label });
+  Object.assign(evt, {
+    kind: 'approval',
+    title: 'Approval needed · ' + String(s.title || s.id).slice(0, 60),
+    body: ask.slice(0, 260) + (pk.card ? ' · it is declined by itself in about 5 minutes' : '')
+      + (risk ? ' · "' + risk + '": open Relaymote to read it all and answer' : ''),
+    tag: 'approval-' + s.id, renotify: true, requireInteraction: true, actions, risk: risk || null,
+  });
+  log('approval: "' + String(s.title || s.id).slice(0, 48) + '" asks "' + ask.slice(0, 90) + '"' + (risk ? ' [risky: ' + risk + ', no one-tap Allow]' : ''));
+}
+
 async function notifyAttention(all) {
   const flagged = all.map(s => [s, attentionState(s)]).filter(([, st]) => st);
   const ids = new Set(flagged.map(([s]) => s.id));
@@ -487,6 +512,7 @@ async function notifyAttention(all) {
       tag: 'sess-' + s.id,
       url: '/?s=' + encodeURIComponent(s.id),
     };
+    if (st === 'awaiting') await approvalEvent(s, evt);
     let aud = null;
     try { require('./principal-touch').refresh(board.CONDUCTOR_DIR, (id) => sessions.transcriptPath(sessions.get(id))); aud = alertAudience(s); }
     catch (e) { log('notify: audience failed, sending to every phone: ' + e.message); }
@@ -1985,6 +2011,13 @@ async function handle(req, res) {
                        (out) => ({ key: body.key, label: body.label, closed: !!(out && (out.closed || out.alreadyClosed)) }));
     }
     if (p === '/api/permission/answer') {
+      log('approval answer: ' + String(body.kind || '') + ' "' + String(body.raw || '').slice(0, 40) + '" for ' + String(body.id || '') + ' from ' + (body.from || 'app'));
+      // The notification's own buttons cannot hold the SSE stream, so they ask for the result in the reply.
+      if (body.wait) {
+        const out = await ui(() => answerPermission(body.id, body.kind, body.raw)).catch(e => ({ ok: false, error: e.message }));
+        log('approval answer ' + (out && out.ok ? 'done: ' + out.chose : 'failed: ' + ((out && (out.error || out.message)) || '?')));
+        return json(res, out && out.ok ? 200 : 409, out || { ok: false });
+      }
       return uiJobWith(res, 'permission-answer',
                        () => ui(() => answerPermission(body.id, body.kind, body.raw)),
                        { id: body.id, kind: body.kind });

@@ -157,4 +157,31 @@ async function answerPermission(sessionId, kind, raw) {
   } finally { conn.close(); }
 }
 
-module.exports = { readPermission, answerPermission };
+// 21-Oct-2026 (Ashwar: "Using relaymote u shud approve such requests like creative cloud use etc. I am not in my pc to
+// allow."): a computer-use "Allow Claude to use <app>?" card (class epitaxy-approval-card) is drawn in whatever chat is
+// on screen and Desktop answers it "user_denied" by itself after ~290 s (measured twice, 21-Oct). The phone was only
+// told "Needs your input". peekPermission reads what is on screen WITHOUT navigating, so the push can carry the ask
+// and his Allow / Deny. Nothing here ever answers on its own; answerPermission runs only from his tap.
+async function peekPermission() {
+  if (!(await desktop.cdpAvailable())) return { ok: false, error: 'CDP_UNAVAILABLE' };
+  const conn = await desktop.connect(await desktop.wsUrl());
+  try {
+    const CID = await desktop.pickChat(conn);
+    const st = JSON.parse(await conn.evaluate(desktop.rEval(CID, READ_JS)) || '{}');
+    const where = JSON.parse(await conn.evaluate(desktop.rEval(CID,
+      `JSON.stringify({here: location.href.split('/').pop(), card: !!document.querySelector('.epitaxy-approval-card')})`)) || '{}');
+    return { ok: true, ...st, here: where.here || '', card: !!where.card };
+  } catch (e) {
+    return { ok: false, error: 'EXCEPTION', message: e.message };
+  } finally { conn.close(); }
+}
+
+// Ashwar's standing rule: credentials, money, deletion and security/system settings are always his own tap with
+// the whole ask in front of him. Such an ask gets no Allow button on the notification; he opens Relaymote to answer.
+const RISKY = /\b(passwords?|credentials?|api[ -]?keys?|tokens?|secrets?|otp|2fa|login|sign[ -]?in|pay(ment)?s?|bank|upi|card|transfer|wallet|invoice payment|delete|deleting|remove|erase|wipe|format|uninstall|rm -rf|drop table|registry|regedit|firewall|defender|antivirus|security|uac|administrator|admin rights|group policy|bitlocker|system settings?|control panel)\b/i;
+function approvalRisk(text) {
+  const m = RISKY.exec(String(text || ''));
+  return m ? m[0].toLowerCase() : '';
+}
+
+module.exports = { readPermission, answerPermission, peekPermission, approvalRisk };

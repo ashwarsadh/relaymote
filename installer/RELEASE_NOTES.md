@@ -1,3 +1,10 @@
+## 0.2.123
+
+- **Approve PC requests from the phone.** When a session on the PC asks for approval, the notification now says "Approval needed" with the request itself (for example "Allow Claude to use Adobe Creative Cloud?") and has **Allow** and **Deny** buttons. Your tap answers it on the PC, and a second notification confirms it.
+  - The computer-use "Allow Claude to use an app" card says no by itself after about 5 minutes, and the notification says so.
+  - Nothing is ever approved without your tap.
+  - A request that mentions passwords, keys, payments, deleting, or security and system settings has no one-tap Allow. Open Relaymote to read it in full and answer there.
+
 ## 0.2.122
 
 - On a phone set to someone else (Settings › This phone is, for example Sagar), a share now goes to that person's Conductor, not to whatever session was last open there. Your own phone still uses the session you were last in.

@@ -67,8 +67,12 @@ const { check: chk, src } = H;
     chk(/rec\.attempt < 3/.test(a), 'a failed upload is retried automatically');
     chk(/tap to retry/.test(a), 'a permanently failed upload stays on screen, tappable');
     chk(/failedUps\.length/.test(a), 'send() refuses while a failed upload is attached');
-    chk(a.includes("if (m === 'signin-required' || !(e && e.conn)) throw e;") && a.includes("throw connErr(e && e.name === 'AbortError' ? 'timeout' : 'net')"),
+    chk(a.includes("if (m === 'signin-required' || !(e && e.conn)) throw e;") && a.includes("e && e.name === 'AbortError' ? 'timeout' : 'net')"),
         'a timed-out read is retried on a fresh connection (g1588: e.conn marks every cannot-reach-the-PC failure)');
+    chk(a.includes("!(await phoneHasInternet()) ? 'nonet'") && /nonet: 'Your phone can\\'t reach the internet'/.test(a),
+        'a phone that reaches no website at all is told so, not "your PC can\'t be reached" (21-Oct, Tailscale + Private DNS)');
+    chk(a.includes('await leftoverShare()') && /function leftoverShare\(\)/.test(a),
+        'a share saved while the PC could not be reached is attached on the next open (21-Oct, Sagar\'s 4 photos)');
   }
 
   console.log('\n--- a message is sent whole or not at all ---');

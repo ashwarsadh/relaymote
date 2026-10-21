@@ -86,7 +86,7 @@ function load({ place = null, sessions = [], open = null, sheet = null, drawerOp
   // Wiring
   check(/document\.addEventListener\('visibilitychange', \(\) => \{ if \(document\.visibilityState === 'hidden'\) savePlace\(\); \}\);\s*window\.addEventListener\('pagehide', savePlace\);/.test(app), 'the place is saved when the app is hidden or closed');
   check(/state\.open = id;\s*try \{ localStorage\.setItem\(PLACE_KEY, JSON\.stringify\(\{ kind: 'chat', id, at: Date\.now\(\) \}\)\); \} catch \{\}/.test(app), 'opening a session records it');
-  check(/const userMoved = navTouched !== bootTouched \|\| !!visibleSheetId\(\) \|\| !!state\.open;\s*if \(SHARE_ID\) receiveShare\([^\n]*\n\s*else if \(userMoved\) \{[^}]*\}\s*else if \(want\) openChat\(want\);\s*else firstScreen\(bootTouched\)/.test(app), 'boot: a share first, then a ?s= link, else firstScreen, only if nothing moved');
+  check(/const userMoved = navTouched !== bootTouched \|\| !!visibleSheetId\(\) \|\| !!state\.open;\s*const shareId = SHARE_ID \|\| \(!userMoved && !want \? await leftoverShare\(\)[^\n]*\n\s*if \(shareId\) receiveShare\(shareId,[^\n]*\n\s*else if \(userMoved\) \{[^}]*\}\s*else if \(want\) openChat\(want\);\s*else firstScreen\(bootTouched\)/.test(app), 'boot: a share first, then a ?s= link, else firstScreen, only if nothing moved');
   check(!/boardWaiting/.test(app) && !/boardWaiting/.test(P('board-ui.js')) && !/relaymote\.lastChat/.test(app), 'the Board-first rule and its old key are gone');
 
   // The connection dot (no session open): green when the stream is up and Desktop answers.

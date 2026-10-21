@@ -58,6 +58,32 @@ for (const t of ['image/*', 'application/pdf', 'application/vnd.openxmlformats-o
   check(/await openChat\(t\.id\)/.test(rs) && /uploadFiles\(files\)/.test(rs) && !/\bsend\(/.test(rs), 'a share opens the last session and attaches, never sends');
   check(/c\.delete\('\/__share\/'/.test(rs), 'the kept share is deleted once taken');
 
+  // 5. 21-Oct (Sagar, 4 WhatsApp photos shared twice while his phone could not reach the PC): the ?share=<id> page
+  //    never booted and the next open carried no id. leftoverShare() takes the newest share under a day old on the
+  //    next boot, drops older copies of the same files and anything stale, and keeps a DIFFERENT fresh share for later.
+  const ls = app.slice(app.indexOf('async function leftoverShare'), app.indexOf('function currentPlace'));
+  const now = Date.now(), cache = new Map();
+  const put = (m) => { cache.set('/__share/' + m.id + '/meta', m); for (const f of m.files) cache.set('/__share/' + m.id + '/' + f.i, 'bytes'); };
+  const four = [0, 1, 2, 3].map(i => ({ i, name: 'IMG-WA020' + i + '.jpg', type: 'image/jpeg', size: 1000 + i }));
+  put({ id: 'first', at: now - 135e3, files: four, text: 'code price for these styles' });
+  put({ id: 'again', at: now - 1e3, files: four, text: 'code price for these styles' });
+  put({ id: 'other', at: now - 600e3, files: [{ i: 0, name: 'invoice.pdf', type: 'application/pdf', size: 9 }], text: '' });
+  put({ id: 'stale', at: now - 30 * 3600e3, files: [{ i: 0, name: 'old.jpg', type: 'image/jpeg', size: 5 }], text: '' });
+  const fake = { keys: async () => [...cache.keys()].map(k => ({ url: 'https://h' + k })), match: async (k) => ({ json: async () => cache.get(typeof k === 'string' ? k : new URL(k.url).pathname) }),
+                 delete: async (k) => cache.delete(k) };
+  const lctx = { caches: { open: async () => fake }, URL, Date, JSON };
+  vm.runInNewContext(ls + '\nthis.leftoverShare = leftoverShare;', lctx);
+  const got = await lctx.leftoverShare();
+  await new Promise(r => setTimeout(r, 0));
+  const ids = [...new Set([...cache.keys()].map(k => k.split('/')[2]))].sort();
+  check(got === 'again', 'the newest share under a day old is taken on the next boot', got);
+  check(ids.join() === 'again,other', 'its older copy and the stale share are dropped; a different fresh share is kept', ids);
+  const empty = { keys: async () => [], match: async () => null, delete: async () => true };
+  vm.runInNewContext(ls + '\nthis.f = leftoverShare;', Object.assign(lctx, { caches: { open: async () => empty } }));
+  check(await lctx.f() === '', 'no share kept -> nothing is taken');
+  const boot = app.slice(app.indexOf('const shareId = SHARE_ID'), app.indexOf('watchForUpdates();', app.indexOf('const shareId = SHARE_ID')));
+  check(/!userMoved && !want \? await leftoverShare\(\)/.test(boot), 'a leftover share never overrides his own navigation or a notification target');
+
   console.log(failed ? `\n${failed} FAILED` : '\nshare-target: all ok');
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

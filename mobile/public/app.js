@@ -25,9 +25,12 @@ function reauth(kind) {
 const isNetErr = (e) => !!(e && e.conn) || /Failed to fetch|NetworkError|Load failed|aborted|timed out/i.test(String(e && e.message || e));
 // g1588: "list failed 530", "send failed 502" said nothing he could act on. A failure to REACH the PC is
 // now one of three plain sentences, each saying what to do; e.conn marks it for retries and the banner.
-const CONN_TITLE = { offline: 'Your phone is offline', net: 'Your PC can\'t be reached', 'pc-down': 'Your PC can\'t be reached', timeout: 'Your PC is answering slowly' };
+// 'nonet' (21-Oct, Sagar's Fold5): Tailscale on + Private DNS "dns.adguard.com" left the phone unable to look up ANY
+// name while Wi-Fi, raw IPs and the tailnet worked, so navigator.onLine stayed true and the app blamed the PC.
+const CONN_TITLE = { offline: 'Your phone is offline', nonet: 'Your phone can\'t reach the internet', net: 'Your PC can\'t be reached', 'pc-down': 'Your PC can\'t be reached', timeout: 'Your PC is answering slowly' };
 const CONN_WHY = {
   offline: 'Connect it to the internet. Anything you send waits on this phone and goes by itself.',
+  nonet: 'The PC is not the problem: this phone cannot open any website right now. A VPN (such as Tailscale) or the Private DNS setting is the usual cause; turning the VPN off, or Private DNS to Automatic, fixes it. Anything you send waits on this phone and goes by itself.',
   net: 'It may be off or asleep, or its internet is down. Anything you send waits on this phone and goes by itself.',
   'pc-down': 'It may be off or asleep, or its internet is down, so Relaymote\'s link to it is down. Anything you send waits on this phone and goes by itself.',
   timeout: 'A slow connection, or the PC is busy. It is tried again by itself.',
@@ -36,6 +39,11 @@ function connErr(kind, status) {
   if (kind !== 'timeout' && navigator.onLine === false) kind = 'offline';
   const why = CONN_WHY[kind] + (status ? ' (code ' + status + ')' : '');
   return Object.assign(new Error(CONN_TITLE[kind] + '. ' + why), { kind, why, status: status || null, conn: true });
+}
+/** true when this phone reaches the wider internet (a Google 204, no-cors). Asked only after a call to the PC failed. */
+async function phoneHasInternet() {
+  try { await fetch('https://www.gstatic.com/generate_204', { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(5000) }); return true; }
+  catch { return false; }
 }
 const isPcDownStatus = (n) => n === 530 || (n >= 502 && n <= 504) || (n >= 520 && n <= 527);
 const api = async (path, opts) => {
@@ -85,7 +93,10 @@ const apiOnce = async (path, opts) => {
   // g1875: who holds this phone (Settings › This phone is). The server lists and records sessions for them.
   try { const who = localStorage.getItem('baton.principal'); if (who) o.headers['X-Relaymote-As'] = who; } catch {}
   try { r = await fetch(path, o); }
-  catch (e) { throw connErr(e && e.name === 'AbortError' ? 'timeout' : 'net'); }
+  catch (e) {
+    clearTimeout(timer);
+    throw connErr(navigator.onLine !== false && !(await phoneHasInternet()) ? 'nonet' : e && e.name === 'AbortError' ? 'timeout' : 'net');
+  }
   finally { clearTimeout(timer); }
   if (r.redirected && /cloudflareaccess\.com|\/cdn-cgi\/access\//.test(r.url)) { reauth('access'); throw new Error('signin-required'); }
   if (!r.ok) {
@@ -1659,6 +1670,27 @@ async function receiveShare(id, list) {
     + '” — check it, then tap send');
   for (const f of meta.files || []) c.delete('/__share/' + id + '/' + f.i).catch(() => {});
   c.delete('/__share/' + id + '/meta').catch(() => {});
+}
+/** 21-Oct (Sagar's 4 WhatsApp photos): a share whose ?share=<id> page never booted (PC or phone net down) stayed in
+ *  the cache while the next open from the launcher carried no id, so it was never attached. The newest share under a
+ *  day old is taken on the next boot; older copies of the SAME files (he shared it again) are dropped. */
+async function leftoverShare() {
+  let c; try { c = await caches.open('relaymote-share-v1'); } catch { return ''; }
+  const metas = [];
+  for (const k of await c.keys()) {
+    if (!/\/__share\/[^/]+\/meta$/.test(new URL(k.url).pathname)) continue;
+    try { metas.push(await (await c.match(k)).json()); } catch {}
+  }
+  metas.sort((a, b) => (b.at || 0) - (a.at || 0));
+  const fresh = metas.filter(m => Date.now() - (m.at || 0) < 24 * 3600e3);
+  if (!fresh.length) return '';
+  const sig = m => JSON.stringify([(m.files || []).map(f => [f.name, f.size]), m.text || '', m.url || '']);
+  for (const m of metas.slice(1)) {
+    if (sig(m) !== sig(fresh[0]) && Date.now() - (m.at || 0) < 24 * 3600e3) continue;
+    for (const f of m.files || []) c.delete('/__share/' + m.id + '/' + f.i).catch(() => {});
+    c.delete('/__share/' + m.id + '/meta').catch(() => {});
+  }
+  return fresh[0].id;
 }
 function currentPlace() {
   if (visibleSheetId() === 'view-board') return { kind: 'board' };
@@ -3988,7 +4020,8 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
     const want = new URLSearchParams(location.search).get('s');
     if (want) history.replaceState(history.state, '', location.pathname + location.hash);
     const userMoved = navTouched !== bootTouched || !!visibleSheetId() || !!state.open;
-    if (SHARE_ID) receiveShare(SHARE_ID, state.rawSessions || state.sessions || []).catch(e => toast('Could not attach the share: ' + e.message, true));
+    const shareId = SHARE_ID || (!userMoved && !want ? await leftoverShare().catch(() => '') : '');
+    if (shareId) receiveShare(shareId, state.rawSessions || state.sessions || []).catch(e => toast('Could not attach the share: ' + e.message, true));
     else if (userMoved) { /* their navigation stands */ }
     else if (want) openChat(want);
     else firstScreen(bootTouched).then(r => { window.__relaymoteFirstScreen = r; });

@@ -1,3 +1,8 @@
+## 0.2.121
+
+- Something shared into Relaymote while your phone could not reach the PC is no longer lost. Before, the photos waited on the phone, but opening Relaymote again from its icon never attached them. Now the next open attaches the newest share to your session, ready to send. A second copy of the same share is dropped.
+- When the phone itself cannot open any website, Relaymote now says "Your phone can't reach the internet" instead of blaming the PC. It also names the usual cause: a VPN such as Tailscale, or the Private DNS setting.
+
 ## 0.2.120
 
 - A message you type while a session is busy now shows at the time you typed it. Claude writes such a message into the session after the replies that were already under way, so Relaymote showed it lower down, under answers to other things (5 of 277 typed messages on 21 Oct, up to 70 seconds out).

@@ -1,3 +1,9 @@
+## 0.2.122
+
+- On a phone set to someone else (Settings › This phone is, for example Sagar), a share now goes to that person's Conductor, not to whatever session was last open there. Your own phone still uses the session you were last in.
+- A shared file is kept on the phone until it has actually reached the PC. If an upload fails, the next open attaches it again instead of losing it.
+- If Relaymote could not start because the PC was unreachable, the PC's log now records it the next time the phone gets through.
+
 ## 0.2.121
 
 - Something shared into Relaymote while your phone could not reach the PC is no longer lost. Before, the photos waited on the phone, but opening Relaymote again from its icon never attached them. Now the next open attaches the newest share to your session, ready to send. A second copy of the same share is dropped.

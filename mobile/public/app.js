@@ -1641,6 +1641,10 @@ const PLACE_KEY = 'baton.lastPlace', LAST_CHAT_KEY = 'baton.lastChat';
 const SHARE_ID = (() => { try { return new URLSearchParams(location.search).get('share') || ''; } catch { return ''; } })();
 function shareTarget(list) {
   const live = (list || []).filter(s => s && !s.archived);
+  // 21-Oct (QuickDial lane, Sagar's Fold5): on a principal's phone the share goes to THEIR Conductor, not whatever
+  // session was last open there. Ashwar's own phone keeps "the session I was last using" (14-Oct).
+  const home = principalHome();
+  if (home && live.some(s => s.id === home)) return { id: home, why: 'home' };
   let last = ''; try { last = localStorage.getItem(LAST_CHAT_KEY) || ''; } catch {}
   if (last && live.some(s => s.id === last)) return { id: last, why: 'last' };
   const f = pickFirstScreen(null, live, { board: false, home: principalHome() });
@@ -1664,10 +1668,13 @@ async function receiveShare(id, list) {
   await openChat(t.id);
   const words = [meta.title, meta.text, meta.url].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join('\n');
   if (words) { $('input').value = ($('input').value ? $('input').value + '\n' : '') + words; autosize(); saveDraft(state.open, $('input').value); }
-  if (files.length) uploadFiles(files);
   const row = (state.sessions || []).find(s => s.id === t.id);
   toast((files.length ? files.length + ' file' + (files.length > 1 ? 's' : '') : 'Text') + ' attached to “' + ((row && row.title) || 'this session')
     + '” — check it, then tap send');
+  // 21-Oct (QuickDial lane): the kept copy is deleted only once EVERY upload reached the PC. A failed or stalled
+  // upload leaves it, so the next open attaches it again (leftoverShare) instead of losing the files.
+  const ups = files.length ? await uploadFiles(files) : [];
+  if (!ups.every(v => v === true)) { clientLog('share ' + id + ': ' + ups.filter(v => v !== true).length + ' of ' + files.length + ' upload(s) failed, kept for the next open'); return; }
   for (const f of meta.files || []) c.delete('/__share/' + id + '/' + f.i).catch(() => {});
   c.delete('/__share/' + id + '/meta').catch(() => {});
 }
@@ -3999,6 +4006,10 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
       localStorage.setItem('baton_sessions_cache', JSON.stringify({ at: Date.now(), sessions: (state.rawSessions || state.sessions || []).slice(0, 80) }));
     } catch {}
     connectStream(null);
+    try {
+      const bf = JSON.parse(localStorage.getItem('baton.bootFail') || 'null');
+      if (bf) { localStorage.removeItem('baton.bootFail'); clientLog('earlier boot failed ' + new Date(bf.at).toISOString() + ' after ' + bf.ms + ' ms: ' + bf.kind + ' ' + bf.msg + (bf.share ? ' (share ' + bf.share + ' waiting)' : '')); }
+    } catch {}
     renderAccountSwitch();
     renderDeskState();
     obFlush();
@@ -4029,6 +4040,8 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
   } catch (e) {
     setTimeout(registerSW, 0);
     if (e.message === 'signin-required') return;
+    // 21-Oct: a boot that could not reach the PC leaves no trace there; the next boot that does reports it.
+    try { localStorage.setItem('baton.bootFail', JSON.stringify({ at: Date.now(), ms: Math.round(performance.now()), kind: e.kind || '', msg: String(e.message || '').slice(0, 160), share: SHARE_ID })); } catch {}
     const n = obItems.length;
     document.body.insertAdjacentHTML('beforeend',
       '<div class="reauth" id="boot-fail"><div><b>' + esc(e.conn ? CONN_TITLE[e.kind] : 'Relaymote could not start') + '</b>' +

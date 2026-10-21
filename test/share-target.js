@@ -81,6 +81,18 @@ for (const t of ['image/*', 'application/pdf', 'application/vnd.openxmlformats-o
   const empty = { keys: async () => [], match: async () => null, delete: async () => true };
   vm.runInNewContext(ls + '\nthis.f = leftoverShare;', Object.assign(lctx, { caches: { open: async () => empty } }));
   check(await lctx.f() === '', 'no share kept -> nothing is taken');
+  // 6. QuickDial lane 21-Oct: on a principal's phone the share goes to THEIR Conductor; Ashwar's phone keeps "last".
+  const stSrc = app.slice(app.indexOf('function shareTarget'), app.indexOf('async function receiveShare'));
+  const live = [{ id: 'cond-sagar' }, { id: 'inquiries' }];
+  const tctx = (home, last) => { const x = { principalHome: () => home, localStorage: { getItem: () => last }, LAST_CHAT_KEY: 'k',
+    pickFirstScreen: () => ({ kind: 'chat', id: 'first', why: 'first' }) }; vm.runInNewContext(stSrc + '\nthis.st = shareTarget;', x); return x.st; };
+  check(tctx('cond-sagar', 'inquiries')(live).id === 'cond-sagar', "a principal's phone attaches in their Conductor, not the last-open session");
+  check(tctx('', 'inquiries')(live).id === 'inquiries', "Ashwar's phone (no principal) keeps the session he was last using");
+  check(tctx('gone', 'inquiries')(live).id === 'inquiries', 'a home that is not live falls back to the last session');
+  // 7. The kept copy is deleted only after every upload reached the PC.
+  const rsBody = app.slice(app.indexOf('async function receiveShare'), app.indexOf('async function leftoverShare'));
+  const iUp = rsBody.indexOf('await uploadFiles(files)'), iKeep = rsBody.indexOf("ups.every(v => v === true)"), iDel = rsBody.indexOf("c.delete('/__share/'");
+  check(iUp > 0 && iKeep > iUp && iDel > iKeep, 'a failed or stalled upload keeps the share for the next open; it is deleted only after all uploads succeed', [iUp, iKeep, iDel]);
   const boot = app.slice(app.indexOf('const shareId = SHARE_ID'), app.indexOf('watchForUpdates();', app.indexOf('const shareId = SHARE_ID')));
   check(/!userMoved && !want \? await leftoverShare\(\)/.test(boot), 'a leftover share never overrides his own navigation or a notification target');
 

@@ -30,11 +30,12 @@ const resends = [...app.matchAll(/send\(\{ id: e\.session, text: e\.text \}\)/g)
 check(resends.length === 2 && resends.every(s => /\.onclick = /.test(s) && /alreadyLanded\(/.test(s)), 'Send again re-sends only from a tap, after an already-landed check', resends.length);
 const idx = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
 const tick = idx.slice(idx.indexOf('async function outboxTickInner'), idx.indexOf('\n}\n', idx.indexOf('async function outboxTickInner')));
-// g1783 made ONE exception: a bridge send with no trace at all (not even a queue row) is re-sent once under
-// its own uuid, from checkAccepted's list. A suspect entry (15 min, text not seen) still only alerts.
-const sends = tick.match(/doSend|sendQueued|sendMessage/g) || [];
-check(sends.length === 1 && /sendQueued\(e\.session, e\.text, \{ uuid: e\.uuid \}\)/.test(tick) && /for \(const e of acc\.resend\)/.test(tick),
-      'the server outbox tick sends only the g1783 same-uuid re-send; a suspect entry only raises an alert', sends);
+// g1783 made ONE exception, widened 21-Oct (at-least-once): a send with no trace at all (not even a queue row) is
+// re-delivered once, from checkAccepted's list, through redeliver() (bridge under its uuid, else the composer), with
+// the "[Redelivered by Relaymote …]" line. A suspect entry (15 min, text not seen) still only alerts.
+const sends = tick.match(/doSend|sendQueued|sendMessage|redeliver\(/g) || [];
+check(sends.length === 1 && /redeliver\(e, text\)/.test(tick) && /for \(const e of acc\.resend\)/.test(tick) && /outbox\.redeliveryText\(e\)/.test(tick),
+      'the server outbox tick sends only the one marked re-delivery; a suspect entry only raises an alert', sends);
 check(/spoken\(t\)/.test(app), 'the client hides an outbox entry by the same needle rule');
 
 fs.rmSync(process.env.RELAYMOTE_STATE_DIR, { recursive: true, force: true });

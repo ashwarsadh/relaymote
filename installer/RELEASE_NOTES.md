@@ -1,3 +1,9 @@
+## 0.2.119
+
+- Works with Claude Desktop 3.x. The new Desktop put each session's status ("Awaiting input") and origin ("Started from a suggestion in …") inside the session's name in the sidebar, and Relaymote was reading them as part of the title — 404 of 473 names. Names are clean again.
+- When Claude Desktop or Claude Code updates, Relaymote now checks everything it reads from Claude and sends you one notification: either "everything works" or exactly what broke.
+- A message that Claude took and then lost (for example when Claude crashed straight after) is now sent again by itself, once, starting with a line "[Redelivered by Relaymote …]" so you and the session can see it was a second try. While that happens the bubble says "redelivered". If the second try is lost too, you get "Message NOT delivered" with a Send again button. Nothing is re-sent while Claude is still restarting.
+
 ## 0.2.118
 
 - A colleague signed in with their own email (Ajay) no longer gets "This phone needs pairing" on the PC. The app took the server's "not for this login" answer to settings and accounts as a lost pairing and kept reloading. It now opens straight on their Conductor.

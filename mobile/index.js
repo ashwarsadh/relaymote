@@ -810,6 +810,25 @@ function finishSend(job, out) {
   }
 }
 
+// Test seam (demo instances only). '1': every send is written straight into the transcript. 'drop-first': the
+// FIRST send is accepted and then lost, as when Desktop crashes after taking it; later sends (the re-delivery) land.
+// 'drop-all': every send and re-delivery is lost (the NOT delivered path).
+const FAKE_SEND = process.env.RELAYMOTE_FAKE_SEND || '';
+let fakeDropped = false;
+function fakeWrite(id, body) {
+  const s = sessions.index().list.find(x => x.id === id);
+  const tp = s && sessions.transcriptPath(s);
+  const at = new Date().toISOString();
+  if (tp) fs.appendFileSync(tp, JSON.stringify({ type: 'user', timestamp: at, uuid: crypto.randomUUID(), message: { role: 'user', content: body } }) + '\n');
+  fs.appendFileSync(path.join(config.STATE, 'fake-sends.jsonl'), JSON.stringify({ at, session: id, text: body }) + '\n');
+}
+/** Re-deliver an outbox entry: the bridge under its own uuid when it had one, else the composer. */
+async function redeliver(e, text) {
+  if (FAKE_SEND) { if (FAKE_SEND !== 'drop-all') fakeWrite(e.session, text); return { ok: true }; }
+  if (e.uuid) return ui(() => desktop.sendQueued(e.session, text, { uuid: e.uuid }));
+  return ui(() => desktop.sendMessage(e.session, text, { queue: true }));
+}
+
 async function doSend(id, text, attachments) {
   let body = String(text || '');
   if (Array.isArray(attachments) && attachments.length) {
@@ -818,13 +837,13 @@ async function doSend(id, text, attachments) {
   if (!body.trim()) return { ok: false, error: 'EMPTY' };
   // Test seam (demo instances only): "deliver" by writing his message into the demo transcript and a
   // log, so the phone's outbox can be shown end to end with no Claude Desktop behind it.
-  if (process.env.RELAYMOTE_FAKE_SEND === '1') {
-    const s = sessions.index().list.find(x => x.id === id);
-    const tp = s && sessions.transcriptPath(s);
-    const at = new Date().toISOString();
-    if (tp) fs.appendFileSync(tp, JSON.stringify({ type: 'user', timestamp: at, uuid: crypto.randomUUID(), message: { role: 'user', content: body } }) + '\n');
-    fs.appendFileSync(path.join(config.STATE, 'fake-sends.jsonl'), JSON.stringify({ at, session: id, text: body }) + '\n');
-    return { ok: true, confirmed: true, delivery: 'sent' };
+  if (FAKE_SEND === '1') { fakeWrite(id, body); return { ok: true, confirmed: true, delivery: 'sent' }; }
+  if (FAKE_SEND === 'drop-first' || FAKE_SEND === 'drop-all') {   // drop-all: the re-delivery is lost too
+    const slip0 = outbox.add({ session: id, text: body });
+    if (fakeDropped) fakeWrite(id, body); else fakeDropped = true;
+    if (slip0) outbox.markSent(slip0.id, { ok: true, delivery: 'generating' });
+    log(`send ${slip0 ? slip0.id : '?'} -> sent via fake (generating)`);
+    return { ok: true, delivery: 'generating', outboxId: slip0 && slip0.id };
   }
 
   const slip = outbox.add({ session: id, text: body });
@@ -1321,7 +1340,7 @@ async function handle(req, res) {
       delivery: e.delivery, state: e.state, error: e.error || null,
       ageMs: Date.now() - e.at, suspect: !!e.suspectedAt,
       held: e.state === 'pending' && e.delivery === 'held' && !!e.uuid,
-      accepted: !!e.acceptedAt, notDelivered: !!e.notDelivered, resent: !!e.resentAt,
+      accepted: !!e.acceptedAt, notDelivered: !!e.notDelivered, resent: !!e.resentAt, redelivered: !!e.redelivered,
     })) });
   }
 
@@ -2154,13 +2173,21 @@ async function outboxTickInner() {
   const busy = (id) => { const s = sessions.get(id); return !!(s && (s.running || s.dot === 'Running')); };
   const { confirmed, suspect } = outbox.reconcile(transcriptTail, Date.now(), busy);
   for (const e of confirmed) log(`outbox: confirmed ${e.id} in ${e.session}`);
-  // g1783: a bridge send Desktop never took is re-sent once (same uuid), then reported NOT delivered.
-  const acc = outbox.checkAccepted(transcriptTail, Date.now());
+  // g1783 + 21-Oct (at-least-once): a send Desktop never took is re-delivered once, marked as such, then reported
+  // NOT delivered. Not while Desktop is down or restarting: its absence is not the message's fault, and the check
+  // runs again once it is back.
+  const acc = (FAKE_SEND || await cdpCached()) ? outbox.checkAccepted(transcriptTail, Date.now()) : { resend: [], failed: [] };
   for (const e of acc.resend) {
+    const text = outbox.redeliveryText(e);
     let r = null;
-    try { r = await ui(() => desktop.sendQueued(e.session, e.text, { uuid: e.uuid })); } catch (x) { r = { ok: false, error: x.message }; }
+    try { r = await redeliver(e, text); } catch (x) { r = { ok: false, error: x.message }; }
     outbox.markResent(e.id, { ok: !!(r && r.ok), error: r && (r.detail || r.error) });
-    log(`outbox: ${e.id} never reached ${e.session} (no queue or user row in ${outbox.ACCEPT_MS / 1000}s) -- re-sent once, same uuid ${String(e.uuid).slice(0, 8)}: ${r && r.ok ? 'ok' : 'FAILED ' + (r && (r.detail || r.error))}`);
+    log(`outbox: ${e.id} never reached ${e.session} (no queue or user row in ${outbox.ACCEPT_MS / 1000}s) -- REDELIVERED once ` +
+        `${e.uuid ? 'via bridge, same uuid ' + String(e.uuid).slice(0, 8) : 'via the composer'}: ${r && r.ok ? 'ok' : 'FAILED ' + (r && (r.detail || r.error))}`);
+    for (const c of clients) {
+      if (isSubuser(c.identity) && !c.identity.sessions.has(e.session)) continue;
+      sseSend(c, 'outbox', { redelivered: [{ id: e.id, session: e.session, ok: !!(r && r.ok) }] });
+    }
   }
   for (const e of acc.failed) {
     log(`outbox: ${e.id} NOT delivered to ${e.session} -- dropped twice`);

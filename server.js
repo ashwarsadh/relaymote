@@ -743,6 +743,13 @@ async function evictWedgedHolder(reason) {
     setInterval(() => serialise(uiQueueTick), 45000);
     setInterval(runDebuggerTick, 60000);
     setInterval(() => { desktopWatch().catch(() => {}); }, 10000);
+    // A Claude Desktop / Claude Code update: re-check what Relaymote reads from Claude and tell him once (21-Oct).
+    const versionTick = () => serialise(() => require('./lib/claude-version-watch').tick({
+      cdp: () => desktop.cdpAvailable(), scrape: () => desktop.scrapeSidebar(), log: (m) => orch.log(m),
+      alert: (evt) => require('./mobile/alerts').deliver(evt, (m) => orch.log(m)),
+    })).catch(e => orch.log('claude version watch: ' + e.message));
+    setTimeout(versionTick, 90000);
+    setInterval(versionTick, 5 * 60000);
     setInterval(() => { follow.tick().catch(e => orch.log('follow Claude: ' + e.message)); }, 5000);
     setInterval(() => { if (config.mod('accounts')) require('./lib/account-sync').autoTick().then(r => { if (r && (r.applied || r.error)) orch.log('accounts auto-sync: ' + (r.error || r.applied + ' change(s) written')); }).catch(e => orch.log('accounts auto-sync: ' + e.message)); }, 15000);
     // Boot window: Desktop not running yet when Relaymote starts -> the pass that waits for a closed Desktop runs now.

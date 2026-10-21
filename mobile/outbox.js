@@ -10,8 +10,22 @@ const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 // g1783: Desktop silently dropped a bridge send made 157 ms before a turn boundary. No queue row, no user
 // row, yet the phone said "delivered" for 73 min. A bridge send (it has a uuid) must show up in the
 // transcript within this long, else it is re-sent once under the same uuid, then called NOT delivered.
-const ACCEPT_MS = 60 * 1000;
-const RESEND_WINDOW_MS = 5 * 60 * 1000;
+const ACCEPT_MS = Number(process.env.RELAYMOTE_OUTBOX_ACCEPT_MS) || 60 * 1000;
+// 21-Oct-2026 (Ashwar, after Desktop crashed and restarted: "if I am losing some messages from the Relay mode, then
+// we can help to fetch the missing things"): at-least-once. A composer send that STARTED a turn ("generating",
+// "sent") must also show in the transcript within ACCEPT_MS, so it is re-delivered too — not only a bridge send.
+// A message Desktop is holding itself ("held" with no uuid, "queued") is never re-sent: it has no transcript
+// trace until the turn ends, and a re-send would double it. The window is 30 min (a Desktop restart takes
+// minutes); the caller skips the whole check while Desktop is unreachable.
+const RESEND_WINDOW_MS = 30 * 60 * 1000;
+const REDELIVERABLE = new Set(['generating', 'sent', 'accepted', 'sent-now']);
+const canRedeliver = (e) => !!e.uuid || REDELIVERABLE.has(String(e.delivery || ''));
+
+/** The re-sent text: a visible line saying it is a re-delivery, then his message unchanged. */
+function redeliveryText(e, now = Date.now()) {
+  const ist = (t) => new Date(t + 5.5 * 3600e3).toISOString().slice(11, 16);
+  return `[Redelivered by Relaymote at ${ist(now)} IST: the first send at ${ist(e.at)} IST never reached this session]\n` + e.text;
+}
 
 function load() {
   try {
@@ -163,7 +177,7 @@ function checkAccepted(readText, now = Date.now()) {
   let changed = false;
   const cache = new Map();
   for (const e of entries) {
-    if (e.state !== 'pending' || !e.uuid || e.acceptedAt) continue;
+    if (e.state !== 'pending' || !canRedeliver(e) || e.acceptedAt) continue;
     let raw = cache.get(e.session);
     if (raw === undefined) { try { raw = readText(e.session) || ''; } catch { raw = ''; } cache.set(e.session, raw); }
     if (arrivedIn(raw, e)) { e.acceptedAt = now; changed = true; continue; }
@@ -172,7 +186,7 @@ function checkAccepted(readText, now = Date.now()) {
     if (!e.resentAt) { if (now - e.at > ACCEPT_MS && now - e.at < RESEND_WINDOW_MS) resend.push(e); continue; }
     if (now - e.resentAt > ACCEPT_MS) {
       e.state = 'failed'; e.notDelivered = true;
-      e.error = 'NOT delivered: Desktop dropped it twice (sent, then re-sent once). Nothing reached the session.';
+      e.error = 'NOT delivered: Desktop dropped it twice (sent, then re-delivered once). Nothing reached the session.';
       failed.push(e); changed = true;
     }
   }
@@ -185,9 +199,10 @@ function markResent(id, { ok, error, now = Date.now() } = {}) {
   const e = entries.find(x => x.id === id);
   if (!e) return null;
   e.resentAt = now;
+  e.redelivered = true;
   if (!ok) { e.state = 'failed'; e.notDelivered = true; e.error = 'NOT delivered: the re-send failed (' + String(error || 'unknown') + ')'; }
   save(entries);
   return e;
 }
 
-module.exports = { checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };
+module.exports = { redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };

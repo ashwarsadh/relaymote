@@ -979,7 +979,7 @@ function renderLog(messages, force) {
               ? 'queued — goes in at its next step' + waitedNote(e.ageMs) + sn
               : e.delivery === 'queued'
                 ? 'queued — goes in at its next step' + waitedNote(e.ageMs) + sn + heldNote(e.at)
-                : 'sending…'}</span>`) +
+                : e.redelivered ? 'redelivered — the first send was lost; checking it arrived' : 'sending…'}</span>`) +
         `</div>`;
     }
   }

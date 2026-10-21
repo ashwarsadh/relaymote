@@ -58,7 +58,7 @@ const e3 = ob.add({ session: 'local_c', text: 'third', delivery: 'held', uuid: '
 r = ob.checkAccepted(() => JSON.stringify({ type: 'attachment', attachment: { type: 'queued_command', prompt: 'x' }, uuid: 'cccccccc-0000-0000-0000-000000000003' }), ob.get(e3.id).at + 61 * 1000);
 check(!r.resend.length && ob.get(e3.id).acceptedAt, 'a row carrying the uuid counts as arrived');
 const e4 = ob.add({ session: 'local_d', text: 'sent long before this check existed', delivery: 'held', uuid: 'dddddddd-0000-0000-0000-000000000004' });
-r = ob.checkAccepted(empty, ob.get(e4.id).at + 6 * 60 * 1000);
+r = ob.checkAccepted(empty, ob.get(e4.id).at + 31 * 60 * 1000);   // window 30 min since 21-Oct (a Desktop restart takes minutes)
 check(!r.resend.length, 'a message older than the re-send window is not re-sent late');
 check(!ob.get(ob.add({ session: 'x', text: 'composer send' }).id).uuid && !ob.checkAccepted(empty, Date.now() + 120000).resend.some(x => x.text === 'composer send'),
       'a composer send (no uuid) is not re-sent by this path');
@@ -67,7 +67,7 @@ check(!ob.get(ob.add({ session: 'x', text: 'composer send' }).id).uuid && !ob.ch
 const app = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'public', 'app.js'), 'utf8');
 check(/NOT delivered/.test(app) && /if \(e\.accepted\) return 'delivered, waiting for a reply'/.test(app), 'the phone says "delivered" only once the session took it, else NOT delivered');
 const idx = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
-check(/sendQueued\(e\.session, e\.text, \{ uuid: e\.uuid \}\)/.test(idx), 'the daemon re-sends with the original uuid');
+check(/sendQueued\(e\.session, text, \{ uuid: e\.uuid \}\)/.test(idx) && /const text = outbox\.redeliveryText\(e\)/.test(idx), 'the daemon re-sends with the original uuid (text carries the redelivered line)');
 
 if (fails) { console.error(fails + ' failed'); process.exit(1); }
 console.log('outbox-accept: all checks passed');

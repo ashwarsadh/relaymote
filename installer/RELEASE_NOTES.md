@@ -1,3 +1,7 @@
+## 0.2.120
+
+- A message you type while a session is busy now shows at the time you typed it. Claude writes such a message into the session after the replies that were already under way, so Relaymote showed it lower down, under answers to other things (5 of 277 typed messages on 21 Oct, up to 70 seconds out).
+
 ## 0.2.119
 
 - Works with Claude Desktop 3.x. The new Desktop put each session's status ("Awaiting input") and origin ("Started from a suggestion in …") inside the session's name in the sidebar, and Relaymote was reading them as part of the title — 404 of 473 names. Names are clean again.

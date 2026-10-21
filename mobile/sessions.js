@@ -500,6 +500,25 @@ const isSpoken = (m) => m.role === 'user' || m.role === 'peer' || (m.role === 'a
 
 const isUser = (m) => m.role === 'user';
 
+// 21-Oct-2026 (Ashwar: the restart message "was already in the relay mode, but it was not in the correct
+// order. Maybe due to some queued messages"): Claude Code writes a message typed during a turn AFTER rows
+// stamped later than it (5 of 277 typed messages that day, up to 70 s apart). File order put it under replies
+// to other things. A typed message (user / peer) more than 2 s older than the row above it moves up to where
+// its own timestamp falls. Only those move: tool rows and attachments keep file order (ms jitter is not a reorder).
+const ORDER_SLACK_MS = 2000;
+function byTypedTime(msgs) {
+  const out = [];
+  for (const m of msgs) {
+    const prev = out.length ? out[out.length - 1].ts : null;
+    if ((m.role === 'user' || m.role === 'peer') && m.ts && prev && Date.parse(prev) - Date.parse(m.ts) > ORDER_SLACK_MS) {
+      let at = out.findIndex(x => x.ts && x.ts > m.ts);
+      if (at < 0) at = out.length;
+      out.splice(at, 0, m);
+    } else out.push(m);
+  }
+  return out;
+}
+
 function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = null, maxBytes = 512 * 1024 } = {}) {
   const file = transcriptPath(sess);
   if (!file) return { ok: false, error: 'no transcript on disk', messages: [] };
@@ -580,8 +599,10 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
     }
   }
 
+  kept = byTypedTime(kept);
+
   const norm = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-  const arrived = new Set(msgs.filter(m => m.role === 'user').map(m => norm(m.text)));
+  const arrived =new Set(msgs.filter(m => m.role === 'user').map(m => norm(m.text)));
   // A slash command arrives as "<command-name>/goal</command-name>…<command-args>…</command-args>"; as typed it was "/goal …".
   for (const m of msgs) { const c = commandAsTyped(m.text); if (c) arrived.add(norm(c)); }
 
@@ -877,7 +898,7 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
   return { ok: true, q, hits, occurrences, truncated, ms: Date.now() - started };
 }
 
-module.exports = { unwrapForTest: unwrap, flattenForTest: flatten,
+module.exports = { unwrapForTest: unwrap, flattenForTest: flatten, byTypedTimeForTest: byTypedTime,
   refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasks, transcriptStamp, transcriptPath, slugFor,
   searchTranscripts, searchSession, ackDot, ackVersion,
   STORE, PROJECTS,

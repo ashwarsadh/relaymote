@@ -80,7 +80,34 @@ function cookieToken(req) {
   return null;
 }
 
+// A login bound to a sub-principal (principals.json `logins`, e.g. Ajay's accounts@ email): a scoped identity
+// that reuses every sub-user gate. Its session set is LIVE — his Conductor plus what it touched in the last 7
+// days (principal-touch) — so a session his Conductor messages appears, and one untouched for a week drops out.
+function scopedPrincipal(key, email) {
+  const P = require('./principals'), touch = require('./principal-touch');
+  let at = 0, ids = new Set();
+  const live = () => {
+    if (Date.now() - at < 5000) return ids;
+    at = Date.now();
+    try { touch.refresh(board.CONDUCTOR_DIR, (id) => sessions.transcriptPath(sessions.get(id))); } catch {}
+    const p = P.resolve(board.CONDUCTOR_DIR, key);
+    const out = new Set(touch.view(sessions.index().list, p, board.CONDUCTOR_DIR).map(s => s.id));
+    if (p.conductor) out.add(p.conductor);
+    ids = out;
+    return ids;
+  };
+  return { kind: 'subuser', name: key, principal: key, email, via: 'access', token: null,
+           sessions: { has: (id) => !!id && live().has(id), get size() { return live().size; } } };
+}
+
 async function resolveIdentity(req, url) {
+  // A bound Access login is scoped whatever else the request carries: an owner ?k= or cookie must not lift it.
+  const hasAccess = !!access.tokenFrom(req);
+  const id = hasAccess ? await access.identify(req) : null;
+  if (id && id.email) {
+    const key = require('./principals').principalForLogin(board.CONDUCTOR_DIR, id.email);
+    if (key) return scopedPrincipal(key, id.email);
+  }
   const k = url.searchParams.get('k');
   if (k) {
     if (safeEq(k, TOKEN)) return { kind: 'owner', via: 'token' };
@@ -88,7 +115,6 @@ async function resolveIdentity(req, url) {
     if (su) return { kind: 'subuser', name: su.name, token: su.token, sessions: su.sessions };
     return null;
   }
-  const id = await access.identify(req);
   if (id) return { kind: 'owner', via: 'access' };
   const cookieTok = cookieToken(req);
   if (cookieTok) {
@@ -114,7 +140,9 @@ function visibleSessions(identity, all) {
 
 // g1875: the phone says who holds it (X-Relaymote-As, set by app.js from Settings › This phone / ?as=).
 // Sagar's phone lists his Conductor + what he touched in the last 7 days; Ashwar's list marks Sagar's sessions.
-const principalOf = (req, url) => require('./principals').resolve(board.CONDUCTOR_DIR, req.headers['x-relaymote-as'] || url.searchParams.get('as'));
+// A scoped login (Ajay) is always its own principal; the header/?as= cannot change it.
+const principalOf = (req, url) => require('./principals').resolve(board.CONDUCTOR_DIR,
+  (req._identity && req._identity.principal) || req.headers['x-relaymote-as'] || url.searchParams.get('as'));
 function principalList(req, url, list) {
   const touch = require('./principal-touch');
   try { touch.refresh(board.CONDUCTOR_DIR, (id) => sessions.transcriptPath(sessions.get(id))); } catch (e) { log('principal touch scan failed: ' + e.message); }
@@ -924,6 +952,7 @@ async function handle(req, res) {
   const identity = open ? null : await resolveIdentity(req, url);
   _hAuth = Date.now() - _a0;
   res._agoIdentity = identity;
+  req._identity = identity;
   if (!open && !identity) {
     if (p === '/') {
       const viaTunnel = !!(req.headers['cf-ray'] || req.headers['cf-access-jwt-assertion']);
@@ -974,14 +1003,25 @@ async function handle(req, res) {
 
   if (isSubuser(identity)) {
     const READ_OK = p === '/api/bootstrap' || p === '/api/sessions' || p === '/api/file' || p === '/api/sent-file' || p === '/api/tier' ||
-                    p === '/api/permission' || p === '/api/build' || p === '/api/stream';
+                    p === '/api/permission' || p === '/api/build' || p === '/api/stream' ||
+                    // a scoped principal (Ajay) has his own board: narrowed to his rows, taps go to his Conductor
+                    // a scoped principal (Ajay) also reads his chats and his own board (narrowed to his rows; taps go to
+                    // his Conductor). Every per-session read is checked against his live set just below.
+                    (identity.principal && (p === '/api/board' || p === '/api/board/needs' || p.startsWith('/api/session/') ||
+                                            p === '/api/chips'));   // never the seen/mark-read routes: unread dots are shared with Ashwar
     const WRITE_OK = req.method === 'POST' && (
       p === '/api/send' || p === '/api/model' || p === '/api/effort' ||
       p === '/api/answer' || p === '/api/permission/answer' ||
-      p === '/api/queued/cancel' || p === '/api/queued/send-now');
+      p === '/api/queued/cancel' || p === '/api/queued/send-now' ||
+      (identity.principal && (p === '/api/board/act' || p === '/api/board/act-batch' || p === '/api/upload' || p === '/api/attach')));
     if (!READ_OK && !WRITE_OK) {
       return json(res, 403, { ok: false, error: 'NOT_AVAILABLE',
         message: 'This account is scoped to specific sessions and cannot use that.' });
+    }
+    const sid = p.startsWith('/api/session/') ? decodeURIComponent(p.slice('/api/session/'.length))
+      : (url.searchParams.get('id') || url.searchParams.get('session'));
+    if (sid && !identity.sessions.has(sid)) {
+      return json(res, 403, { ok: false, error: 'NOT_GRANTED', message: 'That session is not shared with you.' });
     }
   }
 
@@ -998,6 +1038,8 @@ async function handle(req, res) {
     return json(res, 200, {
       ok: true,
       host: os.hostname(),
+      principal: (identity && identity.principal) || null,   // a scoped login (Ajay): the app follows the server
+      principalHome: (identity && identity.principal && principalOf(req, url).conductor) || null,
       folders: isSubuser(identity) ? [] : sessions.folders(all).slice(0, 40),
       counts: {
         total: all.length,
@@ -1202,7 +1244,7 @@ async function handle(req, res) {
     });
     try {
       try { await sessions.refresh(); } catch {}
-      const as = url.searchParams.get('as');
+      const as = (identity && identity.principal) || url.searchParams.get('as');
       const r = p === '/api/board' ? await board.viewCached({ as }) : await board.needs({ as, goal: url.searchParams.get('goal') });
       const body = r.body && r.body.ok ? Object.assign({}, p === '/api/board' ? board.phoneFull(r.body) : r.body, { bundle: assetVersion() }) : r.body;
       built = Date.now() - t0;
@@ -1220,7 +1262,7 @@ async function handle(req, res) {
   if (p === '/api/board/act-batch' && req.method === 'POST') {
     let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { ok: false, error: 'bad json' }); }
     try {
-      const r = await board.actBatch({ items: body && body.items, bid: body && body.bid, who: 'mobile', as: body && body.as });
+      const r = await board.actBatch({ items: body && body.items, bid: body && body.bid, who: 'mobile', as: (identity && identity.principal) || (body && body.as) });
       return json(res, r.code, r.body);
     } catch (e) {
       log('board batch failed: ' + e.message);
@@ -1265,7 +1307,7 @@ async function handle(req, res) {
   if (p === '/api/board/act' && req.method === 'POST') {
     let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { ok: false, error: 'bad json' }); }
     try {
-      const r = await board.act({ kind: body.kind, id: body.id, text: body.text, who: 'mobile', as: body.as });
+      const r = await board.act({ kind: body.kind, id: body.id, text: body.text, who: 'mobile', as: (identity && identity.principal) || body.as });
       return json(res, r.code, r.body);
     } catch (e) {
       log('board act failed: ' + e.message);
@@ -1731,7 +1773,7 @@ async function handle(req, res) {
   try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); }
   catch { return json(res, 400, { ok: false, error: 'bad json' }); }
 
-  if (isSubuser(identity) && ['/api/send', '/api/model', '/api/effort', '/api/answer', '/api/permission/answer', '/api/queued/cancel', '/api/queued/send-now'].includes(p)) {
+  if (isSubuser(identity) && ['/api/send', '/api/model', '/api/effort', '/api/answer', '/api/permission/answer', '/api/queued/cancel', '/api/queued/send-now', '/api/attach'].includes(p)) {
     if (!body.id || !identity.sessions.has(body.id)) {
       return json(res, 403, { ok: false, error: 'NOT_GRANTED', message: 'That session is not shared with you.' });
     }

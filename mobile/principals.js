@@ -40,6 +40,23 @@ function list(dir) {
   return Object.entries(j.principals).map(([key, r]) => ({ key, name: r.name || key, conductor: key === j.default ? null : (r.conductor || null), isDefault: key === j.default }));
 }
 
+/**
+ * Ajay (g-ajay, Ashwar 21-Oct-2026: "login via accounts@... he sees his own sessions and my session where his
+ * prompt invoked it ... he dont see my other sessions"): a Cloudflare Access email listed in a non-default
+ * principal's `logins` signs in AS that principal. Unlike ?as=, this IS a security boundary — index.js makes it a
+ * scoped identity. The default (admin) principal never binds: an unlisted email stays the owner.
+ */
+function principalForLogin(dir, email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return null;
+  const j = load(dir);
+  for (const [k, r] of Object.entries(j.principals)) {
+    if (k === j.default || !r || r.admin) continue;
+    if ((r.logins || []).some(x => String(x).trim().toLowerCase() === e)) return k;
+  }
+  return null;
+}
+
 const of = (row, def) => String((row && row.principal) || def).toLowerCase();
 
 /**
@@ -61,4 +78,4 @@ function narrow(body, p, def) {
     projects: [...new Set(rows.map(r => r.project).filter(Boolean))].sort() });
 }
 
-module.exports = { load, resolve, list, narrow, of };
+module.exports = { load, resolve, list, narrow, of, principalForLogin };

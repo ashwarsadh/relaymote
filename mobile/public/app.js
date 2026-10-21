@@ -3950,6 +3950,11 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
   try {
     state.boot = await api('/api/bootstrap' + (BUILD ? '?build=' + encodeURIComponent(BUILD) : ''));
     tmark('bootstrap');
+    // A scoped login (Ajay's Access email): the server says who this is; the app opens on his Conductor.
+    if (state.boot && state.boot.principal) {
+      let had = ''; try { had = localStorage.getItem(PRINCIPAL_KEY) || ''; } catch {}
+      if (had !== state.boot.principal || principalHome() !== (state.boot.principalHome || '')) setPrincipal(state.boot.principal, state.boot.principalHome || '');
+    }
     paintBuildLine();
     renderStats(); renderFolders(); renderSortChips();
     await loadSessions();

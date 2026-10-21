@@ -1,3 +1,7 @@
+## 0.2.117
+
+- A colleague can sign in to Relaymote on the web with their own email and see only their own work. Ashwar lists the email against that person in principals.json (Ajay: colleague@example.com). From then on the server shows that login only the person's own Conductor and the sessions it started or messaged in the last 7 days. Any other session is refused, the board shows only their goals and asks, and settings, accounts, new sessions and search are closed to them. Ashwar's own login still sees everything.
+
 ## 0.2.116
 
 - Files a session sends you now open inside Relaymote, with **Download** and **Share** buttons.

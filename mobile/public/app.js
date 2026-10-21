@@ -89,10 +89,13 @@ const apiOnce = async (path, opts) => {
   finally { clearTimeout(timer); }
   if (r.redirected && /cloudflareaccess\.com|\/cdn-cgi\/access\//.test(r.url)) { reauth('access'); throw new Error('signin-required'); }
   if (!r.ok) {
-    if (r.status === 401 || r.status === 403) { reauth(); throw new Error('signin-required'); }
     let msg = null;
     let code = null;
     if ((r.headers.get('content-type') || '').includes('json')) { try { const j = await r.json(); code = j.error || null; msg = j.message || j.error || null; } catch {} }
+    // A 403 that carries Relaymote's own refusal (NOT_AVAILABLE, OWNER_ONLY, NOT_GRANTED…) is "not for this login":
+    // a colleague's scoped login (Ajay) gets it for every owner-only call. Only a 401, or a refusal that is not
+    // ours, means the pairing / sign-in is gone. (21-Oct: every 403 read as "This phone needs pairing" and reloaded.)
+    if (r.status === 401 || (r.status === 403 && !code)) { reauth(); throw new Error('signin-required'); }
     if (!msg && isPcDownStatus(r.status)) throw connErr('pc-down', r.status);
     throw Object.assign(new Error(msg || ('Relaymote on your PC hit an error (code ' + r.status + '). Try again; if it repeats, restart Relaymote on the PC.')), { status: r.status, code });
   }

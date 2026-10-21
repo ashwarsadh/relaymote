@@ -104,6 +104,12 @@ https.get = function (url, opts, cb) {
     check((await asAshwar('/api/session/' + OTHER)).status === 200, 'Ashwar opens any session');
     r = await d.req('/api/sessions?limit=300');
     check((r.json.sessions || []).length === all.length, 'the owner token sees the same as Ashwar', (r.json.sessions || []).length);
+    // 21-Oct, his PC: "this phone needs pairing and doesnt work" - the app read the 403 of every owner-only call
+    // (/api/accounts, /api/settings, /api/principals ...) as a lost pairing and reloaded. Only 401 / an uncoded 403 is.
+    r = await asAjay('/api/settings');
+    check(r.status === 403 && !!r.json.error, 'an owner-only call answers him with a CODED 403', r.json.error);
+    check(/r\.status === 401 \|\| \(r\.status === 403 && !code\)/.test(H.src('mobile/public/app.js')),
+      'the app shows the pairing screen only on 401 or an uncoded 403, never on a coded refusal');
   } finally {
     await d.stop();
     w.cleanup();

@@ -1,3 +1,7 @@
+## 0.2.124
+
+- "Approval needed" now also finds the request when the PC is showing a different session. The "Allow Claude to use an app" card does not appear in every session's view, so Relaymote opens the waiting session to read it, then switches the PC back to what it was showing.
+
 ## 0.2.123
 
 - **Approve PC requests from the phone.** When a session on the PC asks for approval, the notification now says "Approval needed" with the request itself (for example "Allow Claude to use Adobe Creative Cloud?") and has **Allow** and **Deny** buttons. Your tap answers it on the PC, and a second notification confirms it.

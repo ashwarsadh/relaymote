@@ -105,7 +105,7 @@ async function focus(conn, CID, sessionId) {
   return { ok: false, error: 'NAV_FAILED' };
 }
 
-async function readPermission(sessionId) {
+async function readPermission(sessionId, { restore = false } = {}) {
   if (!(await desktop.cdpAvailable())) return { ok: false, error: 'CDP_UNAVAILABLE' };
   const conn = await desktop.connect(await desktop.wsUrl());
   try {
@@ -113,8 +113,13 @@ async function readPermission(sessionId) {
     const nav = await focus(conn, CID, sessionId);
     if (!nav.ok) return nav;
     await sleep(400);
-    const st = JSON.parse(await conn.evaluate(desktop.rEval(CID, READ_JS)) || '{}');
-    return { ok: true, sessionId, ...st };
+    let st = JSON.parse(await conn.evaluate(desktop.rEval(CID, READ_JS)) || '{}');
+    // A computer-use card can take a moment to draw after the view changes (measured: not drawn in every view).
+    for (let i = 0; i < 4 && !st.present; i++) { await sleep(500); st = JSON.parse(await conn.evaluate(desktop.rEval(CID, READ_JS)) || '{}'); }
+    const card = JSON.parse(await conn.evaluate(desktop.rEval(CID, `String(!!document.querySelector('.epitaxy-approval-card'))`)) || 'false');
+    // Put the PC's view back where it was (a read on his behalf should not move his screen).
+    if (restore && nav.restore) await focus(conn, CID, nav.restore).catch(() => {});
+    return { ok: true, sessionId, ...st, card };
   } catch (e) {
     return { ok: false, error: 'EXCEPTION', message: e.message };
   } finally { conn.close(); }

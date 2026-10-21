@@ -460,7 +460,12 @@ function logAlert(label, r) {
 async function approvalEvent(s, evt) {
   let pk;
   try { pk = await ui(() => peekPermission()); } catch (e) { log('approval peek failed: ' + e.message); return; }
-  if (!pk || !pk.ok || !pk.present || !(pk.card || pk.here === s.id)) return;
+  // Measured 21-Oct: the computer-use card is NOT drawn in every session's view (absent in Print Finder's, drawn in the
+  // Conductor's). Nothing on screen -> open the waiting session, read its prompt, and put the view back.
+  if (!pk || !pk.ok || !pk.present || !(pk.card || pk.here === s.id)) {
+    try { pk = await ui(() => readPermission(s.id, { restore: true })); } catch (e) { log('approval read failed: ' + e.message); return; }
+    if (!pk || !pk.ok || !pk.present) return;
+  }
   const ask = String(pk.request || '').replace(/\s+/g, ' ').trim();
   const allow = (pk.options || []).filter(o => o.kind === 'allow');
   const deny = (pk.options || []).find(o => o.kind === 'deny');

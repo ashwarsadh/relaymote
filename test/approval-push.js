@@ -27,7 +27,8 @@ for (const [t, risky] of [
   // 2. approvalEvent turns the awaiting push into an approval with the ask and the buttons.
   const idx = fs.readFileSync(path.join(root, 'mobile', 'index.js'), 'utf8');
   const fnSrc = idx.slice(idx.indexOf('async function approvalEvent'), idx.indexOf('async function notifyAttention'));
-  const mk = (pk) => { const logs = []; const x = { ui: (f) => f(), peekPermission: async () => pk, approvalRisk, log: (l) => logs.push(l), String, Object, logs };
+  const mk = (pk, read) => { const logs = [], reads = []; const x = { ui: (f) => f(), peekPermission: async () => pk, approvalRisk, log: (l) => logs.push(l), String, Object, logs, reads,
+    readPermission: async (id, o) => { reads.push([id, o]); return read || { ok: true, present: false }; } };
     vm.runInNewContext(fnSrc + '\nthis.f = approvalEvent;', x); return x; };
   const card = { ok: true, present: true, card: true, here: 'local_other',
     request: 'Allow Claude to use Adobe Creative Cloud? Install Illustrator for the print library. Your other windows will be hidden, then restored when Claude is done.',
@@ -47,10 +48,17 @@ for (const [t, risky] of [
   evt = { id: 'local_pf', kind: 'awaiting', title: 't', body: 'Needs your input' };
   await x.f({ id: 'local_pf', title: 'Print Finder' }, evt);
   check(evt.kind === 'awaiting' && !evt.actions, "another session's own prompt on screen is not pinned on this one", evt);
+  check(x.reads.length === 1 && x.reads[0][0] === 'local_pf' && x.reads[0][1].restore === true,
+    'nothing for it on screen -> its own view is read, and the PC view is put back', x.reads);
   x = mk({ ok: true, present: false });
   evt = { id: 'a', kind: 'awaiting', title: 't', body: 'Needs your input' };
   await x.f({ id: 'a', title: 't' }, evt);
-  check(evt.kind === 'awaiting' && evt.body === 'Needs your input', 'no approval on screen -> the plain awaiting push is unchanged');
+  check(evt.kind === 'awaiting' && evt.body === 'Needs your input', 'no approval anywhere -> the plain awaiting push is unchanged');
+  // Measured 21-Oct: the card was not drawn in Print Finder's view, only once the Conductor's was opened.
+  x = mk({ ok: true, present: false, here: 'local_pf', card: false }, { ...card, here: undefined, card: true });
+  evt = { id: 'local_me', kind: 'awaiting', title: 't', body: 'Needs your input' };
+  await x.f({ id: 'local_me', title: 'RelayMote' }, evt);
+  check(evt.kind === 'approval' && evt.actions.length === 2, 'a card not drawn in the current view is found by opening the waiting session', evt);
   check(/if \(st === 'awaiting'\) await approvalEvent\(s, evt\);/.test(idx), 'notifyAttention enriches every awaiting push');
   check(!/answerPermission\(/.test(fnSrc), 'approvalEvent never answers anything itself');
 

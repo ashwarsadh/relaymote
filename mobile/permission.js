@@ -117,9 +117,11 @@ async function readPermission(sessionId, { restore = false } = {}) {
     // A computer-use card can take a moment to draw after the view changes (measured: not drawn in every view).
     for (let i = 0; i < 4 && !st.present; i++) { await sleep(500); st = JSON.parse(await conn.evaluate(desktop.rEval(CID, READ_JS)) || '{}'); }
     const card = JSON.parse(await conn.evaluate(desktop.rEval(CID, `String(!!document.querySelector('.epitaxy-approval-card'))`)) || 'false');
-    // Put the PC's view back where it was (a read on his behalf should not move his screen).
-    if (restore && nav.restore) await focus(conn, CID, nav.restore).catch(() => {});
-    return { ok: true, sessionId, ...st, card };
+    // Put the PC's view back where it was (a read on his behalf should not move his screen). 22-Oct: this was a
+    // bare row click, which does nothing when that row is not drawn in the sidebar, so his window stayed on Sagar's
+    // Conductor. restoreActive routes there, reveals the row if needed, and verifies.
+    const back = restore && nav.restore ? await desktop.restoreActive(conn, CID, nav.restore).catch(() => false) : null;
+    return { ok: true, sessionId, ...st, card, restored: back };
   } catch (e) {
     return { ok: false, error: 'EXCEPTION', message: e.message };
   } finally { conn.close(); }
@@ -151,12 +153,14 @@ async function answerPermission(sessionId, kind, raw) {
     const r = await conn.evaluate(desktop.rEval(CID, CLICK_JS(pick.key)));
     if (r !== 'clicked') return { ok: false, error: 'CLICK_FAILED', detail: r };
 
-    for (let i = 0; i < 20; i++) {
+    let gone = false;
+    for (let i = 0; i < 20 && !gone; i++) {
       await sleep(300);
-      const after = JSON.parse(await conn.evaluate(desktop.rEval(CID, READ_JS)) || '{}');
-      if (!after.present) return { ok: true, sessionId, chose: pick.label, kind: want };
+      gone = !JSON.parse(await conn.evaluate(desktop.rEval(CID, READ_JS)) || '{}').present;
     }
-    return { ok: false, error: 'STILL_SHOWING', chose: pick.label };
+    // His tap answers from the phone; the PC window goes back to what it showed (Ashwar 22-Oct: sessions must not switch).
+    const restored = nav.restore ? await desktop.restoreActive(conn, CID, nav.restore).catch(() => false) : null;
+    return gone ? { ok: true, sessionId, chose: pick.label, kind: want, restored } : { ok: false, error: 'STILL_SHOWING', chose: pick.label, restored };
   } catch (e) {
     return { ok: false, error: 'EXCEPTION', message: e.message };
   } finally { conn.close(); }
@@ -181,6 +185,33 @@ async function peekPermission() {
   } finally { conn.close(); }
 }
 
+// 22-Oct, Ashwar: "Sagar opened his conductor. Then my Claude desktop app switched to that conductor session ...
+// Unnecessarily session shouldn't be switching". Every "awaiting" push used to open the waiting session on the PC to
+// look for an Allow card. Only a session whose transcript ENDS on a tool call still waiting for its result can be
+// held by an approval; a question, a plan or a plain "blocked" turn never is, so those are never opened.
+const NOT_APPROVAL = /^(AskUserQuestion|ExitPlanMode)$/;
+function pendingApproval(file, { maxBytes = 256 * 1024 } = {}) {
+  const fs = require('fs');
+  let text = '';
+  try {
+    const size = fs.statSync(file).size, from = Math.max(0, size - maxBytes);
+    const fd = fs.openSync(file, 'r');
+    try { const b = Buffer.alloc(size - from); fs.readSync(fd, b, 0, b.length, from); text = b.toString('utf8'); } finally { fs.closeSync(fd); }
+  } catch { return null; }
+  const open = new Map();
+  for (const ln of text.split('\n')) {
+    if (ln.indexOf('tool_') < 0) continue;
+    let d; try { d = JSON.parse(ln); } catch { continue; }
+    const content = d.message && Array.isArray(d.message.content) ? d.message.content : [];
+    for (const c of content) {
+      if (c && c.type === 'tool_use') open.set(c.id, String(c.name || ''));
+      else if (c && c.type === 'tool_result') open.delete(c.tool_use_id);
+    }
+  }
+  const names = [...open.values()].filter(n => !NOT_APPROVAL.test(n));
+  return names.length ? names[names.length - 1] : null;
+}
+
 // Ashwar's standing rule: credentials, money, deletion and security/system settings are always his own tap with
 // the whole ask in front of him. Such an ask gets no Allow button on the notification; he opens Relaymote to answer.
 const RISKY = /\b(passwords?|credentials?|api[ -]?keys?|tokens?|secrets?|otp|2fa|login|sign[ -]?in|pay(ment)?s?|bank|upi|card|transfer|wallet|invoice payment|delete|deleting|remove|erase|wipe|format|uninstall|rm -rf|drop table|registry|regedit|firewall|defender|antivirus|security|uac|administrator|admin rights|group policy|bitlocker|system settings?|control panel)\b/i;
@@ -189,4 +220,4 @@ function approvalRisk(text) {
   return m ? m[0].toLowerCase() : '';
 }
 
-module.exports = { readPermission, answerPermission, peekPermission, approvalRisk };
+module.exports = { readPermission, answerPermission, peekPermission, approvalRisk, pendingApproval };

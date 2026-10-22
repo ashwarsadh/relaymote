@@ -1,3 +1,7 @@
+## 0.2.127
+
+- The PC window no longer jumps to another session when one is waiting. An awaiting turn opens that session to read an Allow card only when its transcript ends on a tool call still waiting, and the window is put back with the verified restore (his phone answer puts it back too).
+
 ## 0.2.126
 
 - A session can be taken off another principal's list (POST /api/principal/release, owner only) until that principal's Conductor acts on it again. The release survives restarts and a full re-read of his Conductor's transcript.

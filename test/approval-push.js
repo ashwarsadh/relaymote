@@ -27,7 +27,8 @@ for (const [t, risky] of [
   // 2. approvalEvent turns the awaiting push into an approval with the ask and the buttons.
   const idx = fs.readFileSync(path.join(root, 'mobile', 'index.js'), 'utf8');
   const fnSrc = idx.slice(idx.indexOf('async function approvalEvent'), idx.indexOf('async function notifyAttention'));
-  const mk = (pk, read) => { const logs = [], reads = []; const x = { ui: (f) => f(), peekPermission: async () => pk, approvalRisk, log: (l) => logs.push(l), String, Object, logs, reads,
+  const mk = (pk, read, pending = 'mcp__computer-use__request_access') => { const logs = [], reads = []; const x = { ui: (f) => f(), peekPermission: async () => pk, approvalRisk, log: (l) => logs.push(l), String, Object, logs, reads,
+    sessions: { transcriptPath: (s) => s.id + '.jsonl' }, pendingApproval: () => pending,
     readPermission: async (id, o) => { reads.push([id, o]); return read || { ok: true, present: false }; } };
     vm.runInNewContext(fnSrc + '\nthis.f = approvalEvent;', x); return x; };
   const card = { ok: true, present: true, card: true, here: 'local_other',
@@ -59,6 +60,31 @@ for (const [t, risky] of [
   evt = { id: 'local_me', kind: 'awaiting', title: 't', body: 'Needs your input' };
   await x.f({ id: 'local_me', title: 'RelayMote' }, evt);
   check(evt.kind === 'approval' && evt.actions.length === 2, 'a card not drawn in the current view is found by opening the waiting session', evt);
+  // 22-Oct, Ashwar: "Sagar opened his conductor. Then my Claude desktop app switched to that conductor session ...
+  // Unnecessarily session shouldn't be switching". The window shows Ashwar's Conductor; Sagar's Conductor goes
+  // "awaiting" (it asked him a question). Nothing in its transcript waits on a tool -> the PC view is never touched.
+  for (const [why, pend] of [['a question (AskUserQuestion) or a plain blocked turn', null]]) {
+    x = mk({ ok: true, present: false, here: 'local_ashwar_conductor', card: false }, { ...card }, pend);
+    evt = { id: 'local_sagar_conductor', kind: 'awaiting', title: 'Sagar Conductor', body: 'Needs your input' };
+    await x.f({ id: 'local_sagar_conductor', title: 'Sagar Conductor' }, evt);
+    check(x.reads.length === 0 && evt.kind === 'awaiting', "Sagar's Conductor awaiting " + why + ": Ashwar's window is NOT switched", x.reads);
+  }
+  check(/restoreActive\(conn, CID, nav\.restore\)/.test(fs.readFileSync(path.join(root, 'mobile', 'permission.js'), 'utf8'))
+    && !/await focus\(conn, CID, nav\.restore\)/.test(fs.readFileSync(path.join(root, 'mobile', 'permission.js'), 'utf8')),
+    'when a read or his answer must open a session, the view is put back by the verified restoreActive, not a bare row click');
+  // pendingApproval reads the transcript: a waiting request_access/Bash is an approval; a question, a plan or a finished call is not.
+  {
+    const os = require('os');
+    const { pendingApproval } = require('../mobile/permission');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pend-'));
+    const tu = (id, name) => JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id, name, input: {} }] } });
+    const tr = (id) => JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] } });
+    const w = (n, lines) => { const f = path.join(tmp, n); fs.writeFileSync(f, lines.join('\n') + '\n'); return pendingApproval(f); };
+    check(w('a', [tu('1', 'Bash'), tr('1'), tu('2', 'mcp__computer-use__request_access')]) === 'mcp__computer-use__request_access', 'a request_access with no result yet is an approval');
+    check(w('b', [tu('1', 'Bash'), tr('1'), tu('2', 'AskUserQuestion')]) === null, 'a pending AskUserQuestion is not');
+    check(w('c', [tu('1', 'Bash'), tr('1')]) === null, 'a transcript whose calls all have results is not');
+    check(pendingApproval(path.join(tmp, 'missing')) === null, 'no transcript -> not an approval (nothing is opened)');
+  }
   check(/if \(st === 'awaiting'\) await approvalEvent\(s, evt\);/.test(idx), 'notifyAttention enriches every awaiting push');
   check(!/answerPermission\(/.test(fnSrc), 'approvalEvent never answers anything itself');
 

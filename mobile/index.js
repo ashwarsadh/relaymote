@@ -31,7 +31,7 @@ const pair = require('../lib/pair');
 const accountScope = require('../lib/account-scope');
 const { readUsage } = require('./usage');
 const board = require('./board');
-const { readPermission, answerPermission, peekPermission, approvalRisk } = require('./permission');
+const { readPermission, answerPermission, peekPermission, approvalRisk, pendingApproval } = require('./permission');
 const { pressDialogButton } = require('./dialog');
 const accounts = require('./accounts');
 const subusers = require('./subusers');
@@ -461,9 +461,15 @@ async function approvalEvent(s, evt) {
   let pk;
   try { pk = await ui(() => peekPermission()); } catch (e) { log('approval peek failed: ' + e.message); return; }
   // Measured 21-Oct: the computer-use card is NOT drawn in every session's view (absent in Print Finder's, drawn in the
-  // Conductor's). Nothing on screen -> open the waiting session, read its prompt, and put the view back.
+  // Conductor's). Nothing on screen -> open the waiting session, read its prompt, and put the view back -- but ONLY
+  // when its transcript ends on a tool call still waiting (22-Oct: every awaiting turn, Sagar's Conductor asking him
+  // a question included, used to switch Ashwar's window).
   if (!pk || !pk.ok || !pk.present || !(pk.card || pk.here === s.id)) {
+    let tool = null;
+    try { tool = pendingApproval(sessions.transcriptPath(s)); } catch {}
+    if (!tool) return;
     try { pk = await ui(() => readPermission(s.id, { restore: true })); } catch (e) { log('approval read failed: ' + e.message); return; }
+    if (pk && pk.restored === false) log('approval read: could not put the PC view back after reading ' + s.id);
     if (!pk || !pk.ok || !pk.present) return;
   }
   const ask = String(pk.request || '').replace(/\s+/g, ' ').trim();

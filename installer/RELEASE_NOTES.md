@@ -1,3 +1,7 @@
+## 0.2.128
+
+- Another person's phone (Sagar, Ajay) never moves the PC window. Opening an unread session no longer clicks it on the PC for them, their sends use the app's own channel only, and their sessions are never opened to read an approval. For Ashwar's own phone these steps wait until the PC has been idle for 2 minutes.
+
 ## 0.2.127
 
 - The PC window no longer jumps to another session when one is waiting. An awaiting turn opens that session to read an Allow card only when its transcript ends on a tool call still waiting, and the window is put back with the verified restore (his phone answer puts it back too).

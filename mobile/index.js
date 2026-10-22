@@ -160,6 +160,17 @@ function alertAudience(s) {
   }
   return { keys: out, def: J.default };
 }
+// 22-Oct (Ashwar): a session is never opened in the PC window because of another principal's activity, and any
+// UI step done for his own phone waits until the PC has been idle for the idle gate (idleGateSeconds, 2 min).
+const pcIdle = () => { try { return require('../lib/idle').isIdle(Number(require('../lib/config').get().idleGateSeconds || 120) * 1000); } catch { return false; } };
+function windowBusy(req, url) {
+  if (req && req._identity && req._identity.kind === 'subuser') return 'another principal';
+  try { if (!principalOf(req, url).isDefault) return 'another principal'; } catch {}
+  return pcIdle() ? null : 'PC in use';
+}
+function othersSession(s) {
+  try { const a = alertAudience(s); return !a.keys.has(a.def); } catch { return true; }
+}
 const subPrincipal = (sub, def) => String((sub && sub.as) || def).toLowerCase();
 function notePrincipalTouch(req, url, sid, started) {
   try {
@@ -468,6 +479,9 @@ async function approvalEvent(s, evt) {
     let tool = null;
     try { tool = pendingApproval(sessions.transcriptPath(s)); } catch {}
     if (!tool) return;
+    // Another principal's session (Ajay's / Sagar's) is never opened on Ashwar's PC; nor is anything while he uses it.
+    if (othersSession(s)) { log('approval read skipped for ' + s.id + ': another principal\'s session'); return; }
+    if (!pcIdle()) { log('approval read skipped for ' + s.id + ': PC in use'); return; }
     try { pk = await ui(() => readPermission(s.id, { restore: true })); } catch (e) { log('approval read failed: ' + e.message); return; }
     if (pk && pk.restored === false) log('approval read: could not put the PC view back after reading ' + s.id);
     if (!pk || !pk.ok || !pk.present) return;
@@ -866,7 +880,7 @@ async function redeliver(e, text) {
   return ui(() => desktop.sendMessage(e.session, text, { queue: true }));
 }
 
-async function doSend(id, text, attachments) {
+async function doSend(id, text, attachments, { noUi = false } = {}) {
   let body = String(text || '');
   if (Array.isArray(attachments) && attachments.length) {
     body = attachments.map(a => '@' + a).join('\n') + (body ? '\n' + body : '');
@@ -924,7 +938,9 @@ async function doSend(id, text, attachments) {
   let last = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      last = await ui(() => desktop.sendMessage(id, body, { queue: true }));
+      // Another principal's message goes through the app's own channel only, never the composer, which opens the
+      // session in Ashwar's window (22-Oct). A refusal stays in that phone's outbox and is retried.
+      last = await ui(() => desktop.sendMessage(id, body, { queue: true, backgroundOnly: noUi }));
     } catch (e) {
       const why = String((e && e.message) || 'threw');
       log(`send attempt ${attempt} threw: ${why}`);
@@ -1550,6 +1566,11 @@ async function handle(req, res) {
     if (!(dec.unread || dec.dot === 'unread' || /unread/i.test(String(dec.dot || '')))) {
       return json(res, 200, { ok: true, skipped: 'not unread' });
     }
+    // 22-Oct, Ashwar: "Sagar opened his conductor. Then my Claude desktop app switched to that conductor session" and
+    // "you again switched my session ... took me to Ajay conductor". Clearing the PC's unread dot CLICKS that session
+    // in his window. Another principal's phone never does that; his own only when the PC has been idle (2 min).
+    const why = windowBusy(req, url);
+    if (why) { log(`mark-read ${id}: PC window not touched (${why})`); return json(res, 200, { ok: true, skipped: why }); }
     return uiJob(res, 'markread', () => desktop.markRead(id), { id });
   }
 
@@ -1858,7 +1879,7 @@ async function handle(req, res) {
       sendJobs.set(jobId, job);
       notePrincipalTouch(req, url, body.id, false);
       if (cmid) { cmidStore().set(cmid, { jobId, at: job.at, done: false }); cmidSave(); }
-      doSend(body.id, body.text, body.attachments)
+      doSend(body.id, body.text, body.attachments, { noUi: windowBusy(req, url) === 'another principal' })
         .then(out => finishSend(job, out))
         .catch(e => finishSend(job, { ok: false, error: e.message }));
       return json(res, 202, { ok: true, queued: true, jobId });

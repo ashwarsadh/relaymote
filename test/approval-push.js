@@ -29,6 +29,7 @@ for (const [t, risky] of [
   const fnSrc = idx.slice(idx.indexOf('async function approvalEvent'), idx.indexOf('async function notifyAttention'));
   const mk = (pk, read, pending = 'mcp__computer-use__request_access') => { const logs = [], reads = []; const x = { ui: (f) => f(), peekPermission: async () => pk, approvalRisk, log: (l) => logs.push(l), String, Object, logs, reads,
     sessions: { transcriptPath: (s) => s.id + '.jsonl' }, pendingApproval: () => pending,
+    othersSession: (s) => /sagar|ajay/.test(s.id), pcIdle: () => x.idle !== false,
     readPermission: async (id, o) => { reads.push([id, o]); return read || { ok: true, present: false }; } };
     vm.runInNewContext(fnSrc + '\nthis.f = approvalEvent;', x); return x; };
   const card = { ok: true, present: true, card: true, here: 'local_other',
@@ -68,6 +69,37 @@ for (const [t, risky] of [
     evt = { id: 'local_sagar_conductor', kind: 'awaiting', title: 'Sagar Conductor', body: 'Needs your input' };
     await x.f({ id: 'local_sagar_conductor', title: 'Sagar Conductor' }, evt);
     check(x.reads.length === 0 && evt.kind === 'awaiting', "Sagar's Conductor awaiting " + why + ": Ashwar's window is NOT switched", x.reads);
+  }
+  // 22-Oct, again: "you again switched my session ... took me to Ajay conductor and I ended up sitting there". Even a
+  // real pending approval in Ajay's or Sagar's session never opens it on Ashwar's PC; nor does anything while he types.
+  for (const who of ['local_ajay_conductor', 'local_sagar_conductor']) {
+    x = mk({ ok: true, present: false, here: 'local_ashwar_conductor', card: false }, { ...card });
+    evt = { id: who, kind: 'awaiting', title: who, body: 'Needs your input' };
+    await x.f({ id: who, title: who }, evt);
+    check(x.reads.length === 0, who + ' with a pending tool call: Ashwar\'s window is NOT switched', x.reads);
+  }
+  x = mk({ ok: true, present: false, here: 'local_ashwar_conductor', card: false }, { ...card });
+  x.idle = false;
+  evt = { id: 'local_pf', kind: 'awaiting', title: 'Print Finder', body: 'Needs your input' };
+  await x.f({ id: 'local_pf', title: 'Print Finder' }, evt);
+  check(x.reads.length === 0, 'Ashwar typing in his Conductor (PC not idle 2 min): even his own session is NOT opened', x.reads);
+  // mark-read (the phone clears the PC's unread dot by clicking the row) and the composer send: same rule.
+  {
+    const wbSrc = idx.slice(idx.indexOf('function windowBusy'), idx.indexOf('function othersSession'));
+    const wb = (kind, isDefault, idle) => { const c = { principalOf: () => ({ isDefault }), pcIdle: () => idle }; vm.runInNewContext(wbSrc + '\nthis.f = windowBusy;', c);
+      return c.f({ _identity: kind ? { kind } : null }, {}); };
+    check(wb('subuser', false, true) === 'another principal', "Ajay's scoped login: the PC window is never touched");
+    check(wb(null, false, true) === 'another principal', "Sagar's phone (as=sagar): the PC window is never touched");
+    check(wb(null, true, false) === 'PC in use', "Ashwar's own phone while he is typing at the PC: not touched");
+    check(wb(null, true, true) === null, "Ashwar's own phone, PC idle 2 min: allowed (and restored)");
+    const mr = idx.slice(idx.indexOf("if (p === '/api/mark-read')"), idx.indexOf("if (p === '/api/mark-read')") + 1400);
+    check(mr.indexOf('windowBusy(req, url)') > 0 && mr.indexOf('windowBusy(req, url)') < mr.indexOf('desktop.markRead'), 'mark-read checks windowBusy BEFORE it clicks anything');
+    check(/doSend\(body\.id, body\.text, body\.attachments, \{ noUi: windowBusy\(req, url\) === 'another principal' \}\)/.test(idx)
+      && /backgroundOnly: noUi/.test(idx), "another principal's send goes by the app's own channel only");
+    const dsk = fs.readFileSync(path.join(root, 'lib', 'desktop.js'), 'utf8');
+    const w = dsk.slice(dsk.indexOf('  sendMessage: async (sessionId, message, opts = {}) => {'));
+    check(w.indexOf('if (opts.backgroundOnly) return') > 0 && w.indexOf('if (opts.backgroundOnly) return') < w.indexOf("gated('sendMessage', sendMessage)"),
+      'a background-only send never falls back to the composer (which opens the session)');
   }
   check(/restoreActive\(conn, CID, nav\.restore\)/.test(fs.readFileSync(path.join(root, 'mobile', 'permission.js'), 'utf8'))
     && !/await focus\(conn, CID, nav\.restore\)/.test(fs.readFileSync(path.join(root, 'mobile', 'permission.js'), 'utf8')),

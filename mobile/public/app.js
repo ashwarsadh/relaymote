@@ -308,9 +308,10 @@ function md(src, doc) {
   });
   // Bare http(s) URLs open in a new tab. Parked like a markdown link BEFORE FILE_RX, so a URL's path is
   // never also turned into a file link. Runs on escaped text: only http(s), and the match stops at an
-  // escaped quote or bracket, so the href cannot close its attribute. Trailing punctuation stays outside.
+  // escaped quote or bracket, so the href cannot close its attribute. Trailing punctuation stays outside,
+  // and so does markdown around it: "**https://x.io/p/**:" linked "x.io/p/**" (22-Oct, a 404 on his phone).
   h = h.replace(URL_RX, (m) => {
-    const url = m.replace(/(?:[.,;:!?)\]}]|&#39;)+$/, '');
+    const url = m.replace(/(?:[.,;:!?)\]}*_~]|&#39;)+$/, '');
     const tail = m.slice(url.length);
     links.push(`<a class="weblink" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
     return `\u0000L${links.length - 1}\u0000${tail}`;
@@ -350,7 +351,7 @@ function boardLinks(h) {
       : `<a class="boardlink" data-board="1">${m}</a>`)).join('');
 }
 
-const URL_RX = /\bhttps?:\/\/(?:(?!&quot;|&lt;|&gt;)[^\s<>`"'])+/gi;
+const URL_RX = /(?<![A-Za-z0-9])https?:\/\/(?:(?!&quot;|&lt;|&gt;)[^\s<>`"'])+/gi;
 // A code span holding one path: a drive path, or a relative path with a separator, ending in a file
 // extension (optionally :line). Spaces are allowed, since a code span marks where the path starts and ends.
 const CODE_PATH_RX = /^(?:[A-Za-z]:[\\/]|\.{0,2}[\\/])?(?:[^\\/\n`<>|*?]+[\\/])+[^\\/\s`<>|*?]+\.\w{1,8}(?::\d+(?::\d+)?)?$/;

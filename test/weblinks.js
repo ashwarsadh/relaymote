@@ -59,6 +59,21 @@ check(/class="fileref"/.test(md('see src/app.js:12')), 'file paths are still fil
 }
 check(md('hello world') === 'hello world', 'plain text is unchanged');
 {
+  // 22-Oct, Ashwar: "when you add asterisk after the domain, it takes it as a part of the domain and the URL
+  // does not open". The message: "live at\n**https://nirvaangyan.com/podcasts/**:".
+  const U = 'https://nirvaangyan.com/podcasts/';
+  const h = md('The podcasts page is live at\n**' + U + '**:');
+  check(hrefs(h).length === 1 && hrefs(h)[0][0] === U && new RegExp('<strong><a class="weblink" href="' + U + '"[^>]*>' + U + '</a></strong>:$').test(h),
+    'the reported message: **url**: at a line start is a bold link to the url, the ** and : outside', h);
+  for (const [s, want] of [['**' + U + '**', '<strong>'], ['*' + U + '*', '<em>'], ['_' + U + '_', ''], ['`' + U + '`', '<code>'],
+    ['(' + U + ')', ''], [U + '.', ''], [U + '**:', ''], ['see ' + U + ', then', ''], ['[' + U + ']', ''], [U + ';', '']]) {
+    const o = md(s);
+    check(hrefs(o).length === 1 && hrefs(o)[0][0] === U && (!want || o.includes(want)), 'url is clean in ' + JSON.stringify(s), o);
+  }
+  check(hrefs(md('https://x.io/a_b_c'))[0][0] === 'https://x.io/a_b_c' && hrefs(md('https://x.io/p?q=*a'))[0][0] === 'https://x.io/p?q=*a',
+    'an _ or * INSIDE a url is kept');
+}
+{
   // The control: md() without the URL pass leaves the URL as text and turns its path into a file link.
   const old = load(parts.join('\n').replace(/\n  \/\/ Bare http\(s\) URLs[\s\S]*?\n  \}\);\n/, '\n'));
   const h = old('https://github.com/example/relaymote/blob/main/src/app.js');

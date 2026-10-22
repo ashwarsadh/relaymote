@@ -1,3 +1,7 @@
+## 0.2.125
+
+- A link wrapped in markdown opens: "**https://site/page/**:" linked "https://site/page/**" and opened a broken page. Trailing * _ ~ and punctuation now stay outside the link, and _url_ is linked too.
+
 ## 0.2.124
 
 - "Approval needed" now also finds the request when the PC is showing a different session. The "Allow Claude to use an app" card does not appear in every session's view, so Relaymote opens the waiting session to read it, then switches the PC back to what it was showing.

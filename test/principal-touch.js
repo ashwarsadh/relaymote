@@ -67,6 +67,29 @@ check(!row(UNTOUCHED).by && !row(ASH_C).by, 'untouched sessions carry nothing');
 T._reset(path.join(dir, 'ledger.json'));
 check(T.view(list, sag, dir).some(s => s.id === STARTED), 'ledger persists across restarts');
 
+// 22-Oct, Ashwar: "i sent 2 commands by msitake to ajay conductor ... can hide those session from ajay unless
+// ajay sends prompt related to cad". A release takes it off his list, durably, until his Conductor acts again.
+{
+  check(T.view(list, sag, dir).some(s => s.id === SHARED), 'control: before the release Sagar sees SHARED');
+  const r = T.release(SHARED, 'sagar');
+  check(r.ok && r.had && !T.view(list, sag, dir).some(s => s.id === SHARED), 'released -> gone from his list', r);
+  check(!(T.view(list, ash, dir).find(s => s.id === SHARED) || {}).by, "Ashwar's list no longer tags it as Sagar's");
+  // A full re-read of his Conductor's transcript (ledger offsets lost) must not bring the old touch back.
+  const L = JSON.parse(fs.readFileSync(path.join(dir, 'ledger.json'), 'utf8'));
+  L.files = {}; fs.writeFileSync(path.join(dir, 'ledger.json'), JSON.stringify(L));
+  T._reset(path.join(dir, 'ledger.json'));
+  T.refresh(dir, (sid) => (sid === SAGAR_C ? tfile : null), { force: true });
+  check(!T.view(list, sag, dir).some(s => s.id === SHARED), 'after a restart and a full transcript re-read it stays released');
+  check(T.view(list, sag, dir).some(s => s.id === STARTED), 'other sessions are untouched by the release');
+  // His Conductor sends to it again -> back.
+  fs.appendFileSync(tfile, tu(Date.now() + 1000, 't7', 'SendMessage', { to: SHARED, message: 'CAD prompt' }) + '\n');
+  T.refresh(dir, (sid) => (sid === SAGAR_C ? tfile : null), { force: true });
+  check(T.view(list, sag, dir).some(s => s.id === SHARED), 'touched again by his Conductor after the release -> shows again');
+  const idx = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
+  check(/p === '\/api\/principal\/release'/.test(idx) && !/WRITE_OK[\s\S]{0,400}\/api\/principal\/release/.test(idx),
+    'the release route exists and is not open to a scoped login');
+}
+
 // The owner's chip: show / fold / hide, taken from app.js as written.
 const app = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'public', 'app.js'), 'utf8');
 const fn = app.slice(app.indexOf('function applyFold'), app.indexOf('function renderSessions'));

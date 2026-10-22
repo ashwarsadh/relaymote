@@ -1,3 +1,7 @@
+## 0.2.126
+
+- A session can be taken off another principal's list (POST /api/principal/release, owner only) until that principal's Conductor acts on it again. The release survives restarts and a full re-read of his Conductor's transcript.
+
 ## 0.2.125
 
 - A link wrapped in markdown opens: "**https://site/page/**:" linked "https://site/page/**" and opened a broken page. Trailing * _ ~ and punctuation now stay outside the link, and _url_ is linked too.

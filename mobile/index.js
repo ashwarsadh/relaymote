@@ -2027,6 +2027,19 @@ async function handle(req, res) {
                        () => ui(() => answerPermission(body.id, body.kind, body.raw)),
                        { id: body.id, kind: body.kind });
     }
+    // 22-Oct: take a session off another principal's list (owner only: scoped logins are refused above) until
+    // that principal's Conductor touches it again. body: { principal, ids: [sid...] } or { principal, id }.
+    if (p === '/api/principal/release') {
+      const P = require('./principals'), touch = require('./principal-touch');
+      const key = String(body.principal || '').toLowerCase();
+      const J = P.load(board.CONDUCTOR_DIR);
+      if (!J.principals[key] || key === J.default) return json(res, 400, { ok: false, error: 'NO_PRINCIPAL', message: 'Name another principal (not the default).' });
+      const conductor = J.principals[key].conductor;
+      const out = [].concat(body.ids || body.id || []).map(String).map(sid => sid === conductor
+        ? { ok: false, sid, error: 'his own Conductor stays on his list' } : touch.release(sid, key));
+      log('principal release: ' + key + ' ' + out.map(r => r.sid + (r.ok ? '' : ' (' + r.error + ')')).join(', '));
+      return json(res, out.length && out.every(r => r.ok) ? 200 : 400, { ok: out.length > 0 && out.every(r => r.ok), results: out });
+    }
 
     if (p === '/api/relaymote-task/stop') {
       const out = await orch.stopTask(String(body.id || ''), { by: 'phone (Relaymote mobile)' });

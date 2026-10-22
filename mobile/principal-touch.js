@@ -33,6 +33,7 @@ function load() {
   if (!ledger || typeof ledger !== 'object') ledger = {};
   ledger.touch = ledger.touch || {};
   ledger.files = ledger.files || {};
+  ledger.released = ledger.released || {};
   return ledger;
 }
 function save() {
@@ -48,6 +49,9 @@ function save() {
 function note(sid, p, { at = Date.now(), started = false } = {}) {
   if (!sid || !p) return false;
   const L = load();
+  // A released session stays off his list for every touch up to the release; a later one brings it back.
+  const rel = (L.released[sid] || {})[p];
+  if (rel && at <= rel) return false;
   const row = (L.touch[sid] = L.touch[sid] || {});
   const t = (row[p] = row[p] || { first: at, last: at, started: false });
   const before = JSON.stringify(t);
@@ -55,6 +59,23 @@ function note(sid, p, { at = Date.now(), started = false } = {}) {
   t.last = Math.max(t.last || 0, at);
   if (started) t.started = true;
   return JSON.stringify(t) !== before;
+}
+
+/**
+ * Take session sid off principal p's list (Ashwar 22-Oct: "i sent 2 commands by msitake to ajay conductor ... can
+ * hide those session from ajay unless ajay sends prompt related to cad"). Durable: the touch row goes, and the
+ * release time is kept so a re-read of his Conductor's transcript cannot bring older touches back. A touch AFTER
+ * the release (his Conductor acts on it again) shows it again. His own Conductor cannot be released.
+ */
+function release(sid, p, { at = Date.now() } = {}) {
+  if (!sid || !p) return { ok: false, error: 'session and principal are required' };
+  const L = load();
+  (L.released[sid] = L.released[sid] || {})[p] = at;
+  const row = L.touch[sid];
+  const had = !!(row && row[p]);
+  if (had) { delete row[p]; if (!Object.keys(row).length) delete L.touch[sid]; }
+  save();
+  return { ok: true, sid, principal: p, had, at };
 }
 
 /** Ids a tool call ACTS on: only its target fields (a send's message text may quote other sessions). */
@@ -176,4 +197,4 @@ function view(list, p, dir, { now = Date.now() } = {}) {
 
 function _reset(file) { FILE = file || FILE; ledger = null; lastScan = 0; }
 
-module.exports = { note, save, refresh, view, scanLines, targetsOf, WEEK_MS, _reset, get file() { return FILE; } };
+module.exports = { note, release, save, refresh, view, scanLines, targetsOf, WEEK_MS, _reset, get file() { return FILE; } };

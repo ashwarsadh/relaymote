@@ -22,7 +22,7 @@ function el(tag) {
   return e;
 }
 const wrap = el('div');
-const start = app.indexOf('function renderAttachments()');
+const start = app.indexOf('const attsKey');
 const end = app.indexOf('function uploadOne(');
 const src = app.slice(start, end);
 const state = { attachments: [], uploads: [] };

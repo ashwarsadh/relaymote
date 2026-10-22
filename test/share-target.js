@@ -96,6 +96,40 @@ for (const t of ['image/*', 'application/pdf', 'application/vnd.openxmlformats-o
   const boot = app.slice(app.indexOf('const shareId = SHARE_ID'), app.indexOf('watchForUpdates();', app.indexOf('const shareId = SHARE_ID')));
   check(/!userMoved && !want \? await leftoverShare\(\)/.test(boot), 'a leftover share never overrides his own navigation or a notification target');
 
+  // 8. 22-Oct, Ashwar (S24): "Then I shared to the relay mode this PDF later then it removed all the photos and just
+  //    attached the PDF. Also loading was slow second time." A share reloads the app; attachments lived in memory.
+  {
+    const grab = (a, b) => app.slice(app.indexOf(a), app.indexOf(b));
+    const src = grab('const attsKey', 'function renderAttachments') + grab('const UPLOAD_PARALLEL', 'async function send(');
+    const store = new Map();
+    const mkCtx = () => {
+      const c = { localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
+        JSON, Array, Promise, Math, toast: () => {}, renderAttachments: () => c.saveAtts(c.state.open, c.state.attachments), live: 0, peak: 0, sent: [],
+        state: { open: 'local_s', attachments: [], uploads: [] } };
+      c.uploadOne = async (f, rec) => { c.live++; c.peak = Math.max(c.peak, c.live); await new Promise(r => setTimeout(r, 5)); c.live--;
+        c.sent.push(f.name); c.state.uploads.splice(c.state.uploads.indexOf(rec), 1);
+        if (!c.state.attachments.some(a => c.sameFile(a, f))) c.state.attachments.push({ name: f.name, path: 'C:/up/' + f.name, size: f.size }); c.renderAttachments(); return true; };
+      vm.runInNewContext(src + '\nthis.loadAtts = loadAtts; this.saveAtts = saveAtts; this.sameFile = sameFile; this.uploadFiles = uploadFiles;', c);
+      return c;
+    };
+    const photos = Array.from({ length: 20 }, (_, i) => ({ name: 'IMG_' + i + '.jpg', size: 1000 + i }));
+    let c = mkCtx();
+    await c.uploadFiles(photos);
+    check(c.state.attachments.length === 20 && c.peak <= 3, 'share 1: 20 photos attached, at most 3 uploading at a time', { n: c.state.attachments.length, peak: c.peak });
+    // The second share reloads the page: a fresh app loads what is pending for the session.
+    c = mkCtx(); c.state.attachments = c.loadAtts('local_s');
+    check(c.state.attachments.length === 20, 'after the reload the 20 photos are still in the composer');
+    await c.uploadFiles([{ name: 'quote.pdf', size: 5000 }, photos[3]]);
+    check(c.state.attachments.length === 21 && c.state.attachments.some(a => a.name === 'quote.pdf') && JSON.stringify(c.sent) === '["quote.pdf"]',
+      'share 2 (a PDF, plus a photo already there) APPENDS the PDF; the duplicate is neither uploaded nor added again', c.sent);
+    c.state.attachments.splice(0, 1); c.renderAttachments();
+    check(c.loadAtts('local_s').length === 20, 'removing one keeps the rest (each is removable, and that sticks)');
+    c.state.attachments = []; c.renderAttachments();
+    check(c.loadAtts('local_s').length === 0 && !store.has('baton.atts.local_s'), 'sending (or Clear all) empties the kept list');
+    check(/if \(!sameSession\) state\.attachments = loadAtts\(id\);/.test(app) && !/\n  state\.attachments = \[\]; renderAttachments\(\);\n  state\.openGroups/.test(app),
+      'opening a session restores its pending attachments instead of emptying them');
+  }
+
   console.log(failed ? `\n${failed} FAILED` : '\nshare-target: all ok');
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -1793,7 +1793,10 @@ async function openChatInner(id) {
   try { localStorage.setItem(LAST_CHAT_KEY, id); } catch {}   // where a share from another app lands (no time limit)
   state.liveSuggestion = null;
   if (state.pending && state.pending.sid !== id) state.pending = null;
-  state.attachments = []; renderAttachments();
+  // 22-Oct (Ashwar: "I shared to the relay mode this PDF later then it removed all the photos"): a share reloads the
+  // app, and attachments lived only in memory. They are kept per session, like the draft, until sent or removed.
+  if (!sameSession) state.attachments = loadAtts(id);
+  renderAttachments();
   state.openGroups.clear();
   htmlCache.clear(); lastSig = '';
   logAtBottom = true; logNew = 0; seenMsgIds = new Set(); seenReplyTs = ''; scrollToBottomNext = true;
@@ -2668,7 +2671,22 @@ function renderChips(running, chips, uiRunning, pending) {
 // g1169: one chip per full-width row meant 15 attachments pushed the textbox and Send off the screen.
 // The chips now sit in ONE row that scrolls sideways, under a "N files · Clear all" line; each chip
 // keeps its own ×. The composer therefore never grows by more than two short rows.
+const attsKey = (id) => 'baton.atts.' + id;
+function loadAtts(id) {
+  try { const a = JSON.parse(localStorage.getItem(attsKey(id)) || '[]'); return Array.isArray(a) ? a.filter(x => x && x.path) : []; } catch { return []; }
+}
+function saveAtts(id, atts) {
+  if (!id) return;
+  try {
+    const keep = (atts || []).filter(a => a && a.path && !a.native).map(a => ({ name: a.name, path: a.path, size: a.size }));
+    if (keep.length) localStorage.setItem(attsKey(id), JSON.stringify(keep)); else localStorage.removeItem(attsKey(id));
+  } catch {}
+}
+// A file already attached (or on its way) is not added twice: a second share of the same photo, or the same
+// share opened again, keeps one copy. Name + size is what the share sheet gives for the same file.
+const sameFile = (a, f) => a && a.name === f.name && (a.size == null || f.size == null || a.size === f.size);
 function renderAttachments() {
+  saveAtts(state.open, state.attachments);
   const wrap = $('attachments');
   wrap.innerHTML = '';
   const uploads = (state.uploads || []).filter(u => !u.cleared);
@@ -2750,7 +2768,7 @@ function uploadOne(f, rec) {
       let d = null;
       try { d = JSON.parse(x.responseText); } catch {}
       if (x.status >= 200 && x.status < 300 && d && d.path) {
-        if (!rec.cleared) state.attachments.push({ name: f.name, path: d.path });   // "Clear all" while it was in flight
+        if (!rec.cleared && !state.attachments.some(a => sameFile(a, f))) state.attachments.push({ name: f.name, path: d.path, size: f.size });   // "Clear all" while it was in flight
         done();
         resolve(true);
       } else { fail(); resolve(false); }
@@ -2761,13 +2779,24 @@ function uploadOne(f, rec) {
   });
 }
 
+// 22-Oct: 20 shared photos went up all at once and the PC's server stalled for ~40 s (his next open was slow). At
+// most UPLOAD_PARALLEL go at a time; the rest wait their turn (each still shows in the strip).
+const UPLOAD_PARALLEL = 3;
 async function uploadFiles(files) {
-  const jobs = [];
+  const todo = [];
   for (const f of files) {
     if (f.size > 95 * 1024 * 1024) { toast(`${f.name} is over 95 MB, the most one upload can carry — share it by Google Drive instead`, true); continue; }
-    jobs.push(uploadOne(f));
+    if (state.attachments.some(a => sameFile(a, f)) || (state.uploads || []).some(u => !u.cleared && sameFile(u.file || u, f)) || todo.some(g => sameFile(g, f))) continue;
+    todo.push(f);
   }
-  return Promise.all(jobs);
+  const out = new Array(todo.length);
+  const recs = todo.map(f => ({ name: f.name, file: f, loaded: 0, total: f.size || 0, failed: false, attempt: 0 }));
+  state.uploads.push(...recs);
+  renderAttachments();
+  let next = 0;
+  const lane = async () => { while (next < todo.length) { const i = next++; out[i] = recs[i].cleared ? true : await uploadOne(todo[i], recs[i]); } };
+  await Promise.all(Array.from({ length: Math.min(UPLOAD_PARALLEL, todo.length) }, lane));
+  return out;
 }
 
 async function send(target) {

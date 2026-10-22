@@ -1,3 +1,8 @@
+## 0.2.129
+
+- A second share ADDS to what is already attached instead of replacing it. Pending attachments are kept per session until sent or removed, a file already attached is not added or uploaded again, and each stays removable.
+- Shared files upload at most 3 at a time (20 at once stalled the PC server for about 40 s and made the next open slow).
+
 ## 0.2.128
 
 - Another person's phone (Sagar, Ajay) never moves the PC window. Opening an unread session no longer clicks it on the PC for them, their sends use the app's own channel only, and their sessions are never opened to read an approval. For Ashwar's own phone these steps wait until the PC has been idle for 2 minutes.

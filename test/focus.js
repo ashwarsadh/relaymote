@@ -6,6 +6,8 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..');
+// restoreActive writes nav.log; a fake app's switches must not land in the real state folder.
+process.env.RELAYMOTE_STATE_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'relaymote-focus-'));
 const d = require(path.join(root, 'lib', 'desktop.js'));
 let n = 0;
 const ok = (c, name) => { assert.ok(c, name); n++; console.log('ok ' + name); };

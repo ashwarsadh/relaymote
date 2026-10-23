@@ -12,20 +12,30 @@ const PTR = `function relaymotePtr(el){
     el.dispatchEvent(new (t.indexOf('pointer')===0?PointerEvent:MouseEvent)(t,o));
   });
 }`;
+// 24-Oct (Desktop 3.x): the question is a [data-engine-native="AskUserQuestion"] card with no "Dismiss question"
+// button; Submit reads "SubmitCtrl⏎Enter" (its key hint), an option reads label+description glued, and "Other" is
+// an aria-labelled button. Both drawings are understood; the new one is tried first.
 const BOX = `function relaymoteBox(){
+  var nat = Array.from(document.querySelectorAll('[data-engine-native="AskUserQuestion"]')).filter(function(n){
+    return Array.from(n.querySelectorAll('button')).some(function(b){ return b.offsetParent!==null; }); });
+  if (nat.length) { var n = nat[nat.length-1]; return n.querySelector('[role=group]') || n; }
   var dismiss = Array.from(document.querySelectorAll('button')).filter(function(b){
     return b.getAttribute('aria-label')==='Dismiss question' && b.offsetParent!==null; })[0];
   if(!dismiss) return null;
   var box = dismiss;
   for (var i=0;i<20 && box;i++){
     var hasConfirm = Array.from(box.querySelectorAll('button')).some(function(b){
-      return /^(submit|next|skip)$/i.test(relaymoteClean(b)); });
+      return RELAYMOTE_CHROME.test(relaymoteClean(b)); });
     if (hasConfirm) return box;
     box = box.parentElement;
   }
   return null;
 }`;
-const CHROME_RX = `var RELAYMOTE_CHROME = /^(back|skip|submit|next)$/i;`;
+const CHROME_RX = `var RELAYMOTE_CHROME = /^(back|skip|submit|next)(ctrl|shift|alt|cmd|enter|esc|[\\u2190-\\u23FF]|\\s|\\+)*$/i;`;
+const LABEL = `function relaymoteLabel(b){
+  var col = b.querySelector('div'); var first = col && col.firstElementChild;
+  return first && col.children.length > 1 ? relaymoteClean(first) : relaymoteClean(b);
+}`;
 const OPTIONS = `function relaymoteOptions(){
   var box = relaymoteBox(); if(!box) return [];
   return Array.from(box.querySelectorAll('button')).filter(function(b){
@@ -38,15 +48,27 @@ const OPTIONS = `function relaymoteOptions(){
 const CHROME = `function relaymoteChrome(name){
   var box = relaymoteBox(); if(!box) return null;
   return Array.from(box.querySelectorAll('button')).filter(function(b){
-    return b.offsetParent !== null && relaymoteClean(b).toLowerCase() === name;
+    var t = relaymoteClean(b).toLowerCase();
+    return b.offsetParent !== null && t.indexOf(name) === 0 && RELAYMOTE_CHROME.test(t);
   })[0] || null;
 }`;
+const OTHER = `function relaymoteOtherButton(){
+  var box = relaymoteBox(); if(!box) return null;
+  return Array.from(box.querySelectorAll('button')).filter(function(b){
+    return b.offsetParent!==null && (b.getAttribute('aria-label')||'').toLowerCase()==='other'; })[0] || null;
+}
+function relaymoteOtherBox(){
+  var box = relaymoteBox();
+  return document.querySelector('textarea[aria-label="Other option"]') || (box && box.querySelector('textarea, input[type=text]'));
+}`;
 
-const STATE_JS = `(function(){ ${CLEAN} ${CHROME_RX} ${BOX} ${OPTIONS} ${CHROME}
-  var dismiss = Array.from(document.querySelectorAll('button')).filter(function(b){
-    return b.getAttribute('aria-label')==='Dismiss question' && b.offsetParent!==null; })[0];
-  if(!dismiss) return JSON.stringify({widget:false});
-  var box = dismiss, m = null, qbox = dismiss;
+const STATE_JS = `(function(){ ${CLEAN} ${CHROME_RX} ${BOX} ${LABEL} ${OPTIONS} ${CHROME} ${OTHER}
+  var root = relaymoteBox();
+  if(!root) return JSON.stringify({widget:false});
+  var native = !!root.closest('[data-engine-native="AskUserQuestion"]');
+  var start = native ? (Array.from(root.querySelectorAll('*')).filter(function(e){
+      return !e.children.length && /^\\s*\\d+\\s*\\/\\s*\\d+\\s*$/.test(e.textContent||''); })[0] || root) : root;
+  var box = start, m = null, qbox = start;
   for (var i=0;i<16 && box;i++){
     var txt = relaymoteClean(box);
     if (txt.length > 400) break;                  // left the widget; keep the last good box
@@ -68,30 +90,32 @@ const STATE_JS = `(function(){ ${CLEAN} ${CHROME_RX} ${BOX} ${OPTIONS} ${CHROME}
     }
     box = box.parentElement;
   }
-  box = qbox;
+  box = native ? root : qbox;
   var opts = relaymoteOptions().map(function(b){
-    return { text: relaymoteClean(b).slice(0,60), pressed: b.getAttribute('aria-pressed')==='true' };
+    return { text: relaymoteLabel(b).slice(0,60), pressed: b.getAttribute('aria-pressed')==='true' };
   });
   var submit = relaymoteChrome('submit');
+  var q = native ? (root.getAttribute('aria-label') || relaymoteClean(root)) : (box ? relaymoteClean(box) : '');
   return JSON.stringify({
     widget: true,
+    native: native,
     index: m ? Number(m[1]) : 1,
     total: m ? Number(m[2]) : 1,
-    question: box ? relaymoteClean(box).replace(/^\\d+\\s*\\/\\s*\\d+/,'').slice(0,120) : '',
+    question: q.replace(/^\\d+\\s*\\/\\s*\\d+/,'').slice(0,120),
     options: opts,
     hasNext: !!relaymoteChrome('next'),
     hasSubmit: !!submit,
     submitEnabled: !!(submit && !submit.disabled),
-    otherBox: !!document.querySelector('textarea[aria-label="Other option"]')
+    otherBox: !!relaymoteOtherBox()
   });
 })()`;
 
-const clickOptionJs = (label) => `(function(){ ${CLEAN} ${PTR} ${CHROME_RX} ${BOX} ${OPTIONS}
+const clickOptionJs = (label) => `(function(){ ${CLEAN} ${PTR} ${CHROME_RX} ${BOX} ${LABEL} ${OPTIONS} ${OTHER}
   var want = ${JSON.stringify(String(label).toLowerCase())};
-  var hit = relaymoteOptions().filter(function(b){
-    return relaymoteClean(b).toLowerCase().indexOf(want) === 0;
-  })[0];
-  if(!hit) return 'not-found:' + relaymoteOptions().map(function(b){return relaymoteClean(b).slice(0,20);}).join('|');
+  var hit = relaymoteOptions().filter(function(b){ return relaymoteLabel(b).toLowerCase() === want; })[0]
+         || relaymoteOptions().filter(function(b){ return relaymoteClean(b).toLowerCase().indexOf(want) === 0; })[0]
+         || (want === 'other' ? relaymoteOtherButton() : null);
+  if(!hit) return 'not-found:' + relaymoteOptions().map(function(b){return relaymoteLabel(b).slice(0,20);}).join('|');
   if (hit.getAttribute('aria-pressed') === 'true') return 'already';
   relaymotePtr(hit);
   return 'clicked';
@@ -115,21 +139,21 @@ const clickChromeJs = (name) => `(function(){ ${CLEAN} ${PTR} ${CHROME_RX} ${BOX
   relaymotePtr(b); return 'clicked';
 })()`;
 
-const typeOtherJs = (text) => `(function(){
-  var ta = document.querySelector('textarea[aria-label="Other option"]');
+const typeOtherJs = (text) => `(function(){ ${CLEAN} ${CHROME_RX} ${BOX} ${OTHER}
+  var ta = relaymoteOtherBox();
   if(!ta) return 'no-textarea';
-  var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;
+  var setter = Object.getOwnPropertyDescriptor(ta.tagName==='INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,'value').set;
   setter.call(ta, ${JSON.stringify(String(text))});
   ta.dispatchEvent(new Event('input',{bubbles:true}));
   ta.focus();
   return 'typed';
 })()`;
 
-const CLEAR_OTHER_JS = `(function(){
-  var ta = document.querySelector('textarea[aria-label="Other option"]');
+const CLEAR_OTHER_JS = `(function(){ ${CLEAN} ${CHROME_RX} ${BOX} ${OTHER}
+  var ta = relaymoteOtherBox();
   if(!ta) return 'none';
   if(!ta.value) return 'empty';
-  var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;
+  var setter = Object.getOwnPropertyDescriptor(ta.tagName==='INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,'value').set;
   setter.call(ta, '');
   ta.dispatchEvent(new Event('input',{bubbles:true}));
   return 'cleared';
@@ -236,4 +260,19 @@ async function answerQuestion(sessionId, answers = []) {
   }
 }
 
-module.exports = { answerQuestion, STATE_JS };
+// 24-Oct (Ashwar: "Answer failed: NO_QUESTION"): a tap must never be lost. When the PC shows no question box to
+// press (or the option is gone), the server sends what he tapped as an ordinary message instead.
+const FALLBACK_ERRORS = new Set(['NO_QUESTION', 'OPTION_NOT_FOUND', 'NO_OTHER_OPTION', 'NO_OTHER_TEXTAREA']);
+function answersAsText(answers) {
+  const parts = (Array.isArray(answers) ? answers : []).map(a => {
+    const other = String((a && a.other) || '').trim();
+    const labels = Array.isArray(a && a.labels) ? a.labels.map(String).filter(Boolean) : [];
+    return other || labels.join(', ');
+  });
+  const said = parts.filter(Boolean);
+  if (!said.length) return '';
+  return said.length === 1 ? said[0] : parts.map((p, i) => `${i + 1}. ${p || '(no answer)'}`).join('\n');
+}
+const shouldFallBack = (out) => !!(out && !out.ok && FALLBACK_ERRORS.has(String(out.error)) && !(out.answered && out.answered.length));
+
+module.exports = { answerQuestion, STATE_JS, answersAsText, shouldFallBack, _js: { clickOptionJs, clickChromeJs, typeOtherJs } };

@@ -18,7 +18,7 @@ const alerts = require('./alerts');
 const pushHealth = require('./pushhealth');   // says so when no phone can receive an alert
 const access = require('./access');
 const { newSession } = require('./newsession');
-const { answerQuestion } = require('./answer');
+const { answerQuestion, answersAsText, shouldFallBack } = require('./answer');
 const { readRunningTasks, stopRunningTask } = require('./tasks');
 const { pasteFiles } = require('./attach');
 const { readFile } = require('./files');
@@ -1996,8 +1996,14 @@ async function handle(req, res) {
           log(`answer attempt ${attempt} -> ${out && out.error}; retrying`);
           await new Promise(r => setTimeout(r, 900 * attempt));
         }
+        const text = shouldFallBack(out) ? answersAsText(body.answers) : '';
+        if (text) {
+          log(`answer ${body.id}: ${out.error} -> sending his tap as a message instead`);
+          const s = await doSend(body.id, text, [], { noUi: windowBusy(req, url) === 'another principal' });
+          return { ...s, fallback: 'message', sentText: text, why: out.error };
+        }
         return out;
-      }, { id: body.id });
+      }, out => ({ id: body.id, fallback: out && out.fallback, sentText: out && out.sentText }));
     }
     if (p === '/api/new') {
       const cwd = String(body.cwd || '');

@@ -2324,7 +2324,8 @@ let lastDoneBuzz = 0;
 function renderPermission(perm) {
   const box = $('permission');
   if (!box) return;
-  state.permission = perm && perm.present ? perm : null;
+  // An open question is answered by the question sheet; it is never also a permission card (24-Oct).
+  state.permission = perm && perm.present && !(state.question && state.question.questions) ? perm : null;
   if (!state.permission) { box.classList.add('hidden'); box.innerHTML = ''; return; }
 
   let req = String(perm.request || 'This session is waiting for permission.');
@@ -2440,6 +2441,7 @@ function checkPermission(meta, force) {
 function renderQuestion(pq) {
   const box = $('question');
   state.question = pq || null;
+  if (pq && pq.questions && pq.questions.length && state.permission) renderPermission(null);
   if (!pq || !pq.questions || !pq.questions.length) {
     box.classList.add('hidden'); box.innerHTML = ''; box.dataset.sig = ''; return;
   }
@@ -2504,7 +2506,10 @@ $('question').addEventListener('click', async (e) => {
       body: JSON.stringify({ id: state.open, answers }),
     });
     uiJobs.set(d.jobId, {
-      label: 'Answer', done: 'Answered',
+      label: 'Answer',
+      done: (r) => r && r.fallback === 'message'
+        ? 'No question box was open on the PC, so your answer went as a message: "' + String(r.sentText || '').slice(0, 80) + '"'
+        : 'Answered',
       revert: restore,
       after: () => { state.qpicked = {}; state.qother = {}; renderQuestion(null); restore(); },
     });

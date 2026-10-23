@@ -1,3 +1,9 @@
+## 0.2.132
+
+- Questions work again with Claude Desktop 3.x. Its new question card was not recognised, so tapping an answer on the phone said "Answer failed: NO_QUESTION"; the card is now read and pressed (options, Other, Submit).
+- A tap is never lost: if the PC shows no question box to press, the answer is sent to the session as an ordinary message, and the toast says so.
+- A question is no longer also shown as "Permission needed" with its options glued together.
+
 ## 0.2.131
 
 - The self-update no longer starts its installer through WMI. Defender's "Block process creations originating from PSExec and WMI commands" rule blocked that route and showed a "Risky action blocked" popup; the update now starts from a one-shot scheduled task (a detached child as the last resort).

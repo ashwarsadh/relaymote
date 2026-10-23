@@ -44,8 +44,11 @@ const READ_JS = `(function(){
     return raw.trim();
   }
 
+  // 24-Oct: Desktop 3.x draws AskUserQuestion inside the same approval-card frame, and an option such as
+  // "No, leave my phone" read as a Deny button, so a question showed as "Permission needed". A question is
+  // never a permission prompt; the phone shows it as a question (answer.js).
   var cand=Array.from(document.querySelectorAll('button')).filter(function(b){
-    return b.offsetParent!==null && isChoice(cl(b));
+    return b.offsetParent!==null && !b.closest('[data-engine-native="AskUserQuestion"]') && isChoice(cl(b));
   });
   var withShortcut=cand.filter(function(b){ var t=cl(b); return pretty(t)!==t; });
   var opts=withShortcut.length ? withShortcut
@@ -220,4 +223,4 @@ function approvalRisk(text) {
   return m ? m[0].toLowerCase() : '';
 }
 
-module.exports = { readPermission, answerPermission, peekPermission, approvalRisk, pendingApproval };
+module.exports = { readPermission, answerPermission, peekPermission, approvalRisk, pendingApproval, _READ_JS: READ_JS };

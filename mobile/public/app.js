@@ -3516,6 +3516,43 @@ async function subscribePush(quiet) {
   return { ok: true, endpoint: sub.endpoint };
 }
 
+// 24-Oct: Sagar's phone never tapped the bell, and 124 of his alerts went nowhere without him knowing. When the
+// server says this phone's person has no phone subscribed, the list opens with one button that turns them on
+// (permission needs a tap, so it cannot be done for him). "Later" hides it for a day.
+const PUSHNAG_KEY = 'baton.pushnag.until';
+function pushNagText(pf, perm) {
+  const m = (pf && pf.missed) || {};
+  const since = m.since ? new Date(m.since).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+  const head = m.n > 0 ? `${m.n} alert${m.n === 1 ? '' : 's'} for you reached no phone${since ? ' since ' + since : ''}`
+                       : 'Notifications are off for you';
+  const how = perm === 'denied'
+    ? 'Chrome has blocked them for this site: tap the lock icon in the address bar → Permissions → Notifications → Allow, then reload.'
+    : 'Turn them on to hear when a session finishes or needs your answer.';
+  return { head, how, button: perm !== 'denied' };
+}
+function renderPushNag() {
+  const el = $('pushnag');
+  if (!el) return;
+  const pf = state.boot && state.boot.pushFor;
+  let until = 0; try { until = Number(localStorage.getItem(PUSHNAG_KEY) || 0); } catch {}
+  const can = 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
+  if (!pf || pf.subscribed || !can || Date.now() < until) { el.hidden = true; el.innerHTML = ''; return; }
+  const t = pushNagText(pf, Notification.permission);
+  el.hidden = false;
+  el.innerHTML = `<b>${esc(t.head)}</b><span>${esc(t.how)}</span><div class="pn-acts">` +
+    (t.button ? '<button class="pn-on">Turn on notifications</button>' : '') + '<button class="linkish pn-later">Later</button></div>';
+  const on = el.querySelector('.pn-on');
+  if (on) on.onclick = async () => {
+    await enablePush();
+    if (Notification.permission === 'granted') { pf.subscribed = true; renderPushNag(); }
+    else renderPushNag();
+  };
+  el.querySelector('.pn-later').onclick = () => {
+    try { localStorage.setItem(PUSHNAG_KEY, String(Date.now() + 24 * 3600e3)); } catch {}
+    renderPushNag();
+  };
+}
+
 async function enablePush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     return toast(location.protocol === 'https:' ? 'This browser cannot do push.'
@@ -4034,6 +4071,7 @@ const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now
     }
     paintBuildLine();
     renderStats(); renderFolders(); renderSortChips();
+    renderPushNag();
     await loadSessions();
     tmark('sessions');
     setTimeout(registerSW, 0);

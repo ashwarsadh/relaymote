@@ -1,3 +1,7 @@
+## 0.2.133
+
+- A person whose phone has notifications off is now told on that phone. The list opens with "N alerts for you reached no phone since …" and one Turn on notifications button (or, if Chrome blocked them, how to unblock). Alerts that reach none of a person's phones are counted per person; subscribing clears the count.
+
 ## 0.2.132
 
 - Questions work again with Claude Desktop 3.x. Its new question card was not recognised, so tapping an answer on the phone said "Answer failed: NO_QUESTION"; the card is now read and pressed (options, Other, Submit).

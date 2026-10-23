@@ -693,6 +693,11 @@ a:visited{color:var(--accent)}
 .permreq{color:var(--dim)}
 
 .outbox{margin:6px 10px; display:flex; flex-direction:column; gap:6px}
+.pushnag{margin:6px 10px; padding:10px 12px; border:1px solid var(--accent); border-radius:10px; display:flex; flex-direction:column; gap:8px}
+.pushnag b{font-size:14px}
+.pushnag .pn-acts{display:flex; gap:10px; align-items:center}
+.pushnag[hidden]{display:none}
+.pushnag .pn-on{flex:1; padding:10px; min-height:44px; border-radius:10px; border:none; background:var(--accent-ground); color:var(--on-accent); font-size:14px; cursor:pointer}
 .obrow{border:1px solid var(--err); border-radius:8px; padding:8px 10px; background:color-mix(in srgb,var(--err) 6%,transparent)}
 .obtext{font-size:13px; line-height:1.35; white-space:pre-wrap}
 .obmeta{font-size:11px; color:var(--err); margin-top:4px}

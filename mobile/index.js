@@ -26,6 +26,7 @@ const sentfiles = require('./sentfiles');   // files a session sent with SendUse
 const tts = require('./tts');               // read-aloud audio the phone plays through <audio> (g808)
 const { readSuggestion } = require('./suggest');
 const config = require('../lib/config');
+const pushMissed = require('./push-missed').make(path.join(config.STATE, 'push-missed.json'));   // per principal, shown on their phone
 const tunnel = require('../lib/tunnel');
 const pair = require('../lib/pair');
 const accountScope = require('../lib/account-scope');
@@ -553,6 +554,10 @@ async function notifyAttention(all) {
 
     if (aud && !aud.keys.size) { log(`notify: ${label} has no principal to tell`); continue; }
     logAlert(label, await alerts.deliver(pushEvt, log, aud ? { only: (sub) => aud.keys.has(subPrincipal(sub, aud.def)), backup: aud.keys.has(aud.def) } : {}));
+    if (aud) {
+      const subs = push.keys().subs || [];
+      for (const k of aud.keys) if (!subs.some(sub => subPrincipal(sub, aud.def) === k)) pushMissed.note(k);
+    }
   }
   for (const s of all) wasRunning.set(s.id, !!s.running);
 }
@@ -1123,6 +1128,14 @@ async function handle(req, res) {
       cdp: await cdpCached(),
       desktop: deskNow(),
       vapid: push.publicKey(),
+      // 24-Oct: whether THIS phone's person has any phone subscribed, and how many of their alerts found none.
+      pushFor: (() => {
+        try {
+          const pr = principalOf(req, url), def = require('./principals').resolve(board.CONDUCTOR_DIR, '').key;
+          const subscribed = (push.keys().subs || []).some(sub => subPrincipal(sub, def) === pr.key);
+          return { principal: pr.key, subscribed, missed: pushMissed.get(pr.key) };
+        } catch { return null; }
+      })(),
       models: modelsCached(),
       efforts: Object.keys(desktop.EFFORT_VALUES || { low: 1, medium: 1, high: 1, xhigh: 1 }),
       startDefaults: newSessionDefaults(),
@@ -2102,6 +2115,8 @@ async function handle(req, res) {
         return pr.isDefault ? '' : pr.key;
       })());
       let host = '?'; try { host = new URL(body.endpoint).host; } catch {}
+      const said = body && 'as' in body ? body.as : (req.headers['x-relaymote-as'] || url.searchParams.get('as'));
+      if (said !== undefined) pushMissed.clear(require('./principals').resolve(board.CONDUCTOR_DIR, said).key);
       log(`push: subscribed ${host} (${n} now)`);
       return json(res, 200, { ok: true, subs: n });
     }

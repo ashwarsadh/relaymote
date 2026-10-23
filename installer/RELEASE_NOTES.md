@@ -1,3 +1,8 @@
+## 0.2.131
+
+- The self-update no longer starts its installer through WMI. Defender's "Block process creations originating from PSExec and WMI commands" rule blocked that route and showed a "Risky action blocked" popup; the update now starts from a one-shot scheduled task (a detached child as the last resort).
+- The 30-second "is Claude Desktop running" probe uses Get-Process instead of two WMI Win32_Process queries (8-9 s and 4-5 CPU-seconds each on a busy server, now 1.5-2 s, same answer).
+
 ## 0.2.130
 
 - Reading on the phone never switches the PC window any more. Opening an unread session no longer clicks it on the PC to clear its dot (the PC dot stays; the phone keeps its own read state), and the phone's task sheet reads running work from the app's own record instead of opening the session. `RELAYMOTE_MARKREAD_CLICK=1` restores the old click.

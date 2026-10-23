@@ -99,6 +99,11 @@ check(/This phone needs pairing/.test(app) && /pairingPage\(\)/.test(mob), 'no v
   check(/taskkill', \['\/PID', String\(child\.pid\), '\/T', '\/F'\]/.test(heal) && /}, 75000\);/.test(heal), 'a switch-on run is killed and answered at 75 s even if its pipes stay open');
   check(/pid === null && deskState\.ensureDevMode\(\)/.test(server), 'Developer Mode is switched on while Desktop is closed, so the next start reads it');
 
+  const dst = fs.readFileSync(path.join(__dirname, '..', 'lib', 'desktop-state.js'), 'utf8');
+  const probeSrc = dst.slice(dst.indexOf('const PROBE_PS'), dst.indexOf('let probeSeam'));
+  check(probeSrc.length > 100 && !/Win32_Process|Get-CimInstance|Get-WmiObject/.test(probeSrc) && /Get-Process -Name claude/.test(probeSrc),
+    'g2291: the 30-s Desktop probe uses Get-Process, never WMI (one Win32_Process query costs 4-5 CPU-s on this server)');
+
   fs.rmSync(tmp, { recursive: true, force: true });
   if (fails) { console.error(fails + ' failed'); process.exit(1); }
   console.log('desktop-state: all checks passed');

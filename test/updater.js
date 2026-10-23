@@ -112,21 +112,20 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
   const script = fs.readFileSync(a.script, 'utf8');
   check(a.dry && /\/VERYSILENT \/SUPPRESSMSGBOXES \/NORESTART \/DIR="/.test(script) && /bin\\relaymote\.js" start|bin\/relaymote\.js" start/.test(script), 'the apply script installs silently over this folder, then starts Relaymote', script);
 
-  // Who starts the apply script. WMI first; refused (ReturnValue 2, as measured for a standard user on
-  // Windows Server) it goes to a one-shot scheduled task; both refused, a detached child.
+  // Who starts the apply script: a one-shot scheduled task; refused, a detached child. Never WMI: Defender
+  // ASR blocks a process WmiPrvSE creates and shows him a popup (23-Oct, event 1121).
   const plan = U.launchPlan('C:\\x\\apply-update.cmd');
-  check(plan.map(p => p.via).join() === 'wmi,task' && plan[1].args[0].includes('/IT') && plan[1].args[0][plan[1].args[0].indexOf('/TN') + 1] === U.UPDATE_TASK
-    && plan[1].args[1].join(' ') === '/Run /TN ' + U.UPDATE_TASK, 'launch order: WMI, then a one-shot interactive task that is created and run', plan);
-  check(U.launchPlan('C:\\' + 'x'.repeat(260) + '\\a.cmd')[1].args === null, 'a /TR over 261 characters skips the task route');
+  check(plan.map(p => p.via).join() === 'task' && plan[0].args[0].includes('/IT') && plan[0].args[0][plan[0].args[0].indexOf('/TN') + 1] === U.UPDATE_TASK
+    && plan[0].args[1].join(' ') === '/Run /TN ' + U.UPDATE_TASK, 'launch: a one-shot interactive task that is created and run, no WMI route', plan);
+  const upd = fs.readFileSync(path.join(__dirname, '..', 'lib', 'updater.js'), 'utf8');
+  check(!/Invoke-CimMethod|Invoke-WmiMethod|MethodName Create/.test(upd), 'the updater never starts a process through WMI (ASR blocks it)');
+  check(U.launchPlan('C:\\' + 'x'.repeat(260) + '\\a.cmd')[0].args === null, 'a /TR over 261 characters skips the task route');
   const runs = [];
   const fake = (answers) => (exe, args) => { runs.push(exe + ' ' + args[0]); return answers[exe + ' ' + args[0]] || { status: 0, stdout: '' }; };
-  let L = U.launch('C:\\x\\a.cmd', { run: fake({ 'powershell.exe -NoProfile': { status: 0, stdout: '2 \r\n' } }), detached: () => 99 });
-  check(L.via === 'task' && runs.join('|') === 'powershell.exe -NoProfile|schtasks.exe /Create|schtasks.exe /Run', 'WMI refused (2): the task route starts it', { L, runs });
+  let L = U.launch('C:\\x\\a.cmd', { run: fake({}), detached: () => 99 });
+  check(L.via === 'task' && runs.join('|') === 'schtasks.exe /Create|schtasks.exe /Run', 'the task route starts it, nothing else is tried', { L, runs });
   runs.length = 0;
-  L = U.launch('C:\\x\\a.cmd', { run: fake({ 'powershell.exe -NoProfile': { status: 0, stdout: '0 4242' } }), detached: () => 99 });
-  check(L.via === 'wmi' && runs.length === 1, 'WMI accepted (0): nothing else is tried', { L, runs });
-  runs.length = 0;
-  L = U.launch('C:\\x\\a.cmd', { run: fake({ 'powershell.exe -NoProfile': { status: 0, stdout: '2' }, 'schtasks.exe /Create': { status: 1, stderr: 'Access is denied.' } }), detached: () => 99 });
+  L = U.launch('C:\\x\\a.cmd', { run: fake({ 'schtasks.exe /Create': { status: 1, stderr: 'Access is denied.' } }), detached: () => 99 });
   check(L.via === 'detached' && L.pid === 99 && !runs.includes('schtasks.exe /Run') && /task: Access is denied/.test(L.tried.join()), 'task not created: never run, the detached child is the last resort', { L, runs });
 
   // After the restart into the new version: recorded once, task removed, tray back only if it was on.

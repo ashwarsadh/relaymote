@@ -15,3 +15,5 @@ settings.json
 # installer builds (npm run build:win / build:mac)
 dist/
 CLAUDE.local.md
+# Internal live-state notes (emails, session ids, Access ids): kept on the PC, never in this public repo
+STATE.md

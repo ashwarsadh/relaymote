@@ -1,0 +1,3 @@
+#!/bin/sh
+# This repo is public: refuse emails, session ids, tailnet addresses, Cloudflare ids and secrets.
+exec node scripts/leak-check.js --staged

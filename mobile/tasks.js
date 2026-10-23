@@ -57,13 +57,14 @@ const stopJs = (i) => `(function(){ ${CLEAN} ${PTR}
   return 'stopped';
 })()`;
 
-async function withSession(sessionId, fn) {
+async function withSession(sessionId, fn, opts = {}) {
   const conn = await desktop.connect(await desktop.wsUrl());
   let CID, original = null;
   try {
     CID = await desktop.pickChat(conn);
     const here = String(await conn.evaluate(desktop.rEval(CID, `location.href.split('/').pop()`)));
     original = here.startsWith('local_') ? here : null;
+    if (here !== sessionId && opts.navigate === false) { original = null; return opts.ifClosed(conn, CID); }
     if (here !== sessionId) {
       const found = await desktop.findSessionRow(conn, CID, sessionId);
       if (!found.row) return { ok: false, error: 'NO_SUCH_SESSION' };
@@ -93,6 +94,21 @@ async function readRunningTasks(sessionId) {
     try { tasks = (JSON.parse(await conn.evaluate(desktop.rEval(CID, LIST_JS)) || '{}').tasks) || []; } catch {}
     await desktop.closeMenus(conn, CID);
     return { ok: true, count, tasks };
+  }, {
+    // 23-Oct: opening the chip sheet on the phone switched the PC to that session and back. A READ
+    // never moves his window now: the live list comes only from a session already open there;
+    // otherwise Desktop's own record says whether background work is running (no count, no labels).
+    navigate: false,
+    ifClosed: async (conn, CID) => {
+      const j = await conn.evaluate(desktop.rEval(CID, `(async function(){
+        try { var s = await window['claude.web'].LocalSessions.getSession(${JSON.stringify(sessionId)});
+              return JSON.stringify(s ? { bg: !!(s.hasBackgroundWork || s.hasBackgroundActivity) } : null); }
+        catch (e) { return ''; } })()`)).catch(() => '');
+      let s = null; try { s = JSON.parse(j || 'null'); } catch {}
+      if (!s) return { ok: false, error: 'NO_BRIDGE_OR_SESSION' };
+      return { ok: true, count: s.bg ? null : 0, tasks: [], backgroundWork: s.bg, transport: 'background',
+               note: s.bg ? 'Background work is running; open the session on the PC to list it.' : undefined };
+    },
   });
 }
 

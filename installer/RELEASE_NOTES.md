@@ -1,3 +1,8 @@
+## 0.2.130
+
+- Reading on the phone never switches the PC window any more. Opening an unread session no longer clicks it on the PC to clear its dot (the PC dot stays; the phone keeps its own read state), and the phone's task sheet reads running work from the app's own record instead of opening the session. `RELAYMOTE_MARKREAD_CLICK=1` restores the old click.
+- Every remaining away-and-back of the PC window is written to `state/nav.log` with the code that caused it.
+
 ## 0.2.129
 
 - A second share ADDS to what is already attached instead of replacing it. Pending attachments are kept per session until sent or removed, a file already attached is not added or uploaded again, and each stays removable.

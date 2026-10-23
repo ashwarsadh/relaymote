@@ -22,7 +22,7 @@ const RULES = [
   { what: 'private key', rx: /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g },
 ];
 
-const git = (...a) => execFileSync('git', a, { encoding: 'utf8', maxBuffer: 1024 * 1024 * 1024 });
+const git = (...a) => execFileSync('git', a, { encoding: 'utf8', maxBuffer: 1024 * 1024 * 1024, windowsHide: true });
 const staged = process.argv.includes('--staged');
 const history = process.argv.includes('--history');   // every line ever added, on every ref
 const files = history ? [] : (staged ? git('diff', '--cached', '--name-only', '--diff-filter=ACMR') : git('ls-files'))

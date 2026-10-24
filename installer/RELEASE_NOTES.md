@@ -1,3 +1,7 @@
+## 0.2.134
+
+- A session stopped by a Claude usage limit is continued as soon as you switch to another Claude account, instead of waiting for that limit's reset (a weekly limit can be days away). It resumes only the work that was cut.
+
 ## 0.2.133
 
 - A person whose phone has notifications off is now told on that phone. The list opens with "N alerts for you reached no phone since …" and one Turn on notifications button (or, if Chrome blocked them, how to unblock). Alerts that reach none of a person's phones are counted per person; subscribing clears the count.

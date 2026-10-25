@@ -524,6 +524,7 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
   if (!file) return { ok: false, error: 'no transcript on disk', messages: [] };
 
   let size = maxBytes;
+  const TAIL_CAP = Math.max(limit, 150);
   let win, msgs = [], offs = [], queued = new Map();
   for (let attempt = 0; attempt < 4; attempt++) {
     try { win = readWindow(file, size, before); } catch (e) { return { ok: false, error: e.message, messages: [] }; }
@@ -553,7 +554,7 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
     }
     const enough = msgs.length >= limit &&
                    msgs.filter(isSpoken).length >= minSpoken &&
-                   msgs.filter(isUser).length >= minUser;
+                   (msgs.filter(isUser).length >= minUser || msgs.length >= TAIL_CAP);   // not 27x the read for one typed row
     if (enough || win.start === 0) break;
     size *= 3;
   }
@@ -562,7 +563,6 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
   // ALL of it went to the phone -- 2,251 rows / 1.7 MB for a 60-row page -- so a switch waited seconds. Only the
   // shortest tail that meets limit / minSpoken / minUser is sent; startByte is that tail's first row, so
   // "load earlier" continues exactly where it stops. (Asks, answers and tool states are still read from the window.)
-  const TAIL_CAP = Math.max(limit, 150);
   let cut = 0;
   {
     let n = 0, spoken = 0, users = 0;

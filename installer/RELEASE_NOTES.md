@@ -1,3 +1,7 @@
+## 0.2.137
+
+- Opening a session in a long run of tool steps no longer reads up to 27 times more of the conversation looking for an earlier typed message.
+
 ## 0.2.136
 
 - A session in a long run of tool steps with no typed message also opens fast: its first page is at most 150 rows (one live session still sent 731 rows / 582 KB).

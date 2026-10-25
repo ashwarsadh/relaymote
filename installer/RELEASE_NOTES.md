@@ -1,3 +1,7 @@
+## 0.2.136
+
+- A session in a long run of tool steps with no typed message also opens fast: its first page is at most 150 rows (one live session still sent 731 rows / 582 KB).
+
 ## 0.2.135
 
 - Switching sessions on the phone shows the current messages at once. A session no longer opens on an old copy that is updated a moment later, and the first page is now only the messages it shows (it carried the whole last 0.5-1.7 MB of the conversation, which took seconds on a phone). "Load earlier" also no longer skips one message where pages join.

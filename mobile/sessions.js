@@ -562,12 +562,15 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
   // ALL of it went to the phone -- 2,251 rows / 1.7 MB for a 60-row page -- so a switch waited seconds. Only the
   // shortest tail that meets limit / minSpoken / minUser is sent; startByte is that tail's first row, so
   // "load earlier" continues exactly where it stops. (Asks, answers and tool states are still read from the window.)
+  const TAIL_CAP = Math.max(limit, 150);
   let cut = 0;
   {
     let n = 0, spoken = 0, users = 0;
     for (let i = msgs.length - 1; i >= 0; i--) {
       n++; if (isSpoken(msgs[i])) spoken++; if (isUser(msgs[i])) users++;
-      if (n >= limit && spoken >= minSpoken && users >= minUser) { cut = i; break; }
+      // A long run with no typed message would reach far back for minUser (731 rows / 582 KB live): stop at
+      // TAIL_CAP rows; his earlier message is one "load earlier" away.
+      if (n >= limit && spoken >= minSpoken && (users >= minUser || n >= TAIL_CAP)) { cut = i; break; }
     }
   }
   const startByte = cut > 0 ? offs[cut] : win.start;

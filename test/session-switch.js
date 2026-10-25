@@ -23,7 +23,8 @@ const findJsonl = (dir, cli) => {
 
 (async () => {
   const w = H.world('switch');
-  const ss = w.sessions().slice(0, 3);
+  const all = w.sessions();
+  const ss = all.slice(0, 3);
   const tag = ['A', 'B', 'C'];
   const files = ss.map(s => findJsonl(path.join(w.claude, 'projects'), s.cliSessionId));
   check(files.every(Boolean), 'three demo sessions with transcripts');
@@ -41,6 +42,13 @@ const findJsonl = (dir, cli) => {
     fs.appendFileSync(f, s);
   });
 
+  // A fourth: a long autonomous run, 600 tool steps with no typed message (live: 731 rows / 582 KB went for one page).
+  const longRun = findJsonl(path.join(w.claude, 'projects'), all[3].cliSessionId);
+  { let s = '', t = t0; for (let i = 0; i < 600; i++) {
+      s += row('assistant', [{ type: 'text', text: 'step ' + i }, { type: 'tool_use', id: 'r' + i, name: 'Bash', input: { command: 'q'.repeat(400) } }], t += 1000);
+      s += row('user', [{ type: 'tool_result', tool_use_id: 'r' + i, content: 'p'.repeat(400) }], t += 1000); }
+    fs.appendFileSync(longRun, s); }
+
   const d = await H.boot(w);
   let edge = null;
   try {
@@ -57,6 +65,9 @@ const findJsonl = (dir, cli) => {
     check(lastOlder && lastOlder.ts < firstPage.ts && Date.parse(firstPage.ts) - Date.parse(lastOlder.ts) <= 1000,
       '"load earlier" continues exactly where the page starts (no gap, no repeat)', { lastOlder: lastOlder && lastOlder.ts, first: firstPage.ts });
 
+    const lr = (await d.req('/api/session/' + encodeURIComponent(all[3].sessionId) + '?limit=60')).json.transcript;
+    check(lr.messages.length <= 150 && lr.hasMore, 'a long run with no typed message still sends at most 150 rows', lr.messages.length);
+
     if (!EDGE) { console.log('skip headless switch: no Edge on this machine'); return; }
     const cdpPort = 9400 + Math.floor(Math.random() * 400);
     const prof = path.join(w.dir, 'edge');
@@ -70,14 +81,24 @@ const findJsonl = (dir, cli) => {
     check(!!target, 'headless Edge is up');
     const ws = new WebSocket(target.webSocketDebuggerUrl);
     await new Promise((ok, no) => { ws.once('open', ok); ws.once('error', no); });
-    let n = 0; const waiting = new Map();
-    ws.on('message', m => { const j = JSON.parse(m); if (waiting.has(j.id)) { waiting.get(j.id)(j); waiting.delete(j.id); } });
+    let n = 0, lastNav = 0; const waiting = new Map();
+    ws.on('message', m => { const j = JSON.parse(m);
+      if (process.env.SW_DEBUG && j.method === 'Network.responseReceived' && j.params.response.url.includes('/api/') && (1) && /./.test(j.params.response.url) && (j.params.response.status >= 400 || !/json|event-stream/.test(j.params.response.mimeType))) console.log('net:', j.params.response.status, j.params.response.mimeType, j.params.response.url.slice(0, 120));
+      if (j.method === 'Page.frameNavigated' && !j.params.frame.parentId) lastNav = Date.now();
+      if (waiting.has(j.id)) { waiting.get(j.id)(j); waiting.delete(j.id); } });
     const cdp = (method, params = {}) => new Promise(ok => { const id = ++n; waiting.set(id, ok); ws.send(JSON.stringify({ id, method, params })); });
-    const ev = async (expr) => { const j = await cdp('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (!(j.result && j.result.result) || j.result.exceptionDetails) console.log('cdp:', JSON.stringify(j).slice(0, 400)); return j.result && j.result.result ? j.result.result.value : undefined; };
+    const ev = async (expr) => { const j = await cdp('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (!(j.result && j.result.result) || j.result.exceptionDetails || j.result.result.value === undefined) console.log('cdp:', JSON.stringify(j).slice(0, 400)); return j.result && j.result.result ? j.result.result.value : undefined; };
 
+    await cdp('Page.enable');
+    if (process.env.SW_DEBUG) await cdp('Network.enable');
     await cdp('Page.navigate', { url: `http://127.0.0.1:${d.app}/?k=${encodeURIComponent(d.token)}` });
     let ready = false;
-    for (let i = 0; i < 80 && !ready; i++) { await H.wait(250); ready = await ev(`typeof openChat === 'function' && !!(state.sessions || []).length`); }
+    // The first visit installs the service worker, which reloads the page once: wait until it has settled.
+    for (let i = 0; i < 120; i++) {
+      await H.wait(250);
+      ready = Date.now() - lastNav > 3000 && await ev(`typeof openChat === 'function' && !!(state.sessions || []).length`);
+      if (ready) break;
+    }
     check(ready, 'the app loaded its session list');
 
     // Open a session and watch the log every 15 ms: when does its newest message appear, and was anything older shown first?

@@ -1,3 +1,7 @@
+## 0.2.135
+
+- Switching sessions on the phone shows the current messages at once. A session no longer opens on an old copy that is updated a moment later, and the first page is now only the messages it shows (it carried the whole last 0.5-1.7 MB of the conversation, which took seconds on a phone). "Load earlier" also no longer skips one message where pages join.
+
 ## 0.2.134
 
 - A session stopped by a Claude usage limit is continued as soon as you switch to another Claude account, instead of waiting for that limit's reset (a weekly limit can be days away). It resumes only the work that was cut.

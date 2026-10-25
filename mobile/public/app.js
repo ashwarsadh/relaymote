@@ -1788,6 +1788,9 @@ async function openChat(id) {
 async function openChatInner(id) {
   const sameSession = state.open === id;
   if (state.open && state.open !== id) saveDraft(state.open, $('input').value);
+  // The one being left was live on the stream until now: its view is current as of this moment.
+  if (state.open && state.open !== id && state.es && state.es.readyState === 1 && state.esWatch === state.open && (state.messages || []).length)
+    cacheChat(state.open, { meta: state.meta, transcript: { messages: state.messages, startByte: state.oldestByte, hasMore: state.hasMore } });
   state.open = id;
   try { localStorage.setItem(PLACE_KEY, JSON.stringify({ kind: 'chat', id, at: Date.now() })); } catch {}
   try { localStorage.setItem(LAST_CHAT_KEY, id); } catch {}   // where a share from another app lands (no time limit)
@@ -1836,8 +1839,12 @@ async function openChatInner(id) {
   autosize();
   updateCommandList();
 
+  // 25-Oct (Ashwar: "It was showing the old message and later on it got updated"): a cached view is painted only
+  // while it is known current -- the stream kept it live until seconds ago. An older one is not shown at all;
+  // the fresh page (now only the tail it needs, tens of KB) replaces "Loading…" directly.
   const cachedView = chatCache.get(id);
-  if (cachedView && cachedView.d && cachedView.d.transcript) {
+  const fresh = cachedView && Date.now() - cachedView.at < ((row && row.running) ? 3000 : 10000);
+  if (fresh && cachedView.d && cachedView.d.transcript) {
     try {
       const c = cachedView.d;
       state.oldestByte = c.transcript.startByte; state.hasMore = !!c.transcript.hasMore;
@@ -1856,7 +1863,7 @@ async function openChatInner(id) {
     cacheChat(id, d);
     if (d.transcript && d.transcript.chips) setChipBadge(d.transcript.chips.length);
     if (state.open !== id) return;
-    if (cachedView) { htmlCache.clear(); lastSig = ''; scrollToBottomNext = logAtBottom; }
+    if (fresh) { htmlCache.clear(); lastSig = ''; scrollToBottomNext = logAtBottom; }
     state.oldestByte = d.transcript.startByte;
     state.hasMore = !!d.transcript.hasMore;
     renderHeader(d.meta);
@@ -1934,6 +1941,7 @@ function connectStream(watch) {
     if (state.liveSuggestion) { state.liveSuggestion = null; renderSuggestion(state.meta); }
     renderLog(applyTail(d.messages, d.startByte, d.hasMore));
     if (d.meta) renderHeader(d.meta);
+    cacheChat(d.id, { meta: state.meta, transcript: { messages: state.messages, startByte: state.oldestByte, hasMore: state.hasMore } });
     if (state.meta && !$('sheet').classList.contains('hidden') && Date.now() - (state._tierReadAt || 0) > 3000) {
       state._tierReadAt = Date.now();
       renderTier(state.meta);

@@ -524,14 +524,17 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
   if (!file) return { ok: false, error: 'no transcript on disk', messages: [] };
 
   let size = maxBytes;
-  let win, msgs = [], queued = new Map();
+  let win, msgs = [], offs = [], queued = new Map();
   for (let attempt = 0; attempt < 4; attempt++) {
     try { win = readWindow(file, size, before); } catch (e) { return { ok: false, error: e.message, messages: [] }; }
     const lines = win.text.split('\n');
-    if (win.truncated) lines.shift();
-    msgs = [];
+    let off = win.start;                       // byte offset of each line, so a page can start at any row
+    if (win.truncated) off += Buffer.byteLength(lines.shift(), 'utf8') + 1;
+    msgs = []; offs = [];
     queued = new Map();
     for (const line of lines) {
+      const lineAt = off;
+      off += Buffer.byteLength(line, 'utf8') + 1;
       const t = line.trim();
       if (!t) continue;
       let row;
@@ -546,7 +549,7 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
         else if (row.operation === 'dequeue') { for (const v of queued.values()) if (!v.taken) { v.taken = true; break; } }
       }
       const f = flatten(row);
-      if (f) msgs.push(f);
+      if (f) { msgs.push(f); offs.push(lineAt); }
     }
     const enough = msgs.length >= limit &&
                    msgs.filter(isSpoken).length >= minSpoken &&
@@ -555,7 +558,20 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
     size *= 3;
   }
 
-  let kept = msgs;
+  // 25-Oct (Ashwar: "switching session should instantly show me the messages"): the window read is >= 512 KB and
+  // ALL of it went to the phone -- 2,251 rows / 1.7 MB for a 60-row page -- so a switch waited seconds. Only the
+  // shortest tail that meets limit / minSpoken / minUser is sent; startByte is that tail's first row, so
+  // "load earlier" continues exactly where it stops. (Asks, answers and tool states are still read from the window.)
+  let cut = 0;
+  {
+    let n = 0, spoken = 0, users = 0;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      n++; if (isSpoken(msgs[i])) spoken++; if (isUser(msgs[i])) users++;
+      if (n >= limit && spoken >= minSpoken && users >= minUser) { cut = i; break; }
+    }
+  }
+  const startByte = cut > 0 ? offs[cut] : win.start;
+  let kept = cut > 0 ? msgs.slice(cut) : msgs;
 
   {
     const byAsk = new Map();
@@ -624,8 +640,8 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
     ok: true,
     file,
     size: win.total,
-    startByte: win.start,
-    hasMore: win.start > 0,
+    startByte,
+    hasMore: startByte > 0,
     truncated: win.truncated,
     messages: kept,
   };

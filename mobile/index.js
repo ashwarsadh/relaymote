@@ -544,7 +544,8 @@ async function notifyAttention(all) {
     catch (e) { log('notify: audience failed, sending to every phone: ' + e.message); }
     const group = aud ? [...aud.keys].sort().join('+') : '';
     const pushEvt = alerts.coalesceDone(evt, Date.now(), group);   // a burst of finishes = one phone notification (g770), per audience
-    const label = `${st} "${String(s.title || s.id).slice(0, 48)}"` + (aud && !aud.keys.has(aud.def) ? ' [to ' + [...aud.keys].join(',') + ']' : '');
+    const label = `${st} "${String(s.title || s.id).slice(0, 48)}"` + (aud && !aud.keys.has(aud.def) ? ' [to ' + [...aud.keys].join(',') + ']' : '') +
+                  (pushEvt.renotify === false ? ' [burst: replaces the last, no buzz]' : '');
 
     for (const c of clients) {
       if (isSubuser(c.identity) && !c.identity.sessions.has(s.id)) continue;

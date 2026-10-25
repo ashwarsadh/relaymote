@@ -1,3 +1,8 @@
+## 0.2.138
+
+- Claude Desktop's "Scheduled task started" toast is no longer shown on the phone as a box blocking the PC. Its Dismiss sent Esc to the Desktop window, which stopped the running session. A non-modal box (toast) is never treated as blocking.
+- The PC log now marks a finished-alert that replaced the previous one without a buzz (several sessions finishing within a minute vibrate the phone once).
+
 ## 0.2.137
 
 - Opening a session in a long run of tool steps no longer reads up to 27 times more of the conversation looking for an earlier typed message.

@@ -12,7 +12,8 @@ const check = (ok, what, got) => { console.log((ok ? 'ok   ' : 'FAIL ') + what +
 const btn = (t) => ({ textContent: t, isConnected: true, disabled: false, clicked: 0, click() { this.clicked++; } });
 const trustText = 'Trust this workspace?\n\nClaude Code may read, write, or execute files in this folder.\n\nC:/x/probe';
 const el = (o, attrs = {}, style = {}) => Object.assign({ attrs, style: Object.assign({ visibility: 'visible', display: 'block', opacity: '1', pointerEvents: 'auto' }, style),
-  hasAttribute(n) { return n in this.attrs; }, querySelectorAll() { return this.buttons || []; } }, o);
+  hasAttribute(n) { return n in this.attrs; }, getAttribute(n) { return n in this.attrs ? this.attrs[n] : null; },
+  closest(sel) { return this.inToast && /data-cds=Toast/.test(sel) ? {} : null; }, querySelectorAll() { return this.buttons || []; } }, o);
 const trust = el({ offsetWidth: 400, offsetHeight: 200, innerText: trustText, buttons: [btn(''), btn(''), btn('Cancel'), btn('Trust workspace')] }, { 'data-open': '' });
 const hidden = el({ offsetWidth: 0, offsetHeight: 0, innerText: 'old' });
 // 13-Oct, measured on his Desktop: the Usage popover after it closed (data-closed, data-side, pointer-events none)
@@ -21,7 +22,11 @@ const usageText = 'Usage Context window 294.1k / 400k (74%) Compact session See 
 const usageClosed = el({ offsetWidth: 360, offsetHeight: 314, innerText: usageText, buttons: [btn('Compact session'), btn(''), btn('See detailed breakdown')] }, { 'data-closed': '', 'data-side': 'top' }, { pointerEvents: 'none' });
 const usageOpen = el({ offsetWidth: 360, offsetHeight: 314, innerText: usageText, buttons: [btn('Compact session')] }, { 'data-open': '', 'data-side': 'top' });
 const credit = el({ offsetWidth: 509, offsetHeight: 560, innerText: 'Credit claimed $250 credits for cloud sessions added', buttons: [btn('Done')] }, { 'data-closed': '' }, { opacity: '0' });
-const ctx = { window: {}, String, JSON, Array, Number, getComputedStyle: (e) => e.style, document: { querySelectorAll: () => [hidden, usageClosed, usageOpen, credit, trust] } };
+// 26-Oct (#2146), captured on his Desktop at a real scheduled-task start: the toast is role=dialog, aria-modal=false,
+// inside [data-cds=Toast]; its only button is the icon Dismiss.
+const toast = el({ offsetWidth: 360, offsetHeight: 64, innerText: 'Scheduled task “Ago store probe” started. View', inToast: true, buttons: [btn('')] }, { role: 'dialog', 'aria-modal': 'false', 'data-type': 'neutral' });
+const toastBare = el({ offsetWidth: 360, offsetHeight: 64, innerText: 'Scheduled task started. View', buttons: [btn('')] }, { 'aria-modal': 'false' });
+const ctx = { window: {}, String, JSON, Array, Number, getComputedStyle: (e) => e.style, document: { querySelectorAll: () => [toast, toastBare, hidden, usageClosed, usageOpen, credit, trust] } };
 vm.createContext(ctx);
 
 // The key exactly as lib/desktop.js's scrape builds the phone's blocker text.
@@ -29,16 +34,16 @@ const scraped = trustText.split('\n').join(' ').trim().slice(0, 300);
 const key = scraped.slice(0, 80);
 const found = JSON.parse(vm.runInContext(FIND_JS(key), ctx));
 check(found.present && JSON.stringify(found.buttons) === '["Cancel","Trust workspace"]', 'the PC finds the same dialog and the same buttons the phone was shown (no blank or icon-only button)', found);
-for (const [d, what] of [[usageClosed, 'a closed Usage popover'], [usageOpen, 'an open Usage popover (anchored, never blocks a send)'], [credit, 'a faded-out closed modal']]) {
+for (const [d, what] of [[toast, 'the "Scheduled task started" toast (#2146)'], [toastBare, 'any aria-modal=false dialog'], [usageClosed, 'a closed Usage popover'], [usageOpen, 'an open Usage popover (anchored, never blocks a send)'], [credit, 'a faded-out closed modal']]) {
   const k = d.innerText.split(String.fromCharCode(10)).join(' ').trim().slice(0, 300).slice(0, 80);
   check(!JSON.parse(vm.runInContext(FIND_JS(k), ctx)).present, what + ' is not a blocking box');
 }
 // The sidebar scrape (what puts the banner on the phone) uses the same test.
 const desktop = require('../lib/desktop');
-const scrapeCtx = Object.assign({}, ctx, { location: { href: 'x/local_1' }, document: { querySelectorAll: (q) => /dialog/.test(q) ? [hidden, usageClosed, usageOpen, credit] : [] } });
+const scrapeCtx = Object.assign({}, ctx, { location: { href: 'x/local_1' }, document: { querySelectorAll: (q) => /dialog/.test(q) ? [toast, toastBare, hidden, usageClosed, usageOpen, credit] : [] } });
 vm.createContext(scrapeCtx);
 let scraped0 = null; try { scraped0 = JSON.parse(vm.runInContext(desktop.SCRAPE_JS, scrapeCtx)); } catch (e) { scraped0 = { err: e.message }; }
-check(scraped0 && !scraped0.err && scraped0.blocker === null, 'the phone banner is not raised for the Usage popover or a closed modal', scraped0 && (scraped0.err || scraped0.blocker));
+check(scraped0 && !scraped0.err && scraped0.blocker === null, 'the phone banner is not raised for a scheduled-task toast, the Usage popover or a closed modal (so its Dismiss can never send Esc into a running chat)', scraped0 && (scraped0.err || scraped0.blocker));
 const other = JSON.parse(vm.runInContext(FIND_JS('Some other dialog'), ctx));
 check(!other.present, 'a dialog that is no longer the one he saw is not touched', other);
 

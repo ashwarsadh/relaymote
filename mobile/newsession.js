@@ -131,4 +131,4 @@ async function newSession(opts = {}) {
   } finally { conn.close(); }
 }
 
-module.exports = { newSession, resolveModel };
+module.exports = { newSession, resolveModel, savedModelIds };

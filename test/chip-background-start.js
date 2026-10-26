@@ -11,7 +11,7 @@ const { check, wait } = H;
 (async () => {
   const boardDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cbs-board-'));
   const fake = await H.fakeDesktop();
-  const w = H.world('cbs', { settings: { cdpPort: fake.port, idleGateSeconds: 999999, board: { dir: boardDir },
+  const w = H.world('cbs', { settings: { cdpPort: fake.port, idleGateSeconds: 999999, board: { dir: boardDir }, newSession: { model: 'Opus 5.5', effort: 'medium' },
     modules: { autoResume: false, orchestrator: false, chipAutostart: true, masterNotify: false, organizer: false, routines: false } } });
   const [A, B] = w.sessions();          // A = the Conductor, B = an ordinary session
   const chips = {
@@ -49,7 +49,9 @@ const { check, wait } = H;
     const sc = started.find(s => s.spawnedFrom.taskId === 'task_cond');
     check(!!sc && sc.spawnedFrom.sessionId === A.sessionId && sc.spawnedFrom.pendingPop === true && sc.message === 'do it',
       "the Conductor's chip starts by itself, linked to the Conductor (spawnedFrom + pendingPop), with the chip's prompt", sc);
-    check(titles['local_child_task_cond'] === 'Memento · packing list Particulars on one line', "the new session carries the chip's title", titles);
+    check(sc && sc.model === 'claude-opus-5-5' && sc.effort === 'medium',
+      'the default tier is stored as a label ("Opus 5.5"); the start carries the model id', sc && { model: sc.model, effort: sc.effort });
+    check(titles['local_child_task_cond'] ==='Memento · packing list Particulars on one line', "the new session carries the chip's title", titles);
     await wait(3500);
     check(!started.some(s => s.spawnedFrom.taskId === 'task_opt'), 'a chip marked optional is not started by itself');
     check(!started.some(s => s.spawnedFrom.taskId === 'task_b'), "an ordinary session's chip is not started by itself");

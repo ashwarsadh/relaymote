@@ -1,3 +1,7 @@
+## 0.2.141
+
+- A chip started by Relaymote now gets your default model correctly. 0.2.140 passed the model's display name ("Opus 5.5"), and the new session stopped with "There's an issue with the selected model".
+
 ## 0.2.140
 
 - Suggested-task chips start themselves. A chip raised by the Conductor or a master session is started automatically, unless it says it is optional. It starts in the background: nothing is clicked and the session open on the PC never changes, so it runs while you type. The new session carries the chip's title and shows as started from that suggestion.

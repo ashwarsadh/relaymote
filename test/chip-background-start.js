@@ -55,6 +55,10 @@ const { check, wait } = H;
     await wait(3500);
     check(!started.some(s => s.spawnedFrom.taskId === 'task_opt'), 'a chip marked optional is not started by itself');
     check(!started.some(s => s.spawnedFrom.taskId === 'task_b'), "an ordinary session's chip is not started by itself");
+    const cw = JSON.parse(fs.readFileSync(path.join(w.home, 'state', 'chipwatch.json'), 'utf8'));
+    check(cw.ticks >= 2 && cw.lastTick && cw.lastTick.at && (cw.lastTick.held || []).some(h => h.taskId === 'task_opt'),
+      'every tick leaves its outcome on disk (why a chip was or was not started)', { ticks: cw.ticks, lastTick: cw.lastTick });
+    check(/chipwatch: .*task_opt/.test(d.output()), 'a tick that holds a chip says so in the log', d.output().split('\n').filter(l => /chipwatch/.test(l)).slice(-3));
 
     // The phone sees every waiting chip, wherever it is.
     let r = await d.req('/api/chips/all');

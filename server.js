@@ -45,7 +45,7 @@ const PUMP_MS = 5000;
 const DESKTOP_MS = 30000;
 const NOTIFY_MS = 15000;
 const RESUME_MS = 60000;
-const CHIPWATCH_MS = Number(process.env.RELAYMOTE_CHIPWATCH_MS || 60000);
+const CHIPWATCH_MS = Number(process.env.RELAYMOTE_CHIPWATCH_MS || 20000);   // a bridge read (~0.3 s); 60 s let a chip wait
 const idleMinMs = () => Number(process.env.RELAYMOTE_IDLE_MIN_MS ?? (config.get().idleGateSeconds * 1000));
 
 const serialise = desktop.serializeUi;
@@ -63,6 +63,10 @@ async function uiQueueTick() {
   }
 }
 
+// 26-Oct: a Conductor chip went unstarted for 85 s and nothing said why — a tick that started nothing logged
+// nothing. Every outcome other than "nothing pending" is now logged (once per change) and the last tick is kept
+// in state/chipwatch.json.
+let lastChipwatchNote = '';
 async function chipwatchTick() {
   if (!config.mod('chipAutostart')) return;
   try {
@@ -72,6 +76,12 @@ async function chipwatchTick() {
       orch.log('chipwatch started: ' + r.started.map(x => x.taskId + ' -> ' + x.sessionId).join(', '));
     }
   } catch (e) { lastChipwatch = { at: new Date().toISOString(), error: e.message }; }
+  chipwatch.noteTick(lastChipwatch);
+  const c = lastChipwatch, quiet = c.note === 'no pending chips anywhere' || c.skipped === 'no-master-owns-anything' || c.skipped === 'disabled';
+  const note = quiet || (c.started && c.started.length && !(c.failed || []).length) ? ''
+    : JSON.stringify({ skipped: c.skipped, detail: c.detail, error: c.error, failed: c.failed, held: (c.held || []).map(h => h.taskId) }).slice(0, 400);
+  if (note && note !== lastChipwatchNote) orch.log('chipwatch: ' + note);
+  lastChipwatchNote = note;
 }
 
 let refreshStage = '';

@@ -1,3 +1,8 @@
+## 0.2.143
+
+- Chips are checked every 20 seconds instead of every minute, so a Conductor or master chip starts sooner.
+- Every check that does not start a waiting chip now says why in the PC log (held as optional, a failed start, Desktop unreachable), and the last check is kept in state/chipwatch.json.
+
 ## 0.2.142
 
 - A chip started by itself is filed under a real sidebar group only. With the sidebar sorted by status, a section such as "Needs input" is never taken for a group, and the auto-starter never creates a group.

@@ -1,3 +1,7 @@
+## 0.2.139
+
+- Another person using Relaymote (Ajay, Sagar) no longer switches the session open on your PC. When a phone looks at a session waiting for input, the PC is read only where it already is; the session is opened there only for you, with the PC idle and an approval really waiting, and the view is put back. A question answered from another phone, or while the PC is in use, goes to the session as a message in the background. An Allow tap while the PC is in use waits instead of opening the session.
+
 ## 0.2.138
 
 - Claude Desktop's "Scheduled task started" toast is no longer shown on the phone as a box blocking the PC. Its Dismiss sent Esc to the Desktop window, which stopped the running session. A non-modal box (toast) is never treated as blocking.

@@ -1236,7 +1236,21 @@ async function handle(req, res) {
     if (isSubuser(identity) && !identity.sessions.has(id)) {
       return json(res, 403, { ok: false, error: 'NOT_GRANTED', message: 'That session is not shared with you.' });
     }
-    return uiJobWith(res, 'permission', () => ui(() => readPermission(id)),
+    // 26-Oct (Ashwar: "while i am typing here my window switches to ajay conductor while he uses relaymote"): a phone
+    // looking at an awaiting session asked for this, and readPermission CLICKED that session open on the PC -- no idle
+    // check, no principal check, no restore. Now the PC view is only read where it already is unless the owner asks,
+    // the PC is idle, and the transcript really ends on a tool call waiting for approval; then it is put back.
+    const busy = windowBusy(req, url);
+    try { await sessions.refresh(); } catch {}
+    const sess = sessions.get(id);
+    let waitsTool = null;
+    try { waitsTool = sess ? pendingApproval(sessions.transcriptPath(sess)) : null; } catch {}
+    if (busy || !waitsTool) {
+      return uiJobWith(res, 'permission', () => ui(() => peekPermission()),
+                       (out) => ({ id, permission: out && out.ok && out.present && out.here === id ? out : null,
+                                   notOpened: busy || (waitsTool ? null : 'nothing waits for approval') }));
+    }
+    return uiJobWith(res, 'permission', () => ui(() => readPermission(id, { restore: true })),
                      (out) => ({ id, permission: out && out.ok ? out : null }));
   }
 
@@ -2002,6 +2016,16 @@ async function handle(req, res) {
     }
     if (p === '/api/answer') {
       return uiJobWith(res, 'answer', async () => {
+        // 26-Oct: answering on the card opens the session on the PC. While the PC is in use, or for another principal,
+        // the tap goes as a message through the background route instead (the window is never touched).
+        const busy = windowBusy(req, url);
+        if (busy) {
+          const text = answersAsText(body.answers);
+          if (!text) return { ok: false, error: 'NOTHING_TO_SEND', message: 'No answer was picked, and the PC is not opened for it (' + busy + ').' };
+          log(`answer ${body.id}: ${busy} -> sent as a message, PC window not touched`);
+          const s = await doSend(body.id, text, [], { noUi: true });
+          return { ...s, fallback: 'message', sentText: text, why: busy };
+        }
         let out = null;
         for (let attempt = 1; attempt <= 3; attempt++) {
           out = await ui(() => answerQuestion(body.id, body.answers));
@@ -2063,6 +2087,15 @@ async function handle(req, res) {
                        (out) => ({ key: body.key, label: body.label, closed: !!(out && (out.closed || out.alreadyClosed)) }));
     }
     if (p === '/api/permission/answer') {
+      // 26-Oct: an Allow/Deny can only be pressed in that session's view. It is pressed in place if the PC already
+      // shows it; otherwise only while nobody is using the PC (and the view is put back). Never while he types.
+      if (!pcIdle()) {
+        const pk = await ui(() => peekPermission()).catch(() => null);
+        if (!(pk && pk.ok && pk.present && pk.here === String(body.id || ''))) {
+          log('approval answer for ' + String(body.id || '') + ' held: PC in use, session not on screen');
+          return json(res, 409, { ok: false, error: 'PC_IN_USE', message: 'Someone is using the PC right now, so the session was not opened there. The approval is still waiting; tap again in a couple of minutes.' });
+        }
+      }
       log('approval answer: ' + String(body.kind || '') + ' "' + String(body.raw || '').slice(0, 40) + '" for ' + String(body.id || '') + ' from ' + (body.from || 'app'));
       // The notification's own buttons cannot hold the SSE stream, so they ask for the result in the reply.
       if (body.wait) {

@@ -211,7 +211,7 @@ async function fakeDesktop(sessions = {}) {
     s.transcript.push({ type: 'assistant', timestamp: new Date().toISOString(), message: { model: model || s.model } });
     turnEnds(s);
   };
-  return { port: srv.address().port, sessions, calls, endTurn, close: () => { wss.close(); srv.close(); } };
+  return { port: srv.address().port, sessions, calls, endTurn, renderer, close: () => { wss.close(); srv.close(); } };
 }
 
 function finish(w) {

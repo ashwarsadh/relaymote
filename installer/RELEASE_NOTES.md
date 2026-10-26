@@ -1,3 +1,7 @@
+## 0.2.142
+
+- A chip started by itself is filed under a real sidebar group only. With the sidebar sorted by status, a section such as "Needs input" is never taken for a group, and the auto-starter never creates a group.
+
 ## 0.2.141
 
 - A chip started by Relaymote now gets your default model correctly. 0.2.140 passed the model's display name ("Opus 5.5"), and the new session stopped with "There's an issue with the selected model".

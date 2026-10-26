@@ -296,7 +296,7 @@ else {
     allChipQueues: async () => ({ ok: true, total: [...queues.values()].reduce((n, s) => n + s.chips.length, 0), sessions: queues }),
     startChipBackground: async ({ taskId, sessionId }) => { started.push(taskId); return { ok: true, startedSessionId: 'local_new_' + taskId, owner: sessionId, transport: 'background' }; },
     startTask: async ({ taskId }) => { clicked.push(taskId); return { ok: true, startedSessionId: 'local_dom_' + taskId }; },
-    loadSnapshot: () => ({ sessions: [{ sessionId: 'local_owned', group: 'Baton', cwd: 'C:/x' }] }),
+    loadSnapshot: () => ({ sessions: [{ sessionId: 'local_owned', group: 'Baton', cwd: 'C:/x' }, { sessionId: 'local_cond', group: 'Needs input', cwd: 'C:/y' }] }),
     setGroup: async (id, g) => { grouped.push(id + '>' + g); return { ok: true }; }, setModel: async () => ({ ok: true }),
   };
   const agoMasters = path.join(TMP, 'ago-masters.json');
@@ -329,6 +329,7 @@ else {
   const c4 = await chipwatch.tick();
   check(c4.started.map(x => x.taskId).join() === 'task_c' && !started.includes('task_w'), "the Conductor's chip (claim in AGO's file) starts; a non-master's chip does not", c4);
   check(JSON.parse(fs.readFileSync(agoMasters, 'utf8')).conductor.fleet.includes('local_new_task_c'), "the Conductor's started session joins its fleet");
+  check(!grouped.some(g => /Needs input/.test(g)), "a status section ('Needs input') is never taken for a group", grouped);
   fs.writeFileSync(path.join(config.STATE, 'masters.json'), JSON.stringify({ proj: { sessionId: 'local_owned', expiresAt: new Date(Date.now() - 1000).toISOString() } }));
   fs.unlinkSync(agoMasters);
   check(!chipwatch.ownedSessions().some(o => o.sessionId === 'local_owned'), 'an expired master claim owns nothing');

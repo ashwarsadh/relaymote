@@ -1,3 +1,7 @@
+## 0.2.144
+
+- The "install on this device" guide knows the phone's layout. On iOS 26 it points at ••• beside the address bar (the bottom-right button there is the tab switcher), and each layout gets an animated how-to: iOS 15–18, iPad, Chrome on iPhone, Android and Samsung. A "Still stuck?" link loads a maintained install library.
+
 ## 0.2.143
 
 - Chips are checked every 20 seconds instead of every minute, so a Conductor or master chip starts sooner.

@@ -2594,8 +2594,13 @@ async function openNew() {
 }
 
 async function openChips() {
-  if (!state.open) return toast('Pick a session first', true);
   showSheet($('chipsheet'));
+  loadAllChips();
+  if (!state.open) {
+    $('chip-sub').innerHTML = '<span class="muted">no session open</span>';
+    $('chiplist').innerHTML = '';
+    return;
+  }
   $('chip-sub').innerHTML = '<span class="muted">reading the session…</span>';
   $('chiplist').innerHTML = '<div class="empty">Reading background tasks…</div>';
   try {
@@ -2607,6 +2612,46 @@ async function openChips() {
   } catch (e) {
     $('chiplist').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
+}
+
+// 26-Oct, Ashwar: "relaymote shud hv ability to also self start such tasks too". Every chip waiting anywhere on
+// the PC, each with Start. Starting goes through the app's own records: the PC's window never moves.
+async function loadAllChips() {
+  const ul = $('chipall'), h = $('chipall-h');
+  try {
+    const d = await api('/api/chips/all');
+    const rows = (d.sessions || []).filter(s => s.sessionId !== state.open);
+    ul.innerHTML = '';
+    h.hidden = !rows.length;
+    rows.forEach(s => s.chips.forEach(c => {
+      const li = document.createElement('li');
+      li.className = 'row';
+      li.innerHTML = `<div class="row-main"><div class="row-title">${esc(c.title || 'task')}</div>` +
+        `<div class="row-meta"><span>${esc(c.tldr || '')}</span></div>` +
+        `<div class="row-meta"><span class="muted">from ${esc(s.owner || s.sessionId)}` +
+        `${s.autoStarts && !c.optional ? ' · starts by itself' : c.optional ? ' · optional' : ''}</span></div></div>`;
+      li.appendChild(chipStartButton(s.sessionId, c, loadAllChips));
+      ul.appendChild(li);
+    }));
+  } catch (e) { h.hidden = true; ul.innerHTML = ''; }
+}
+
+function chipStartButton(sessionId, c, after) {
+  const go = document.createElement('button');
+  go.className = 'ghost primary';
+  go.style.cssText = 'flex:0 0 auto;width:auto;padding:8px 14px';
+  go.textContent = 'Start';
+  go.onclick = async () => {
+    go.disabled = true; go.textContent = '…';
+    const revert = () => { go.disabled = false; go.textContent = 'Start'; };
+    try {
+      const d = await api('/api/chip/start', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, taskId: c.taskId, title: c.title, index: c.index, mode: 'local' }) });
+      if (d && d.jobId) { uiJobs.set(d.jobId, { label: 'Start', revert, after }); toast('Starting…'); }
+      else { toast('Started: ' + (d.title || c.title || 'task')); after(); }
+    } catch (e) { toast('Start failed: ' + e.message, true); revert(); }
+  };
+  return go;
 }
 
 function setChipBadge(n) {
@@ -2655,21 +2700,8 @@ function renderChips(running, chips, uiRunning, pending) {
     const li = document.createElement('li');
     li.className = 'row';
     li.innerHTML = `<div class="row-main"><div class="row-title">${esc(c.title || c.text || 'task ' + (i + 1))}</div>` +
-                   `<div class="row-meta"><span>${esc(c.tldr || c.subtitle || '')}</span></div></div>`;
-    const go = document.createElement('button');
-    go.className = 'ghost primary';
-    go.style.cssText = 'flex:0 0 auto;width:auto;padding:8px 14px';
-    go.textContent = 'Start';
-    go.onclick = async () => {
-      go.disabled = true; go.textContent = '…';
-      const revert = () => { go.disabled = false; go.textContent = 'Start'; };
-      try {
-        const d = await api('/api/chip/start', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: state.open, title: c.title, index: i, mode: 'local' }) });
-        if (d && d.jobId) { uiJobs.set(d.jobId, { label: 'Start', revert, after: openChips }); toast('Starting…'); }
-        else { toast('Task started'); openChips(); }
-      } catch (e) { toast('Start failed: ' + e.message, true); revert(); }
-    };
+                   `<div class="row-meta"><span>${esc(c.tldr || c.description || c.subtitle || '')}</span></div></div>`;
+    const go = chipStartButton(state.open, c.taskId ? c : { ...c, index: i }, openChips);
     li.appendChild(go);
     ul.appendChild(li);
   });

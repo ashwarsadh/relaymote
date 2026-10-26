@@ -1,3 +1,8 @@
+## 0.2.140
+
+- Suggested-task chips start themselves. A chip raised by the Conductor or a master session is started automatically, unless it says it is optional. It starts in the background: nothing is clicked and the session open on the PC never changes, so it runs while you type. The new session carries the chip's title and shows as started from that suggestion.
+- The phone's Background tasks sheet lists the chips waiting in every session, each with Start. Start works the same way, in the background.
+
 ## 0.2.139
 
 - Another person using Relaymote (Ajay, Sagar) no longer switches the session open on your PC. When a phone looks at a session waiting for input, the PC is read only where it already is; the session is opened there only for you, with the PC idle and an approval really waiting, and the view is put back. A question answered from another phone, or while the PC is in use, goes to the session as a message in the background. An Allow tap while the PC is in use waits instead of opening the session.

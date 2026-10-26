@@ -1086,7 +1086,7 @@ async function handle(req, res) {
                     // a scoped principal (Ajay) also reads his chats and his own board (narrowed to his rows; taps go to
                     // his Conductor). Every per-session read is checked against his live set just below.
                     (identity.principal && (p === '/api/board' || p === '/api/board/needs' || p.startsWith('/api/session/') ||
-                                            p === '/api/chips'));   // never the seen/mark-read routes: unread dots are shared with Ashwar
+                                            p === '/api/chips' || p === '/api/chips/all'));   // never the seen/mark-read routes: unread dots are shared with Ashwar
     const WRITE_OK = req.method === 'POST' && (
       p === '/api/send' || p === '/api/model' || p === '/api/effort' ||
       p === '/api/answer' || p === '/api/permission/answer' ||
@@ -1687,6 +1687,31 @@ async function handle(req, res) {
     });
   }
 
+  // 26-Oct (chips self-start): every pending suggested-task chip on the PC, read from the app's own records
+  // (no session opened, no unread dot touched). A scoped login sees only chips in its own sessions.
+  if (p === '/api/chips/all') {
+    let q;
+    try { q = await desktop.allChipQueues(); } catch (e) { return json(res, 503, { ok: false, error: 'DESKTOP_UNAVAILABLE', message: e.message }); }
+    if (!q || !q.ok) return json(res, 503, { ok: false, error: (q && q.error) || 'DESKTOP_UNAVAILABLE' });
+    await sessions.refresh();
+    let visible = null;
+    if (isSubuser(identity)) visible = identity.sessions;
+    else {
+      const pr = principalOf(req, url);
+      if (pr.own) visible = new Set(principalList(req, url, sessions.index().list).map(s => s.id));
+    }
+    const auto = new Set(require('../lib/chipwatch').ownedSessions().map(o => o.sessionId));
+    const out = [];
+    for (const s of q.sessions.values()) {
+      if (s.archived || (visible && !visible.has(s.sessionId))) continue;
+      out.push({ sessionId: s.sessionId, owner: s.owner, autoStarts: auto.has(s.sessionId),
+        chips: s.chips.map(c => ({ taskId: c.taskId, title: c.title, tldr: c.description, createdAt: c.createdAt,
+                                   optional: require('../lib/chipwatch').isOptional(c) })) });
+    }
+    out.sort((a, b) => Math.max(...b.chips.map(c => c.createdAt || 0)) - Math.max(...a.chips.map(c => c.createdAt || 0)));
+    return json(res, 200, { ok: true, sessions: out, total: out.reduce((n, s) => n + s.chips.length, 0) });
+  }
+
   if (p === '/api/chips') {
     const id = url.searchParams.get('id');
     if (!id) return json(res, 400, { ok: false, error: 'id required' });
@@ -2134,6 +2159,20 @@ async function handle(req, res) {
       return uiJob(res, 'attach', () => pasteFiles(body.id, body.files), { id: body.id });
     }
     if (p === '/api/chip/start') {
+      // A chip named by taskId starts through the bridge: nothing is clicked or fronted on the PC (0.2.139 rule),
+      // so it is safe while he types. Only an old phone (title/index, no taskId) or a missing bridge falls back
+      // to pressing the card, which waits for an idle PC.
+      if (body.taskId) {
+        const tier = require('../lib/tier-policy').defaults();
+        const r = await desktop.startChipBackground({ sessionId: body.sessionId, taskId: body.taskId,
+          model: tier.model || undefined, effort: tier.effort || undefined }).catch(e => ({ ok: false, error: 'THREW', message: e.message }));
+        if (r.ok) {
+          try { require('../lib/tier-policy').recordRelaymote(r.startedSessionId, { model: r.model, effort: r.effort }); } catch {}
+          log(`chip started in background: ${body.taskId} "${String(r.title || '').slice(0, 60)}" from ${body.sessionId} -> ${r.startedSessionId}`);
+          return json(res, 200, r);
+        }
+        if (r.error !== 'NO_BRIDGE') return json(res, r.error === 'NO_CHIP' ? 410 : 409, r);
+      }
       return uiJob(res, 'chipstart', () => desktop.startTask({ ...body, mode: body.mode || 'local' }),
                    { id: body.sessionId });
     }

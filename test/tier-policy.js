@@ -79,7 +79,9 @@ const S = (o = {}) => ({ newSession: { model: 'sonnet', effort: 'medium' }, tier
     const nsSrc = fs.readFileSync(path.join(root, 'mobile', 'newsession.js'), 'utf8');
     ok(/args\.model = m\.id/.test(nsSrc) && /args\.effort = wantEffort/.test(nsSrc) && nsSrc.indexOf('args.effort') < nsSrc.indexOf('.start('), 'a new session is started WITH its model and effort, in the same call as the first prompt');
     const cw = fs.readFileSync(path.join(root, 'lib', 'chipwatch.js'), 'utf8');
-    ok(/if \(!require\('\.\/tier-policy'\)\.defaults\(\)\.model\)/.test(cw), 'chipwatch no longer overwrites the default with its own model');
+    ok(/const tier = require\('\.\/tier-policy'\)\.defaults\(\)/.test(cw) && /model: tier\.model \|\| DEFAULT_MODEL/.test(cw), 'chipwatch starts a chip on the default tier first, its own model only when none is set');
+    const mi = fs.readFileSync(path.join(root, 'mobile', 'index.js'), 'utf8');
+    ok(/startChipBackground\(\{ sessionId: body\.sessionId, taskId: body\.taskId,\s+model: tier\.model \|\| undefined, effort: tier\.effort \|\| undefined/.test(mi), "the phone's background chip Start uses the default tier");
     const ui = fs.readFileSync(path.join(root, 'mobile', 'public', 'settings-ui.js'), 'utf8');
     ok(/toggle\('tierBeforeWake'/.test(ui) && /field\('tierOverrideHours'/.test(ui), 'Settings has the switch and the hours');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

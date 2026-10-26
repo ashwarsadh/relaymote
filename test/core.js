@@ -1,5 +1,5 @@
 // core.js — the orchestrator core, offline: router, retry/escalation policy, a worker's whole life
-// against a fake `claude` CLI, await, heal (stubbed probes), chipwatch gating (stubbed desktop),
+// against a fake `claude` CLI, await, heal (stubbed probes), chipwatch background starts (stubbed desktop),
 // idle detection, trust roots, the account-switch detector, registry salvage, the AGO import, the
 // stderr-keeping launcher, the control-port guard, and — against a throwaway daemon on spare ports —
 // the dashboard, `relaymote stop <id>` vs `relaymote stop`, and the account-switch question over the app API.
@@ -289,14 +289,18 @@ else {
   idle._setSampler(null); idle.stop();
 
   // ------------------------------------------------------------------------------------------------
-  section('chipwatch: tick gating (stubbed desktop)');
-  const started = [];
+  section('chipwatch: Conductor/master chips start in the background (stubbed desktop)');
+  const started = [], clicked = [], grouped = [];
+  let queues = new Map([['local_owned', { chips: [{ taskId: 'task_a', title: 'A' }, { taskId: 'task_b', title: 'B' }, { taskId: 'task_opt', title: 'Tidy docs', description: 'Optional: only if you want it' }] }]]);
   const stubDesktop = {
-    allChipQueues: async () => ({ ok: true, total: 2, sessions: new Map([['local_owned', { chips: [{ taskId: 'task_a', title: 'A' }, { taskId: 'task_b', title: 'B' }] }]]) }),
-    startTask: async ({ taskId }) => { started.push(taskId); if (onStart) onStart(); return { ok: true, startedSessionId: 'local_new_' + taskId }; },
-    loadSnapshot: () => ({ sessions: [] }), setGroup: async () => ({ ok: true }), setModel: async () => ({ ok: true }),
+    allChipQueues: async () => ({ ok: true, total: [...queues.values()].reduce((n, s) => n + s.chips.length, 0), sessions: queues }),
+    startChipBackground: async ({ taskId, sessionId }) => { started.push(taskId); return { ok: true, startedSessionId: 'local_new_' + taskId, owner: sessionId, transport: 'background' }; },
+    startTask: async ({ taskId }) => { clicked.push(taskId); return { ok: true, startedSessionId: 'local_dom_' + taskId }; },
+    loadSnapshot: () => ({ sessions: [{ sessionId: 'local_owned', group: 'Baton', cwd: 'C:/x' }] }),
+    setGroup: async (id, g) => { grouped.push(id + '>' + g); return { ok: true }; }, setModel: async () => ({ ok: true }),
   };
-  let onStart = null;
+  const agoMasters = path.join(TMP, 'ago-masters.json');
+  process.env.RELAYMOTE_AGO_MASTERS = agoMasters;
   const dPath = require.resolve('../lib/desktop'), cPath = require.resolve('../lib/chipwatch');
   const realDesktop = require.cache[dPath];
   require.cache[dPath] = { id: dPath, filename: dPath, loaded: true, exports: stubDesktop };
@@ -305,28 +309,33 @@ else {
   if (realDesktop) require.cache[dPath] = realDesktop; else delete require.cache[dPath];
   delete require.cache[cPath];
   idle._setSampler(() => 0);
-  const c0 = await chipwatch.tick();
-  check(c0.skipped === 'user-active' && started.length === 0, 'the user is at the keyboard: nothing is pressed', c0);
-  idle._setSampler(() => null);
-  const cU = await chipwatch.tick();
-  check(cU.skipped === 'user-active' && started.length === 0, 'idle time UNKNOWN: nothing is pressed (the guard fires)', cU);
-  idle._setSampler(() => 10 * 60000);
   const c1 = await chipwatch.tick();
-  check(c1.skipped === 'no-master-owns-anything' && started.length === 0, 'idle, but no master owns a session: nothing is pressed', c1);
+  check(c1.skipped === 'no-master-owns-anything' && started.length === 0, 'no master or Conductor owns a session: nothing starts', c1);
   fs.writeFileSync(path.join(config.STATE, 'masters.json'), JSON.stringify({ proj: { sessionId: 'local_owned', expiresAt: new Date(Date.now() + 3600000).toISOString(), fleet: [] } }));
-  onStart = () => idle._setSampler(() => 0);
   const c2 = await chipwatch.tick();
-  check(c2.skipped === 'user-active-mid-tick' && started.join() === 'task_a', 'the user comes back mid-tick: it stops after the chip in hand', c2);
-  onStart = null;
-  idle._setSampler(() => 10 * 60000);
+  check(c2.started && c2.started.map(x => x.taskId).join() === 'task_a,task_b', 'he is typing (PC busy): a master\'s chips still start, in the background', c2);
+  check(clicked.length === 0 && grouped.length === 0, 'nothing is clicked on the PC while he types (no DOM start, grouping waits)', { clicked, grouped });
+  check(c2.held.some(h => h.taskId === 'task_opt') && !started.includes('task_opt'), 'a chip marked optional is left for him', c2.held);
   const c3 = await chipwatch.tick();
-  check(c3.started && c3.started.map(x => x.taskId).join() === 'task_b', 'a started chip is never pressed twice; the next one is', c3);
+  check(c3.started.length === 0 && started.length === 2, 'a started chip is never started twice', c3);
+  idle._setSampler(() => 10 * 60000);
+  await chipwatch.tick();
+  check(grouped.join() === 'local_new_task_a>Baton,local_new_task_b>Baton', 'once the PC is idle the started sessions join the owner\'s group', grouped);
   const fleet = JSON.parse(fs.readFileSync(path.join(config.STATE, 'masters.json'), 'utf8')).proj.fleet;
   check(fleet.includes('local_new_task_a') && fleet.includes('local_new_task_b'), 'started sessions join the owning master\'s fleet', fleet);
+  // The Conductor's claim lives in AGO's masters.json; its chips start too.
+  fs.writeFileSync(agoMasters, JSON.stringify({ conductor: { sessionId: 'local_cond', expiresAt: new Date(Date.now() + 3600000).toISOString(), fleet: [] } }));
+  queues = new Map([['local_cond', { chips: [{ taskId: 'task_c', title: 'Memento · packing list Particulars on one line' }] }], ['local_worker', { chips: [{ taskId: 'task_w', title: 'W' }] }]]);
+  const c4 = await chipwatch.tick();
+  check(c4.started.map(x => x.taskId).join() === 'task_c' && !started.includes('task_w'), "the Conductor's chip (claim in AGO's file) starts; a non-master's chip does not", c4);
+  check(JSON.parse(fs.readFileSync(agoMasters, 'utf8')).conductor.fleet.includes('local_new_task_c'), "the Conductor's started session joins its fleet");
   fs.writeFileSync(path.join(config.STATE, 'masters.json'), JSON.stringify({ proj: { sessionId: 'local_owned', expiresAt: new Date(Date.now() - 1000).toISOString() } }));
-  check(chipwatch.ownedSessions().length === 0, 'an expired master claim owns nothing');
+  fs.unlinkSync(agoMasters);
+  check(!chipwatch.ownedSessions().some(o => o.sessionId === 'local_owned'), 'an expired master claim owns nothing');
+  check(chipwatch.isOptional({ title: 'x', description: 'optional idea' }) && !chipwatch.isOptional({ title: 'Fix it', description: 'now' }), 'optional is read from the title or summary');
   idle._setSampler(null); idle.stop();
   fs.unlinkSync(path.join(config.STATE, 'masters.json'));
+  delete process.env.RELAYMOTE_AGO_MASTERS;
 
   // ------------------------------------------------------------------------------------------------
   section('trusted roots');

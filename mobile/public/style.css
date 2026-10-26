@@ -1283,3 +1283,4 @@ mark.hit.cur{background:#f5a524; color:#000}
 .set-subtabs .chip{min-height:34px}
 .live-stack{grid-template-columns:1fr}
 .live-stack .live-v{text-align:left; max-width:none}
+#chipall-h[hidden]{display:none}

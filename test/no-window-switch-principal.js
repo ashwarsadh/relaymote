@@ -68,6 +68,8 @@ async function run(tag, idleGateSeconds, fn) {
     check(sent.length >= 1, 'his answer reached the session in the background, as a message', sent.map(c => String(c[2]).slice(0, 60)));
   });
   // Control: the owner with the PC idle still gets the read (the test does see a click when one happens).
+  // Needs a real idle reading: CI's Linux (no xprintidle) and macOS runners have none, so "unknown" = in use there.
+  if (process.platform !== 'win32' || process.env.RELAYMOTE_IDLE_PLATFORM) { console.log('skip control: no idle reading off Windows'); return H.finish(null); }
   await run('owner-idle', 0.001, async ({ d, A, clicks }) => {
     const ev = d.stream('nws-owner');
     await wait(800);

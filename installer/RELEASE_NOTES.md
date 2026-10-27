@@ -1,3 +1,7 @@
+## 0.2.151
+
+- Working sessions (blue dot) always show, at the top of the list, then waiting ones (yellow dot), then the rest. Before, a session that Claude Desktop still dated days back could be left out of the list even while it was working. A star now lifts a session only within its own group.
+
 ## 0.2.150
 
 - Entering the Cloudflare code always lets a colleague in, however long the email took. Before, a code entered more than 15 minutes after tapping Continue led back to Sign in again, and Continue then signed them out once more.

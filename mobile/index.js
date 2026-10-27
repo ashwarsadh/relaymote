@@ -488,6 +488,12 @@ function recipients(origin) {
   return out;
 }
 
+// 27-Oct, Ashwar: "I don't see the blue dot session, which is working. The blue dot ones should appear above the
+// yellow dot ones." Working, then waiting, then the rest by last activity, BEFORE any list is cut (the phone asks
+// for 80; the doorbell session, dated 7 days back by Desktop's file, never made the cut).
+const attnRank = (s) => (s.running ? 0 : s.awaiting ? 1 : 2);
+const byAttention = (list) => list.slice().sort((a, b) => (attnRank(a) - attnRank(b)) || ((b.lastActivityAt || 0) - (a.lastActivityAt || 0)));
+
 function listKey(list) {
   let k = '';
   for (const s of list.slice(0, 80)) k += s.id + s.lastActivityAt + (s.dot || '') + s.title + ';';
@@ -689,7 +695,7 @@ async function poll() {
     const decorKey = String(sessions.index().at) + '|' + String(snap && snap.at) + '|' + sessions.ackVersion();
     let all;
     if (lastDecor.all && lastDecor.key === decorKey) all = lastDecor.all;
-    else { all = sessions.decorate(sessions.index().list, snap); lastDecor = { key: decorKey, all }; }
+    else { all = byAttention(sessions.decorate(sessions.index().list, snap)); lastDecor = { key: decorKey, all }; }
 
     const _tN = Date.now();
     await notifyAttention(all);
@@ -1288,6 +1294,7 @@ async function handle(req, res) {
     let out = all.filter(s => !!s.archived === wantArchived);
     if (folder) out = out.filter(s => s.cwd === folder);
     if (q) out = out.filter(s => (s.title || '').toLowerCase().includes(q) || (s.cwd || '').toLowerCase().includes(q));
+    out = byAttention(out);
     const snap = desktop.loadSnapshot() || {};
     return json(res, 200, {
       ok: true, total: out.length,

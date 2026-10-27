@@ -175,8 +175,18 @@ function decorate(list, snapshot) {
     const d = d0 && api ? { ...d0, awaiting: false, unread: false, dot: d0.running ? d0.dot : null } : d0;
     const ack = seen[s.id];
     const acked = !!(d && (d.awaiting || d.unread) && !d.running && ack && s.turnMark && ack.mark === s.turnMark);
+    // 27-Oct: Desktop leaves lastActivityAt in its session file unchanged while a resumed session works (the doorbell
+    // session read 20-Oct while its transcript was written that night), so a running session sorted 7 days back,
+    // past the list's 300, and read "stalled". For a running session the transcript's last write is the activity.
+    let at = s.lastActivityAt || 0;
+    if (d && d.running) {
+      const st = transcriptStamp(s);
+      const m = st ? Number(String(st).split(':')[1]) : 0;
+      if (m > at) at = Math.round(m);
+    }
     return {
       ...s,
+      lastActivityAt: at,
       dot: d ? (acked ? null : d.dot) : null,
       group: d ? d.group : null,
       awaiting: d ? (d.awaiting && !acked) : false,
@@ -185,8 +195,8 @@ function decorate(list, snapshot) {
       seen: acked,
       active: s.id === active,
       live: !!d,
-      stalled: !!(d && d.running && s.lastActivityAt && (Date.now() - s.lastActivityAt) > STALE_RUN_MS),
-      quietFor: d && d.running && s.lastActivityAt ? Date.now() - s.lastActivityAt : 0,
+      stalled: !!(d && d.running && at && (Date.now() - at) > STALE_RUN_MS),
+      quietFor: d && d.running && at ? Date.now() - at : 0,
       api,
     };
   });

@@ -1283,11 +1283,12 @@ function sortSessions(list) {
   const arr = list.slice();
   if (state.sort === 'fav') return arr.filter(s => state.favs.has(s.id)).sort((a, b) => b.at - a.at);
   if (state.sort === 'recent') return arr.sort((a, b) => b.at - a.at);
+  // Working (blue) above waiting (yellow) above the rest; a star lifts a session within its own group.
   return arr.sort((a, b) => {
-    const f = (state.favs.has(b.id) ? 1 : 0) - (state.favs.has(a.id) ? 1 : 0);
-    if (f) return f;
     const r = rank(a) - rank(b);
-    return r || b.at - a.at;
+    if (r) return r;
+    const f = (state.favs.has(b.id) ? 1 : 0) - (state.favs.has(a.id) ? 1 : 0);
+    return f || b.at - a.at;
   });
 }
 

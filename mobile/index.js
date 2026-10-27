@@ -101,13 +101,41 @@ function scopedPrincipal(key, email) {
            sessions: { has: (id) => !!id && live().has(id), get size() { return live().size; } } };
 }
 
+// 27-Oct (AI Repair group): "on sanjay user baton logged in info user without otp or cloudflare access". Sanjay's
+// Chrome on the office terminal server still held the team-wide Access session from an info@ OTP 24 days earlier,
+// and Access re-issued Baton's token silently. A scoped (staff) login therefore also needs Baton's own sub-session
+// (baton_ss, SUB_SESSION_H hours), and that is issued only after Baton has sent the browser through Access logout,
+// which ends the stale session so the next Access login asks for the OTP. Owner logins are unchanged.
+const SUB_SESSION_H = () => Number(((config.get().remote || {}).access || {}).subSessionHours) || 12;
+const ssSig = (kind, email, exp) => crypto.createHmac('sha256', TOKEN).update(kind + '|' + String(email).toLowerCase() + '|' + exp).digest('hex');
+function cookieVal(req, name) {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === name) return decodeURIComponent(v.join('='));
+  }
+  return null;
+}
+function signedCookieOk(req, name, kind, email) {
+  const v = cookieVal(req, name);
+  const m = /^(\d+)\.([0-9a-f]{64})$/.exec(v || '');
+  if (!m || Number(m[1]) < Date.now()) return false;
+  return safeEq(m[2], ssSig(kind, email, m[1]));
+}
+function signedCookie(name, kind, email, maxAgeS, secure) {
+  const exp = Date.now() + maxAgeS * 1000;
+  return `${name}=${exp}.${ssSig(kind, email, exp)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeS}` + (secure ? '; Secure' : '');
+}
+
 async function resolveIdentity(req, url) {
   // A bound Access login is scoped whatever else the request carries: an owner ?k= or cookie must not lift it.
   const hasAccess = !!access.tokenFrom(req);
   const id = hasAccess ? await access.identify(req) : null;
   if (id && id.email) {
     const key = require('./principals').principalForLogin(board.CONDUCTOR_DIR, id.email);
-    if (key) return scopedPrincipal(key, id.email);
+    if (key) {
+      if (signedCookieOk(req, 'baton_ss', 'ss', id.email)) return scopedPrincipal(key, id.email);
+      return { kind: 'reauth', principal: key, email: id.email, pending: signedCookieOk(req, 'baton_otp', 'otp', id.email) };
+    }
   }
   const k = url.searchParams.get('k');
   if (k) {
@@ -1027,8 +1055,28 @@ async function handle(req, res) {
                /^\/(icon|badge)(-\d+)?\.(svg|png)$/.test(p);
 
   const _a0 = Date.now();
-  const identity = open ? null : await resolveIdentity(req, url);
+  let identity = open ? null : await resolveIdentity(req, url);
   _hAuth = Date.now() - _a0;
+  if (identity && identity.kind === 'reauth') {
+    const secure = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https' || !!req.headers['cf-ray'];
+    if (identity.pending) {
+      // Back from Access logout with a new Access login: the OTP was asked. Start the sub-session.
+      res.setHeader('Set-Cookie', [signedCookie('baton_ss', 'ss', identity.email, SUB_SESSION_H() * 3600, secure),
+                                   'baton_otp=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0']);
+      log(`access: ${identity.email} (${identity.principal}) signed in again; sub-session ${SUB_SESSION_H()} h`);
+      identity = scopedPrincipal(identity.principal, identity.email);
+    } else {
+      const page = req.method === 'GET' && (p === '/' || p === '/board' || p === '/board.html' || /text\/html/.test(String(req.headers.accept || '')));
+      const otp = signedCookie('baton_otp', 'otp', identity.email, 900, secure);
+      log(`access: ${identity.email} (${identity.principal}) has no Baton sub-session; ${page ? 'sent to Access logout for a fresh sign-in' : 'refused (401)'}`);
+      if (page) {
+        res.writeHead(302, { 'Set-Cookie': otp, Location: '/cdn-cgi/access/logout', 'Cache-Control': 'no-store' });
+        return res.end();
+      }
+      // No pending mark here: only the page load that goes through Access logout may earn the sub-session.
+      return json(res, 401, { ok: false, error: 'SIGN_IN_AGAIN', message: 'Sign in again: reload the page and enter the code Cloudflare emails you.' });
+    }
+  }
   res._agoIdentity = identity;
   req._identity = identity;
   if (!open && !identity) {

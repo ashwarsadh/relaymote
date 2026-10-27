@@ -53,11 +53,31 @@ https.get = function (url, opts, cb) {
 
   const d = await H.boot(w, { NODE_OPTIONS: '--require ' + JSON.stringify(stub).slice(1, -1),
                               RELAYMOTE_ACCESS_TEAM: TEAM, RELAYMOTE_ACCESS_AUD: AUD });
-  const asAjay = (p, o = {}) => d.req(p, { ...o, token: null, headers: { 'Cf-Access-Jwt-Assertion': jwt(AJAY), ...(o.headers || {}) } });
+  let ajayCookie = '';
+  const asAjay = (p, o = {}) => d.req(p, { ...o, token: null, headers: { 'Cf-Access-Jwt-Assertion': jwt(AJAY), ...(ajayCookie ? { Cookie: ajayCookie } : {}), ...(o.headers || {}) } });
   const asAshwar = (p, o = {}) => d.req(p, { ...o, token: null, headers: { 'Cf-Access-Jwt-Assertion': jwt(ASHWAR), ...(o.headers || {}) } });
   const refused = (r) => r.status === 403;
   try {
+    // 27-Oct (Sanjay's user showed the designer's sessions with no OTP): a scoped Access login is first sent
+    // through Access logout for a fresh sign-in; only then does it get Baton's own sub-session.
+    const cookieOf = (r, name) => [].concat(r.headers['set-cookie'] || []).map(c => c.split(';')[0]).find(c => c.startsWith(name + '=')) || '';
     let r = await asAjay('/api/sessions?limit=300');
+    check(r.status === 401 && r.json.error === 'SIGN_IN_AGAIN' && !cookieOf(r, 'baton_otp'),
+      'a staff Access login with no Baton sub-session is refused on the API (no shortcut cookie)', { status: r.status, body: r.json });
+    r = await asAjay('/', { headers: { Accept: 'text/html' } });
+    check(r.status === 302 && r.headers.location === '/cdn-cgi/access/logout' && !!cookieOf(r, 'baton_otp'),
+      'the page sends him through Access logout (ends the stale Access session so the OTP is asked)', { status: r.status, location: r.headers.location });
+    const otp = cookieOf(r, 'baton_otp');
+    r = await asAjay('/', { headers: { Accept: 'text/html', Cookie: otp } });
+    const ss = cookieOf(r, 'baton_ss');
+    check(r.status === 200 && !!ss && /Max-Age=43200/.test([].concat(r.headers['set-cookie']).join()), 'back from a fresh Access sign-in: the page loads and a 12 h sub-session starts', r.status);
+    const forged = ss.replace(/\.[0-9a-f]{64}$/, '.' + '0'.repeat(64));
+    r = await asAjay('/api/sessions?limit=300', { headers: { Cookie: forged } });
+    check(r.status === 401, 'a forged sub-session cookie is refused', r.status);
+    r = await asAshwar('/api/sessions?limit=300');
+    check(r.status === 200, "Ashwar's own Access login needs no sub-session (unchanged)", r.status);
+    ajayCookie = ss;
+    r = await asAjay('/api/sessions?limit=300');
     const aj = (r.json.sessions || []).map(s => s.id);
     check(r.status === 200 && aj.length === 2 && aj.includes(AJAY_C) && aj.includes(TOUCHED),
       "Ajay's list = his Conductor + the session it touched this week, nothing else", aj);
@@ -86,7 +106,7 @@ https.get = function (url, opts, cb) {
     const ev = [];
     await new Promise((resolve) => {
       const req = require('http').request({ host: '127.0.0.1', port: d.app, path: '/api/stream?client=pc-ajay&as=ashwar',
-        headers: { 'Cf-Access-Jwt-Assertion': jwt(AJAY), Accept: 'text/event-stream' } }, res => {
+        headers: { 'Cf-Access-Jwt-Assertion': jwt(AJAY), Cookie: ajayCookie, Accept: 'text/event-stream' } }, res => {
           let buf = '';
           res.on('data', c => { buf += c; const m = buf.match(/event: *sessions\r?\ndata: *(.*)\n/); if (m) { ev.push(JSON.parse(m[1])); req.destroy(); resolve(); } });
           res.on('error', () => resolve());

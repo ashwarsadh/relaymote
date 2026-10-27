@@ -1,3 +1,7 @@
+## 0.2.145
+
+- A colleague's Cloudflare Access login (a scoped principal such as the designer or Ajay) must sign in with a fresh emailed code every 12 hours. A browser that still holds an old Access session from another app no longer opens Relaymote by itself: Relaymote first sends it through Access logout, so Cloudflare asks for the code. Your own login is unchanged.
+
 ## 0.2.144
 
 - The "install on this device" guide knows the phone's layout. On iOS 26 it points at ••• beside the address bar (the bottom-right button there is the tab switcher), and each layout gets an animated how-to: iOS 15–18, iPad, Chrome on iPhone, Android and Samsung. A "Still stuck?" link loads a maintained install library.

@@ -106,6 +106,7 @@ const apiOnce = async (path, opts) => {
     // A 403 that carries Relaymote's own refusal (NOT_AVAILABLE, OWNER_ONLY, NOT_GRANTED…) is "not for this login":
     // a colleague's scoped login (Ajay) gets it for every owner-only call. Only a 401, or a refusal that is not
     // ours, means the pairing / sign-in is gone. (21-Oct: every 403 read as "This phone needs pairing" and reloaded.)
+    if (code === 'SIGN_IN_AGAIN') { reauth('access'); throw new Error('signin-required'); }
     if (r.status === 401 || (r.status === 403 && !code)) { reauth(); throw new Error('signin-required'); }
     if (!msg && isPcDownStatus(r.status)) throw connErr('pc-down', r.status);
     throw Object.assign(new Error(msg || ('Relaymote on your PC hit an error (code ' + r.status + '). Try again; if it repeats, restart Relaymote on the PC.')), { status: r.status, code });

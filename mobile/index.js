@@ -106,13 +106,14 @@ function scopedPrincipal(key, email) {
 // and Access re-issued Baton's token silently. A scoped (staff) login therefore also needs Baton's own sub-session
 // (baton_ss, SUB_SESSION_H hours), and that is issued only after Baton has sent the browser through Access logout,
 // which ends the stale session so the next Access login asks for the OTP. Owner logins are unchanged.
+// The mark that this browser has been through Continue (the team-wide Access logout). Any Access login it makes after
+// that asked for the code, however late. 15 min (0.2.145) and then 24 h (0.2.149) were time limits on a slow code email,
+// and they trapped Sagar on 27-Oct: his code worked (14:40Z, a valid sagar@ login), but the mark from 14:08Z had expired,
+// so he got Sign in again, and Continue logged him straight back out ("sagar entered relaymote pin and his account
+// again logged out"). It now lasts as long as the login, and letting him in keeps it.
+const OTP_WINDOW_S = 90 * 24 * 3600;
 // 27-Oct 23:05 IST, Ashwar: "I do not want any login to expire in short amount ... like three months or so." 90 days,
 // renewed while in use; ⏻ Log out still ends it at once.
-// How long after Continue a new Access login still counts as the fresh sign-in. 15 min (0.2.145) was shorter than a
-// slow Cloudflare code email (Sagar, 28-Oct 00:10 IST: "rcd otp once then didnt receive"), and a late code then
-// landed on Sign in again, which asked for yet another code. The team logout has already run in that browser, so
-// any Access login it makes inside this window asked for the code.
-const OTP_WINDOW_S = 24 * 3600;
 const SUB_SESSION_H = () => Number(((config.get().remote || {}).access || {}).subSessionHours) || 2160;
 const ssSig = (kind, email, exp) => crypto.createHmac('sha256', TOKEN).update(kind + '|' + String(email).toLowerCase() + '|' + exp).digest('hex');
 function cookieVal(req, name) {
@@ -1121,8 +1122,7 @@ async function handle(req, res) {
     }
     if (identity.pending) {
       // Back from Access logout with a new Access login: the OTP was asked. Start the sub-session.
-      res.setHeader('Set-Cookie', [signedCookie('baton_ss', 'ss', identity.email, SUB_SESSION_H() * 3600, secure),
-                                   'baton_otp=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0']);
+      res.setHeader('Set-Cookie', signedCookie('baton_ss', 'ss', identity.email, SUB_SESSION_H() * 3600, secure));
       log(`access: ${identity.email} (${identity.principal}) signed in again; sub-session ${SUB_SESSION_H()} h`);
       identity = scopedPrincipal(identity.principal, identity.email);
     } else {

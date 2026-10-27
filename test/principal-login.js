@@ -79,6 +79,16 @@ https.get = function (url, opts, cb) {
     r = await asAjay('/', { headers: { Accept: 'text/html', Cookie: otp } });
     const ss = cookieOf(r, 'baton_ss');
     check(r.status === 200 && !!ss && /Max-Age=7776000/.test([].concat(r.headers['set-cookie']).join()), 'back from a fresh Access sign-in: the page loads and a 90-day sub-session starts', r.status);
+    check(!expired(r, 'baton_otp'), 'letting him in keeps the mark, so a later Access re-login from this browser never loops', r.headers['set-cookie']);
+    // 27-Oct, Sagar: his code worked (a valid sagar@ Access login at 14:40Z) but the 15-min mark from Continue at
+    // 14:08Z had expired, so he got Sign in again and Continue logged him straight back out. A late code must still count.
+    const sig = (kind, exp) => crypto.createHmac('sha256', d.token).update(kind + '|' + AJAY.toLowerCase() + '|' + exp).digest('hex');
+    const lateMark = (() => { const e = Date.now() + 90 * 86400e3 - 2 * 86400e3; return `baton_otp=${e}.${sig('otp', e)}`; })();
+    r = await asAjay('/', { headers: { Accept: 'text/html', Cookie: lateMark } });
+    check(r.status === 200 && !!cookieOf(r, 'baton_ss'), 'a code entered long after Continue (mark issued 2 days ago) still lets him in', r.status);
+    const deadMark = (() => { const e = Date.now() - 1000; return `baton_otp=${e}.${sig('otp', e)}`; })();
+    r = await asAjay('/', { headers: { Accept: 'text/html', Cookie: deadMark } });
+    check(r.status === 401 && /Sign in again/.test(r.text), 'an expired mark is not accepted (the Sanjay guard holds)', r.status);
     // 27-Oct 23:05 IST: "I do not want any login to expire in short amount". A sub-session issued today for 12 h
     // (0.2.145-0.2.147) is topped up to 90 days on its next request, with no new sign-in.
     const exp12 = Date.now() + 12 * 3600e3;
@@ -157,8 +167,19 @@ https.get = function (url, opts, cb) {
     check(r.status === 403 && !!r.json.error, 'an owner-only call answers him with a CODED 403', r.json.error);
     check(/r\.status === 401 \|\| \(r\.status === 403 && !code\)/.test(H.src('mobile/public/app.js')),
       'the app shows the pairing screen only on 401 or an uncoded 403, never on a coded refusal');
-  } finally {
+    // Full cycle, then the PC restarts and a day passes: the sub-session still holds, with no new sign-in.
     await d.stop();
+    const d2 = await H.boot(w, { NODE_OPTIONS: '--require ' + JSON.stringify(stub).slice(1, -1), RELAYMOTE_ACCESS_TEAM: TEAM, RELAYMOTE_ACCESS_AUD: AUD });
+    try {
+      const e = Date.now() + 90 * 86400e3 - 86400e3;   // issued 24 h ago
+      const dayOld = `baton_ss=${e}.${crypto.createHmac('sha256', d2.token).update('ss|' + AJAY.toLowerCase() + '|' + e).digest('hex')}`;
+      r = await d2.req('/api/sessions?limit=300', { token: null, headers: { 'Cf-Access-Jwt-Assertion': jwt(AJAY), Cookie: dayOld } });
+      check(r.status === 200 && (r.json.sessions || []).length === 2, 'after a Relaymote restart and 24 h idle, his sub-session still lets him in (his 2 sessions)', r.status);
+      r = await d2.req('/', { token: null, headers: { 'Cf-Access-Jwt-Assertion': jwt(AJAY), Cookie: dayOld, Accept: 'text/html' } });
+      check(r.status === 200 && !/Sign in again/.test(r.text), 'and the page opens the app, not Sign in again', r.status);
+    } finally { await d2.stop(); }
+  } finally {
+    try { await d.stop(); } catch {}
     w.cleanup();
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
   }

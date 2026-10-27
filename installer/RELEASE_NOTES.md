@@ -1,3 +1,7 @@
+## 0.2.150
+
+- Entering the Cloudflare code always lets a colleague in, however long the email took. Before, a code entered more than 15 minutes after tapping Continue led back to Sign in again, and Continue then signed them out once more.
+
 ## 0.2.149
 
 - After you tap Continue on Sign in again, a Cloudflare code that arrives late still lets you in. It counts for 24 hours instead of 15 minutes, so a slow email no longer sends you round for a second code.

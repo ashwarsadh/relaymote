@@ -66,9 +66,15 @@ https.get = function (url, opts, cb) {
       'a staff Access login with no Baton sub-session is refused on the API (no shortcut cookie)', { status: r.status, body: r.json });
     r = await asAjay('/', { headers: { Accept: 'text/html' } });
     const expired = (r, name) => [].concat(r.headers['set-cookie'] || []).some(c => c.startsWith(name + '=;') && /Max-Age=0/.test(c));
-    check(r.status === 302 && r.headers.location === `https://${TEAM}/cdn-cgi/access/logout` && !!cookieOf(r, 'baton_otp'),
-      'the page sends him through the TEAM-wide Access logout (the app logout left the team session to re-issue silently)', { status: r.status, location: r.headers.location });
-    check(expired(r, 'CF_Authorization') && expired(r, 'baton_ss'), "and expires Baton's own Access token so it cannot ride back in", r.headers['set-cookie']);
+    // 0.2.147: 0.2.146's 302 to the team logout stranded him on Cloudflare's "successfully logged out" page.
+    check(r.status === 401 && /Sign in again/.test(r.text) && r.text.includes(`https://${TEAM}/cdn-cgi/access/logout`) && r.text.includes('/reauth/start') && !r.headers.location,
+      'the page is a sign-in-again page (team logout in a popup, then back here), not a redirect that strands him', { status: r.status, location: r.headers.location });
+    check(!r.headers['set-cookie'], 'loading that page changes no cookie: a plain reload cannot skip the logout', r.headers['set-cookie']);
+    r = await asAjay('/', { headers: { Accept: 'text/html' } });
+    check(r.status === 401 && !cookieOf(r, 'baton_ss'), 'reloading it without Continue still does not let him in', r.status);
+    r = await asAjay('/reauth/start', { method: 'POST' });
+    check(r.status === 204 && !!cookieOf(r, 'baton_otp') && expired(r, 'CF_Authorization') && expired(r, 'baton_ss'),
+      "Continue (POST /reauth/start) marks the fresh sign-in and expires Baton's own Access token so it cannot ride back in", { status: r.status, c: r.headers['set-cookie'] });
     const otp = cookieOf(r, 'baton_otp');
     r = await asAjay('/', { headers: { Accept: 'text/html', Cookie: otp } });
     const ss = cookieOf(r, 'baton_ss');
@@ -87,7 +93,9 @@ https.get = function (url, opts, cb) {
 
     // The menu's Log out.
     r = await asAjay('/logout', { headers: { Accept: 'text/html' } });
-    check(r.status === 302 && r.headers.location === `https://${TEAM}/cdn-cgi/access/logout` && /storage/.test(r.headers['clear-site-data'] || '') &&
+    check(r.status === 200 && /Log out of Relaymote/.test(r.text) && !r.headers['set-cookie'], 'GET /logout shows the Log out page and changes nothing yet', r.status);
+    r = await asAjay('/logout', { method: 'POST' });
+    check(r.status === 204 && /storage/.test(r.headers['clear-site-data'] || '') &&
       expired(r, 'baton_ss') && expired(r, 'CF_Authorization') && expired(r, 'baton_m'),
       '/logout clears Baton + Access cookies, cache and service worker, and ends the team Access session', { status: r.status, h: r.headers });
     r = await d.req('/', { token: null, headers: { Accept: 'text/html' } });

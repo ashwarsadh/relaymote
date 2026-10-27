@@ -134,6 +134,36 @@ function accessLogout(secure) {
   return { location: team ? `https://${team}/cdn-cgi/access/logout` : '/cdn-cgi/access/logout',
            cookies: ['CF_Authorization', 'CF_AppSession', 'baton_ss', 'baton_m'].map(gone) };
 }
+// 27-Oct (0.2.146 live): a 302 to the team logout left him on Cloudflare's "You have successfully logged out" page
+// with no way back ("when we log in, it directly opens the You have successfully logged out page"). Instead this
+// page runs the team logout in a popup from his tap, closes it, and reloads Relaymote, which lands on Cloudflare's
+// email-and-code screen and then straight back here. 401 so the service worker never caches it as the app shell.
+function reauthPage(logoutUrl, email, explicit, postUrl) {
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  const head = explicit ? 'Log out of Relaymote' : 'Sign in again';
+  const why = explicit ? 'This signs Relaymote out on this browser. Coming back will ask for the emailed code.'
+    : `For ${esc(email || 'this login')}, Relaymote asks for a fresh emailed code every 12 hours.`;
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relaymote</title>
+<body style="font:16px system-ui;background:#12110f;color:#e8e6e3;padding:28px;max-width:520px">
+<b style="font-size:18px">${head}</b><p style="color:#9b9691">${why}</p>
+<ol style="color:#9b9691;padding-left:20px"><li>Tap <b>Continue</b>. A Cloudflare window opens and closes by itself.</li>
+<li>Cloudflare asks for your email: enter it and tap <b>Send me a code</b>.</li><li>Type the code from that inbox. Relaymote opens.</li></ol>
+<button id="go" style="font:inherit;padding:12px 20px;border-radius:10px;border:0;background:#d97757;color:#fff">Continue</button>
+<p id="msg" style="color:#9b9691"></p>
+<script>
+var L=${JSON.stringify(logoutUrl)}, P=${JSON.stringify(postUrl)};
+// The cookies change only on this tap (a POST), never on a page load, so a plain reload cannot skip the logout.
+function start(){return fetch(P,{method:'POST',credentials:'same-origin'}).catch(function(){});}
+document.getElementById('go').onclick=function(){
+  var w=null; try{w=window.open(L,'cflogout','width=420,height=520');}catch(e){}
+  if(!w){document.getElementById('msg').innerHTML='Your browser blocked the window. <a id="lo" style="color:#d97757" href="'+L+'" target="_blank">Open Cloudflare logout</a>, then come back and <a style="color:#d97757" href="/">tap here</a>.';
+    document.getElementById('lo').onclick=start;return;}
+  document.getElementById('msg').textContent='Signing out of Cloudflare…';
+  var t0=Date.now();
+  start().then(function(){setTimeout(function(){try{w.close();}catch(e){} location.replace('/');},Math.max(0,4000-(Date.now()-t0)));});
+};
+</script>`;
+}
 
 async function resolveIdentity(req, url) {
   // A bound Access login is scoped whatever else the request carries: an owner ?k= or cookie must not lift it.
@@ -1068,6 +1098,14 @@ async function handle(req, res) {
   _hAuth = Date.now() - _a0;
   if (identity && identity.kind === 'reauth') {
     const secure = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https' || !!req.headers['cf-ray'];
+    if (p === '/reauth/start' && req.method === 'POST') {
+      // His Continue tap, sent while the popup ends the team-wide Access session: from here a new Access login
+      // (which will ask for the code) earns the sub-session.
+      const out = accessLogout(secure);
+      log(`access: ${identity.email} (${identity.principal}) started a fresh sign-in`);
+      res.writeHead(204, { 'Set-Cookie': [...out.cookies, signedCookie('baton_otp', 'otp', identity.email, 900, secure)], 'Cache-Control': 'no-store' });
+      return res.end();
+    }
     if (identity.pending) {
       // Back from Access logout with a new Access login: the OTP was asked. Start the sub-session.
       res.setHeader('Set-Cookie', [signedCookie('baton_ss', 'ss', identity.email, SUB_SESSION_H() * 3600, secure),
@@ -1076,19 +1114,22 @@ async function handle(req, res) {
       identity = scopedPrincipal(identity.principal, identity.email);
     } else {
       const page = req.method === 'GET' && (p === '/' || p === '/board' || p === '/board.html' || /text\/html/.test(String(req.headers.accept || '')));
-      const otp = signedCookie('baton_otp', 'otp', identity.email, 900, secure);
-      log(`access: ${identity.email} (${identity.principal}) has no Baton sub-session; ${page ? 'sent to Access logout for a fresh sign-in' : 'refused (401)'}`);
+      log(`access: ${identity.email} (${identity.principal}) has no Baton sub-session; ${page ? 'shown the sign-in-again page' : 'refused (401)'}`);
       if (page) {
-        const out = accessLogout(secure);
-        res.writeHead(302, { 'Set-Cookie': [...out.cookies, otp], Location: out.location, 'Cache-Control': 'no-store' });
-        return res.end();
+        res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        return res.end(reauthPage(accessLogout(secure).location, identity.email, false, '/reauth/start'));
       }
-      // No pending mark here: only the page load that goes through Access logout may earn the sub-session.
+      // No pending mark here: only the Continue tap on the sign-in-again page may earn the sub-session.
       return json(res, 401, { ok: false, error: 'SIGN_IN_AGAIN', message: 'Sign in again: reload the page and enter the code Cloudflare emails you.' });
     }
   }
   // The menu's Log out: Baton's cookies, Access's cookies, the app's cache and service worker, then the team-wide
   // Access session. The next visit asks for the emailed code (27-Oct: "I cannot understand the logout option").
+  if (p === '/logout' && req.method !== 'POST') {
+    const secure = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https' || !!req.headers['cf-ray'];
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(reauthPage(accessLogout(secure).location, null, true, '/logout'));
+  }
   if (p === '/logout') {
     const secure = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https' || !!req.headers['cf-ray'];
     const out = accessLogout(secure);
@@ -1096,7 +1137,7 @@ async function handle(req, res) {
     // A staff login coming back after this has already been through logout: one code, not two.
     if (id && id.email) out.cookies.push(signedCookie('baton_otp', 'otp', id.email, 900, secure));
     log(`access: ${(id && id.email) || (identity && identity.kind) || 'anonymous'} logged out`);
-    res.writeHead(302, { 'Set-Cookie': out.cookies, 'Clear-Site-Data': '"cache", "storage"', Location: out.location, 'Cache-Control': 'no-store' });
+    res.writeHead(204, { 'Set-Cookie': out.cookies, 'Clear-Site-Data': '"cache", "storage"', 'Cache-Control': 'no-store' });
     return res.end();
   }
   res._agoIdentity = identity;

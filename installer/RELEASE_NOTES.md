@@ -1,3 +1,8 @@
+## 0.2.147
+
+- Signing in again no longer strands you on Cloudflare's "You have successfully logged out" page. Relaymote shows its own Sign in again page: tap Continue, a Cloudflare window opens and closes by itself, then enter your email and the emailed code, and Relaymote opens.
+- Log out (⏻) uses the same page, so it ends on Cloudflare's sign-in screen instead of a dead end.
+
 ## 0.2.146
 
 - Log out (⏻ in the sessions panel) ends Relaymote on this browser: it clears the app's cache, service worker and saved settings, Relaymote's and Cloudflare Access's cookies, and the Cloudflare Access sign-in for every app, so coming back asks for the emailed code.

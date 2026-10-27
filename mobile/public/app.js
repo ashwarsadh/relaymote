@@ -3702,10 +3702,9 @@ $('btn-menu').onclick = () => drawer(true);
 $('btn-close-drawer').onclick = () => navBack();
 $('scrim').onclick = () => navBack();
 $('btn-bell').onclick = enablePush;
-// Log out: drop what this browser keeps (service worker, caches, local settings), then /logout ends the
-// Baton and Cloudflare Access sessions. The next visit asks for the emailed code again.
+// Log out: drop what this browser keeps (service worker, caches, local settings), then the /logout page (its Continue
+// is the confirmation) ends the Baton and Cloudflare Access sessions. The next visit asks for the emailed code again.
 if ($('btn-logout')) $('btn-logout').onclick = async () => {
-  if (!confirm('Log out of Relaymote on this browser? You will need the emailed code to come back.')) return;
   try { for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) await r.unregister(); } catch {}
   try { for (const k of (await caches.keys())) await caches.delete(k); } catch {}
   try { localStorage.clear(); sessionStorage.clear(); } catch {}

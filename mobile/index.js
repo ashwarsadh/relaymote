@@ -125,6 +125,15 @@ function signedCookie(name, kind, email, maxAgeS, secure) {
   const exp = Date.now() + maxAgeS * 1000;
   return `${name}=${exp}.${ssSig(kind, email, exp)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeS}` + (secure ? '; Secure' : '');
 }
+// 0.2.145 sent the browser to the app's own /cdn-cgi/access/logout. That ends Baton's Access token only: the
+// team-wide session on <team>.cloudflareaccess.com (which clearing Baton's site data never touches) re-issued it
+// with no code asked. So: expire Baton's Access cookies here and end the team session at the team domain.
+function accessLogout(secure) {
+  const team = String(access.TEAM || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const gone = (n) => `${n}=; Path=/; Max-Age=0; HttpOnly` + (secure ? '; Secure; SameSite=None' : '; SameSite=Lax');
+  return { location: team ? `https://${team}/cdn-cgi/access/logout` : '/cdn-cgi/access/logout',
+           cookies: ['CF_Authorization', 'CF_AppSession', 'baton_ss', 'baton_m'].map(gone) };
+}
 
 async function resolveIdentity(req, url) {
   // A bound Access login is scoped whatever else the request carries: an owner ?k= or cookie must not lift it.
@@ -1070,12 +1079,25 @@ async function handle(req, res) {
       const otp = signedCookie('baton_otp', 'otp', identity.email, 900, secure);
       log(`access: ${identity.email} (${identity.principal}) has no Baton sub-session; ${page ? 'sent to Access logout for a fresh sign-in' : 'refused (401)'}`);
       if (page) {
-        res.writeHead(302, { 'Set-Cookie': otp, Location: '/cdn-cgi/access/logout', 'Cache-Control': 'no-store' });
+        const out = accessLogout(secure);
+        res.writeHead(302, { 'Set-Cookie': [...out.cookies, otp], Location: out.location, 'Cache-Control': 'no-store' });
         return res.end();
       }
       // No pending mark here: only the page load that goes through Access logout may earn the sub-session.
       return json(res, 401, { ok: false, error: 'SIGN_IN_AGAIN', message: 'Sign in again: reload the page and enter the code Cloudflare emails you.' });
     }
+  }
+  // The menu's Log out: Baton's cookies, Access's cookies, the app's cache and service worker, then the team-wide
+  // Access session. The next visit asks for the emailed code (27-Oct: "I cannot understand the logout option").
+  if (p === '/logout') {
+    const secure = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https' || !!req.headers['cf-ray'];
+    const out = accessLogout(secure);
+    const id = access.tokenFrom(req) ? await access.identify(req).catch(() => null) : null;
+    // A staff login coming back after this has already been through logout: one code, not two.
+    if (id && id.email) out.cookies.push(signedCookie('baton_otp', 'otp', id.email, 900, secure));
+    log(`access: ${(id && id.email) || (identity && identity.kind) || 'anonymous'} logged out`);
+    res.writeHead(302, { 'Set-Cookie': out.cookies, 'Clear-Site-Data': '"cache", "storage"', Location: out.location, 'Cache-Control': 'no-store' });
+    return res.end();
   }
   res._agoIdentity = identity;
   req._identity = identity;

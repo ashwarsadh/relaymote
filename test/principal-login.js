@@ -65,8 +65,10 @@ https.get = function (url, opts, cb) {
     check(r.status === 401 && r.json.error === 'SIGN_IN_AGAIN' && !cookieOf(r, 'baton_otp'),
       'a staff Access login with no Baton sub-session is refused on the API (no shortcut cookie)', { status: r.status, body: r.json });
     r = await asAjay('/', { headers: { Accept: 'text/html' } });
-    check(r.status === 302 && r.headers.location === '/cdn-cgi/access/logout' && !!cookieOf(r, 'baton_otp'),
-      'the page sends him through Access logout (ends the stale Access session so the OTP is asked)', { status: r.status, location: r.headers.location });
+    const expired = (r, name) => [].concat(r.headers['set-cookie'] || []).some(c => c.startsWith(name + '=;') && /Max-Age=0/.test(c));
+    check(r.status === 302 && r.headers.location === `https://${TEAM}/cdn-cgi/access/logout` && !!cookieOf(r, 'baton_otp'),
+      'the page sends him through the TEAM-wide Access logout (the app logout left the team session to re-issue silently)', { status: r.status, location: r.headers.location });
+    check(expired(r, 'CF_Authorization') && expired(r, 'baton_ss'), "and expires Baton's own Access token so it cannot ride back in", r.headers['set-cookie']);
     const otp = cookieOf(r, 'baton_otp');
     r = await asAjay('/', { headers: { Accept: 'text/html', Cookie: otp } });
     const ss = cookieOf(r, 'baton_ss');
@@ -82,6 +84,14 @@ https.get = function (url, opts, cb) {
     check(r.status === 200 && aj.length === 2 && aj.includes(AJAY_C) && aj.includes(TOUCHED),
       "Ajay's list = his Conductor + the session it touched this week, nothing else", aj);
     check(!aj.includes(STALE) && !aj.includes(OTHER), 'a session untouched for 8 days and an untouched one are hidden', aj);
+
+    // The menu's Log out.
+    r = await asAjay('/logout', { headers: { Accept: 'text/html' } });
+    check(r.status === 302 && r.headers.location === `https://${TEAM}/cdn-cgi/access/logout` && /storage/.test(r.headers['clear-site-data'] || '') &&
+      expired(r, 'baton_ss') && expired(r, 'CF_Authorization') && expired(r, 'baton_m'),
+      '/logout clears Baton + Access cookies, cache and service worker, and ends the team Access session', { status: r.status, h: r.headers });
+    r = await d.req('/', { token: null, headers: { Accept: 'text/html' } });
+    check(r.status !== 200 || !/id="btn-logout"/.test(r.text || ''), 'after logout, a reload with no cookies gets no app', r.status);
 
     r = await asAjay('/api/sessions?limit=300', { headers: { 'X-Relaymote-As': 'ashwar' } });
     check((r.json.sessions || []).length === 2, 'X-Relaymote-As: ashwar cannot widen his list', (r.json.sessions || []).length);

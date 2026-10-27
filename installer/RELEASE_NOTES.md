@@ -1,3 +1,8 @@
+## 0.2.146
+
+- Log out (⏻ in the sessions panel) ends Relaymote on this browser: it clears the app's cache, service worker and saved settings, Relaymote's and Cloudflare Access's cookies, and the Cloudflare Access sign-in for every app, so coming back asks for the emailed code.
+- 0.2.145's fresh sign-in for a colleague's login now ends the Cloudflare Access sign-in for every app, not just Relaymote. Before, clearing one site's data still left the shared sign-in, which let Relaymote open again with no code.
+
 ## 0.2.145
 
 - A colleague's Cloudflare Access login (a scoped principal such as the designer or Ajay) must sign in with a fresh emailed code every 12 hours. A browser that still holds an old Access session from another app no longer opens Relaymote by itself: Relaymote first sends it through Access logout, so Cloudflare asks for the code. Your own login is unchanged.

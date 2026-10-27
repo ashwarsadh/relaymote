@@ -1,3 +1,7 @@
+## 0.2.149
+
+- After you tap Continue on Sign in again, a Cloudflare code that arrives late still lets you in. It counts for 24 hours instead of 15 minutes, so a slow email no longer sends you round for a second code.
+
 ## 0.2.148
 
 - A colleague's login now lasts 90 days instead of 12 hours, and it renews while in use. Anyone who signed in today stays signed in and is not asked again. ⏻ Log out still ends it at once.

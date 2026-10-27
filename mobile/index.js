@@ -108,6 +108,11 @@ function scopedPrincipal(key, email) {
 // which ends the stale session so the next Access login asks for the OTP. Owner logins are unchanged.
 // 27-Oct 23:05 IST, Ashwar: "I do not want any login to expire in short amount ... like three months or so." 90 days,
 // renewed while in use; ⏻ Log out still ends it at once.
+// How long after Continue a new Access login still counts as the fresh sign-in. 15 min (0.2.145) was shorter than a
+// slow Cloudflare code email (Sagar, 28-Oct 00:10 IST: "rcd otp once then didnt receive"), and a late code then
+// landed on Sign in again, which asked for yet another code. The team logout has already run in that browser, so
+// any Access login it makes inside this window asked for the code.
+const OTP_WINDOW_S = 24 * 3600;
 const SUB_SESSION_H = () => Number(((config.get().remote || {}).access || {}).subSessionHours) || 2160;
 const ssSig = (kind, email, exp) => crypto.createHmac('sha256', TOKEN).update(kind + '|' + String(email).toLowerCase() + '|' + exp).digest('hex');
 function cookieVal(req, name) {
@@ -1111,7 +1116,7 @@ async function handle(req, res) {
       // (which will ask for the code) earns the sub-session.
       const out = accessLogout(secure);
       log(`access: ${identity.email} (${identity.principal}) started a fresh sign-in`);
-      res.writeHead(204, { 'Set-Cookie': [...out.cookies, signedCookie('baton_otp', 'otp', identity.email, 900, secure)], 'Cache-Control': 'no-store' });
+      res.writeHead(204, { 'Set-Cookie': [...out.cookies, signedCookie('baton_otp', 'otp', identity.email, OTP_WINDOW_S, secure)], 'Cache-Control': 'no-store' });
       return res.end();
     }
     if (identity.pending) {
@@ -1143,7 +1148,7 @@ async function handle(req, res) {
     const out = accessLogout(secure);
     const id = access.tokenFrom(req) ? await access.identify(req).catch(() => null) : null;
     // A staff login coming back after this has already been through logout: one code, not two.
-    if (id && id.email) out.cookies.push(signedCookie('baton_otp', 'otp', id.email, 900, secure));
+    if (id && id.email) out.cookies.push(signedCookie('baton_otp', 'otp', id.email, OTP_WINDOW_S, secure));
     log(`access: ${(id && id.email) || (identity && identity.kind) || 'anonymous'} logged out`);
     res.writeHead(204, { 'Set-Cookie': out.cookies, 'Clear-Site-Data': '"cache", "storage"', 'Cache-Control': 'no-store' });
     return res.end();

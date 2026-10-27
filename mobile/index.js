@@ -106,7 +106,9 @@ function scopedPrincipal(key, email) {
 // and Access re-issued Baton's token silently. A scoped (staff) login therefore also needs Baton's own sub-session
 // (baton_ss, SUB_SESSION_H hours), and that is issued only after Baton has sent the browser through Access logout,
 // which ends the stale session so the next Access login asks for the OTP. Owner logins are unchanged.
-const SUB_SESSION_H = () => Number(((config.get().remote || {}).access || {}).subSessionHours) || 12;
+// 27-Oct 23:05 IST, Ashwar: "I do not want any login to expire in short amount ... like three months or so." 90 days,
+// renewed while in use; ⏻ Log out still ends it at once.
+const SUB_SESSION_H = () => Number(((config.get().remote || {}).access || {}).subSessionHours) || 2160;
 const ssSig = (kind, email, exp) => crypto.createHmac('sha256', TOKEN).update(kind + '|' + String(email).toLowerCase() + '|' + exp).digest('hex');
 function cookieVal(req, name) {
   for (const part of String(req.headers.cookie || '').split(';')) {
@@ -172,7 +174,13 @@ async function resolveIdentity(req, url) {
   if (id && id.email) {
     const key = require('./principals').principalForLogin(board.CONDUCTOR_DIR, id.email);
     if (key) {
-      if (signedCookieOk(req, 'baton_ss', 'ss', id.email)) return scopedPrincipal(key, id.email);
+      if (signedCookieOk(req, 'baton_ss', 'ss', id.email)) {
+        const sp = scopedPrincipal(key, id.email);
+        // A live sub-session is topped back up to the full term (today's 12 h cookies become 90 days, no new sign-in).
+        const exp = Number(String(cookieVal(req, 'baton_ss')).split('.')[0]);
+        if (exp - Date.now() < SUB_SESSION_H() * 3600e3 * 0.9) sp.renewSS = true;
+        return sp;
+      }
       return { kind: 'reauth', principal: key, email: id.email, pending: signedCookieOk(req, 'baton_otp', 'otp', id.email) };
     }
   }
@@ -1139,6 +1147,10 @@ async function handle(req, res) {
     log(`access: ${(id && id.email) || (identity && identity.kind) || 'anonymous'} logged out`);
     res.writeHead(204, { 'Set-Cookie': out.cookies, 'Clear-Site-Data': '"cache", "storage"', 'Cache-Control': 'no-store' });
     return res.end();
+  }
+  if (identity && identity.renewSS) {
+    const secure = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https' || !!req.headers['cf-ray'];
+    res.appendHeader('Set-Cookie', signedCookie('baton_ss', 'ss', identity.email, SUB_SESSION_H() * 3600, secure));
   }
   res._agoIdentity = identity;
   req._identity = identity;

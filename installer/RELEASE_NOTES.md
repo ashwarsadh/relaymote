@@ -1,3 +1,7 @@
+## 0.2.148
+
+- A colleague's login now lasts 90 days instead of 12 hours, and it renews while in use. Anyone who signed in today stays signed in and is not asked again. ⏻ Log out still ends it at once.
+
 ## 0.2.147
 
 - Signing in again no longer strands you on Cloudflare's "You have successfully logged out" page. Relaymote shows its own Sign in again page: tap Continue, a Cloudflare window opens and closes by itself, then enter your email and the emailed code, and Relaymote opens.

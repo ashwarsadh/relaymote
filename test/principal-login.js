@@ -78,7 +78,16 @@ https.get = function (url, opts, cb) {
     const otp = cookieOf(r, 'baton_otp');
     r = await asAjay('/', { headers: { Accept: 'text/html', Cookie: otp } });
     const ss = cookieOf(r, 'baton_ss');
-    check(r.status === 200 && !!ss && /Max-Age=43200/.test([].concat(r.headers['set-cookie']).join()), 'back from a fresh Access sign-in: the page loads and a 12 h sub-session starts', r.status);
+    check(r.status === 200 && !!ss && /Max-Age=7776000/.test([].concat(r.headers['set-cookie']).join()), 'back from a fresh Access sign-in: the page loads and a 90-day sub-session starts', r.status);
+    // 27-Oct 23:05 IST: "I do not want any login to expire in short amount". A sub-session issued today for 12 h
+    // (0.2.145-0.2.147) is topped up to 90 days on its next request, with no new sign-in.
+    const exp12 = Date.now() + 12 * 3600e3;
+    const old = `baton_ss=${exp12}.${crypto.createHmac('sha256', d.token).update('ss|' + AJAY.toLowerCase() + '|' + exp12).digest('hex')}`;
+    r = await asAjay('/api/sessions?limit=300', { headers: { Cookie: old } });
+    check(r.status === 200 && /baton_ss=\d+\.[0-9a-f]{64}; .*Max-Age=7776000/.test([].concat(r.headers['set-cookie'] || []).join()),
+      "a live 12 h sub-session from today is renewed to 90 days without signing in again", { status: r.status, c: r.headers['set-cookie'] });
+    r = await asAjay('/api/sessions?limit=300', { headers: { Cookie: ss } });
+    check(r.status === 200 && !r.headers['set-cookie'], 'a fresh 90-day sub-session is not re-issued on every request', r.headers['set-cookie']);
     const forged = ss.replace(/\.[0-9a-f]{64}$/, '.' + '0'.repeat(64));
     r = await asAjay('/api/sessions?limit=300', { headers: { Cookie: forged } });
     check(r.status === 401, 'a forged sub-session cookie is refused', r.status);

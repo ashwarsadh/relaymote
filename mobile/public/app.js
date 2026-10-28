@@ -912,7 +912,9 @@ function renderLog(messages, force) {
   state.messages = messages;
   if (state.open && state._suggLive !== undefined && isLive() !== state._suggLive) renderSuggestion(state.meta);
   renderLive();
-  const sig = messages.map(keyOf).join('|');
+  // The outbox rows are part of what is drawn: a send turning into "waiting to send — …" must repaint (28-Oct:
+  // the failure badge stayed "sending…" because only the messages were compared).
+  const sig = messages.map(keyOf).join('|') + '#' + obItems.filter(x => x.sid === state.open).map(x => x.cmid + ':' + x.state + ':' + (x.error || '')).join(',');
   if (!force && sig === lastSig) { ttsWake(); return; }
 
   const log = $('log');
@@ -2847,7 +2849,7 @@ async function uploadFiles(files) {
 }
 
 async function send(target) {
-  if (state.sending) return;
+  if (state.sending) { toast('Still waiting for the upload — your message goes as soon as it finishes.'); return; }
   if (target && target.id && target.text && target.id === state.open) {   // "Send again" on a held message
     obAdd(target.id, target.text, []); renderLog(state.messages, true); return obFlush();
   }
@@ -2856,11 +2858,14 @@ async function send(target) {
     return sendTo(target.id, target.text || $('input').value.trim(), []);
   }
   if (!state.open) return toast('Pick a session first', true);
-  if (state.question && !state.sentDismissWarning) {
-    state.sentDismissWarning = true;
-    return toast('A question is open — sending a message will DISMISS it. Tap send again if that is what you want.', true);
+  // A question card is open: the first tap ARMS the button (it reads "Send?" for 5 s) instead of only
+  // showing a toast he may miss, which left the text sitting in the box (28-Oct).
+  if (state.question && !(state.sentDismissWarning && Date.now() < state.sentDismissWarning)) {
+    state.sentDismissWarning = Date.now() + 5000;
+    armSendButton(5000);
+    return toast('A question is open — sending will DISMISS it. Tap Send again to send.', true);
   }
-  state.sentDismissWarning = false;
+  state.sentDismissWarning = 0; armSendButton(0);
   const text = $('input').value.trim();
 
   const failedUps = state.uploads.filter(u => u.failed);
@@ -2882,13 +2887,15 @@ async function send(target) {
   if (!text && !atts.length) return;
 
   const id = state.open;
-  $('input').value = ''; autosize();
-  clearDraft(id);
-  state.attachments = []; renderAttachments();
-  state.liveSuggestion = null;
-  renderSuggestion(state.meta);
-  obAdd(id, text, atts);
-  renderLog(state.messages, true);
+  obAdd(id, text, atts);                 // in the outbox (localStorage) before the box is touched
+  $('input').value = ''; clearDraft(id);
+  try {
+    autosize();
+    state.attachments = []; renderAttachments();
+    state.liveSuggestion = null;
+    renderSuggestion(state.meta);
+    renderLog(state.messages, true);
+  } catch (e) { clientLog('send render: ' + (e && e.message)); }
   obFlush();
 }
 
@@ -3808,7 +3815,32 @@ async function archiveSession(force) {
   } catch (e) { toast('Archive failed: ' + e.message, true); }
 }
 
-$('btn-send').onclick = send;
+/* 28-Oct (Ashwar: "I press the send button ... then I open Relay Mode again and the message was never sent and was
+   just sitting inside"). A tap on Send while the keyboard is up moved focus off the box, the keyboard started to
+   close, the composer jumped down by the keyboard's height and the click could land beside the button; a finger
+   that slid a few px also cancelled the click. Now: pressing Send never takes focus from the box (no keyboard
+   collapse, no jump), and the tap is acted on at pointerup anywhere on the button, with the synthetic click that
+   follows ignored, so one tap is exactly one send. Any failure inside send() is shown, never swallowed. */
+let sendTapAt = 0;
+function sendTap(ev) {
+  if (ev) ev.preventDefault();
+  if ($('btn-send').disabled) return toast('Still working on the last send…');
+  sendTapAt = Date.now();
+  Promise.resolve().then(() => send()).catch(e => { toast('Send failed: ' + (e && e.message), true); clientLog('send: ' + (e && e.message)); });
+}
+$('btn-send').addEventListener('mousedown', (e) => e.preventDefault());   // focus (and the keyboard) stay in the box
+$('btn-send').addEventListener('pointerup', (e) => {
+  if (e.pointerType === 'mouse') return;     // mouse: the click below
+  const r = $('btn-send').getBoundingClientRect(), pad = 16;
+  if (e.clientX < r.left - pad || e.clientX > r.right + pad || e.clientY < r.top - pad || e.clientY > r.bottom + pad) return;
+  sendTap(e);
+});
+$('btn-send').addEventListener('click', (e) => { if (Date.now() - sendTapAt < 700) { e.preventDefault(); return; } sendTap(e); });
+function armSendButton(ms) {
+  const b = $('btn-send'); clearTimeout(armSendButton.t);
+  b.classList.toggle('armed', ms > 0); b.textContent = ms > 0 ? 'Send?' : '↑';
+  if (ms > 0) armSendButton.t = setTimeout(() => { state.sentDismissWarning = 0; armSendButton(0); }, ms);
+}
 $('btn-attach').onclick = () => $('file').click();
 $('file').onchange = (e) => { uploadFiles([...e.target.files]); e.target.value = ''; };
 
@@ -4003,6 +4035,25 @@ function updateBanner(server) {
   b.querySelector('.upd-x').onclick = () => { try { sessionStorage.setItem('baton.updDismissed', server); } catch {} b.remove(); };
 }
 
+// 28-Oct (Ashwar: a message "was never sent and was just sitting inside"): an update used to reload the page
+// 900 ms after it installed, whatever he was doing. A Send tapped into that reload was lost, and the draft
+// (saved on every keystroke) came back in the box. Now the reload waits until he is not typing: an empty,
+// unfocused box and no touch for 8 s, or the app going to the background.
+let lastTouchAt = 0;
+addEventListener('pointerdown', () => { lastTouchAt = Date.now(); }, true);
+function composerBusy() {
+  const i = $('input');
+  return !!i && (document.activeElement === i || !!i.value.trim() || Date.now() - lastTouchAt < 8000);
+}
+function reloadForUpdate() {
+  if (reloadForUpdate.armed) return;
+  reloadForUpdate.armed = true;
+  const go = () => { if (document.hidden || !composerBusy()) location.reload(); else setTimeout(go, 3000); };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) location.reload(); });
+  if (!composerBusy()) toast('Update ready — reloading');
+  setTimeout(go, 900);
+}
+
 async function watchForUpdates() {
   if (!('serviceWorker' in navigator)) return;
   let reg;
@@ -4012,10 +4063,7 @@ async function watchForUpdates() {
     const sw = reg.installing;
     if (!sw) return;
     sw.addEventListener('statechange', () => {
-      if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-        toast('Update ready — reloading');
-        setTimeout(() => location.reload(), 900);
-      }
+      if (sw.state === 'installed' && navigator.serviceWorker.controller) reloadForUpdate();
     });
   });
   const check = () => { reg.update().catch(() => {}); };

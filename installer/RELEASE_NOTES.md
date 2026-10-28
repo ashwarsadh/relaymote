@@ -1,3 +1,10 @@
+## 0.2.152
+
+- Send works on the first tap. Before, a tap could miss because the keyboard closing moved the button, or a slight finger slide cancelled it, and the message stayed in the box. Now the button acts as soon as your finger lifts, the keyboard stays open, and repeat taps send the message once.
+- If a send fails, the message shows in the chat as "waiting to send" with Send now, Edit and Discard. Before, it could keep saying "sending…" until something else arrived.
+- An update no longer reloads the app while you are typing. It waits until the box is empty and you have stopped touching the screen, or until you switch away. Before, a Send tapped during that reload was lost and the text came back in the box unsent.
+- With a question open, the button turns into "Send?" for 5 seconds; tap again to send.
+
 ## 0.2.151
 
 - Working sessions (blue dot) always show, at the top of the list, then waiting ones (yellow dot), then the rest. Before, a session that Claude Desktop still dated days back could be left out of the list even while it was working. A star now lifts a session only within its own group.

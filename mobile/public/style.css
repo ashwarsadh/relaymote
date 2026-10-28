@@ -298,6 +298,10 @@ pre.code{
 #input:focus{border-color:var(--accent)}      
 .send-btn{flex:none; width:44px; height:44px;    border-radius:50%; border:none; background:var(--accent-ground); color:var(--on-accent); font-size:19px; cursor:pointer}
 .send-btn:disabled{opacity:.35}
+/* 28-Oct: a tap is acted on at once; no double-tap zoom delay, no text selection, and the "Send?" confirm when a question is open */
+.send-btn{touch-action:none; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent}
+.send-btn:active{transform:scale(.92)}
+.send-btn.armed{width:auto; min-width:64px; padding:0 12px; border-radius:22px; font-size:15px; background:var(--warn,#d97706); color:#fff}
 
 #main:has(#question:not(.hidden)) .send-btn,
 #main:has(#permission:not(.hidden)) .send-btn{background:var(--panel-2); color:var(--dim)}

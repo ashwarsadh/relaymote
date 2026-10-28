@@ -150,7 +150,7 @@ function reauthPage(logoutUrl, email, explicit, postUrl) {
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const head = explicit ? 'Log out of Relaymote' : 'Sign in again';
   const why = explicit ? 'This signs Relaymote out on this browser. Coming back will ask for the emailed code.'
-    : `For ${esc(email || 'this login')}, Relaymote asks for a fresh emailed code every 12 hours.`;
+    : `For ${esc(email || 'this login')}, Relaymote asks for a fresh emailed code once every ${Math.round(SUB_SESSION_H() / 24)} days, renewed while you use it.`;
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relaymote</title>
 <body style="font:16px system-ui;background:#12110f;color:#e8e6e3;padding:28px;max-width:520px">
 <b style="font-size:18px">${head}</b><p style="color:#9b9691">${why}</p>

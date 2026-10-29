@@ -958,6 +958,7 @@ function finishSend(job, out) {
 // FIRST send is accepted and then lost, as when Desktop crashes after taking it; later sends (the re-delivery) land.
 // 'drop-all': every send and re-delivery is lost (the NOT delivered path).
 const FAKE_SEND = process.env.RELAYMOTE_FAKE_SEND || '';
+const SEND_DEADLINE_MS = Number(process.env.RELAYMOTE_SEND_DEADLINE_MS) || 3 * 60 * 1000;
 let fakeDropped = false;
 function fakeWrite(id, body) {
   const s = sessions.index().list.find(x => x.id === id);
@@ -982,6 +983,12 @@ async function doSend(id, text, attachments, { noUi = false } = {}) {
   // Test seam (demo instances only): "deliver" by writing his message into the demo transcript and a
   // log, so the phone's outbox can be shown end to end with no Claude Desktop behind it.
   if (FAKE_SEND === '1') { fakeWrite(id, body); return { ok: true, confirmed: true, delivery: 'sent' }; }
+  if (FAKE_SEND === 'hang-first') {   // the 29-Oct case: the send goes into the outbox, then never finishes
+    const slip0 = outbox.add({ session: id, text: body });
+    if (!fakeDropped) { fakeDropped = true; return new Promise(() => {}); }
+    fakeWrite(id, body); if (slip0) outbox.markSent(slip0.id, { ok: true, delivery: 'generating' });
+    return { ok: true, delivery: 'generating', outboxId: slip0 && slip0.id };
+  }
   if (FAKE_SEND === 'drop-first' || FAKE_SEND === 'drop-all') {   // drop-all: the re-delivery is lost too
     const slip0 = outbox.add({ session: id, text: body });
     if (fakeDropped) fakeWrite(id, body); else fakeDropped = true;
@@ -2067,9 +2074,19 @@ async function handle(req, res) {
       sendJobs.set(jobId, job);
       notePrincipalTouch(req, url, body.id, false);
       if (cmid) { cmidStore().set(cmid, { jobId, at: job.at, done: false }); cmidSave(); }
+      // 29-Oct: a send that hung on Desktop's debugger link kept its job open for ever, so the phone's retries were
+      // answered "already queued" and nothing moved. Past SEND_DEADLINE_MS the job is closed as taken by the PC:
+      // the PC's outbox now owns the message and re-delivers it (outbox.STUCK_MS), so the phone must not send it again.
+      let settled = false;
+      const settle = (out) => { if (settled) return; settled = true; clearTimeout(dl); finishSend(job, out); };
+      const dl = setTimeout(() => {
+        log(`send ${jobId} to ${body.id} still unfinished after ${SEND_DEADLINE_MS / 1000}s: left to the PC outbox to re-deliver`);
+        settle({ ok: true, delivery: 'pc-outbox' });
+      }, SEND_DEADLINE_MS);
+      if (dl.unref) dl.unref();
       doSend(body.id, body.text, body.attachments, { noUi: windowBusy(req, url) === 'another principal' })
-        .then(out => finishSend(job, out))
-        .catch(e => finishSend(job, { ok: false, error: e.message }));
+        .then(out => settle(out))
+        .catch(e => settle({ ok: false, error: e.message }));
       return json(res, 202, { ok: true, queued: true, jobId });
     }
     const tierEcho = (out) => ({
@@ -2489,7 +2506,7 @@ async function outboxTickInner() {
     let r = null;
     try { r = await redeliver(e, text); } catch (x) { r = { ok: false, error: x.message }; }
     outbox.markResent(e.id, { ok: !!(r && r.ok), error: r && (r.detail || r.error) });
-    log(`outbox: ${e.id} never reached ${e.session} (no queue or user row in ${outbox.ACCEPT_MS / 1000}s) -- REDELIVERED once ` +
+    log(`outbox: ${e.id} never reached ${e.session} (${e.delivery ? 'no queue or user row in ' + outbox.ACCEPT_MS / 1000 + 's' : 'its send never finished'}) -- REDELIVERED once ` +
         `${e.uuid ? 'via bridge, same uuid ' + String(e.uuid).slice(0, 8) : 'via the composer'}: ${r && r.ok ? 'ok' : 'FAILED ' + (r && (r.detail || r.error))}`);
     for (const c of clients) {
       if (isSubuser(c.identity) && !c.identity.sessions.has(e.session)) continue;

@@ -19,7 +19,12 @@ const ACCEPT_MS = Number(process.env.RELAYMOTE_OUTBOX_ACCEPT_MS) || 60 * 1000;
 // minutes); the caller skips the whole check while Desktop is unreachable.
 const RESEND_WINDOW_MS = 30 * 60 * 1000;
 const REDELIVERABLE = new Set(['generating', 'sent', 'accepted', 'sent-now']);
-const canRedeliver = (e) => !!e.uuid || REDELIVERABLE.has(String(e.delivery || ''));
+// 29-Oct (Ashwar: "i sent msgs from relay kote and they never reached"): at 21:46 IST a send went into this outbox,
+// then hung while Desktop's debugger link was timing out. It never got a delivery, so it was never re-sent, only
+// flagged after 15 min. A send that has not finished after STUCK_MS never reached Desktop: it is re-delivered too.
+const STUCK_MS = Number(process.env.RELAYMOTE_OUTBOX_STUCK_MS) || 3 * 60 * 1000;
+const stuck = (e) => !e.delivery && !e.uuid;
+const canRedeliver = (e) => !!e.uuid || REDELIVERABLE.has(String(e.delivery || '')) || stuck(e);
 
 /** The re-sent text: a visible line saying it is a re-delivery, then his message unchanged. */
 function redeliveryText(e, now = Date.now()) {
@@ -183,7 +188,8 @@ function checkAccepted(readText, now = Date.now()) {
     if (arrivedIn(raw, e)) { e.acceptedAt = now; changed = true; continue; }
     // Only a fresh send is re-sent: an older one (from before this check, or a tail that no longer reaches
     // back to it) is left to the 15-minute suspect flag rather than risk a late duplicate.
-    if (!e.resentAt) { if (now - e.at > ACCEPT_MS && now - e.at < RESEND_WINDOW_MS) resend.push(e); continue; }
+    const due = stuck(e) ? STUCK_MS : ACCEPT_MS;
+    if (!e.resentAt) { if (now - e.at > due && now - e.at < RESEND_WINDOW_MS) resend.push(e); continue; }
     if (now - e.resentAt > ACCEPT_MS) {
       e.state = 'failed'; e.notDelivered = true;
       e.error = 'NOT delivered: Desktop dropped it twice (sent, then re-delivered once). Nothing reached the session.';
@@ -205,4 +211,4 @@ function markResent(id, { ok, error, now = Date.now() } = {}) {
   return e;
 }
 
-module.exports = { redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };
+module.exports = { STUCK_MS, redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };

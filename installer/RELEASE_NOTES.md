@@ -1,3 +1,7 @@
+## 0.2.154
+
+- A message whose send hangs on the PC (Claude Desktop's link timing out) is no longer lost. After 3 minutes the PC re-delivers it by itself, marked "Redelivered by Relaymote", and the phone stops waiting on it. On 29-Oct one message at 21:46 IST was stuck this way.
+
 ## 0.2.153
 
 - Updates the app puts into a conversation (side-session notes, CI results, relayed messages) show as one thin bar, for example "⇄ 3 side-session updates · apps-growth-engine, marketing". Tap the bar to read them. Before, each one showed as a large bubble that looked like your own message, with a read-aloud button. Anything you typed in the same turn still shows as your message.

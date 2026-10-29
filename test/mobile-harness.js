@@ -71,7 +71,7 @@ async function boot(w, extraEnv = {}) {
   const child = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; child.stdout.on('data', d => out += d); child.stderr.on('data', d => out += d);
   let up = false;
-  for (let i = 0; i < 80 && !up; i++) { await wait(250); up = (await request(APP, '/manifest.webmanifest')).status === 200; }
+  for (let i = 0; i < 160 && !up; i++) { await wait(250); up = (await request(APP, "/manifest.webmanifest")).status === 200; }   // 40 s: a loaded PC (29-Oct) took over 20 s
   if (!up) { console.log(out.slice(-3000)); throw new Error('daemon did not come up'); }
   const token = JSON.parse(fs.readFileSync(path.join(w.home, 'mobile', 'secret.json'), 'utf8')).token;
   const streams = [];

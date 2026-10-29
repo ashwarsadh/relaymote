@@ -271,19 +271,47 @@ const INJECTED = [
   /^\s*Stop hook feedback:/i,
   /^\s*<user-prompt-submit-hook>/i,
   /^\s*<cross-session-message/i,
+  /^\s*<side-sessions-event>/i,
+  /^\s*<ci-monitor-event/i,
 ];
 const isInjected = (t) => INJECTED.some(rx => rx.test(String(t || '')));
 
+// 29-Oct (Ashwar: "This side session message showing up in relay mode does not have any relevance and only
+// takes up space"): the app sends a side-session note as <system-reminder> blocks plus a <side-sessions-event>.
+// Only the reminders were stripped, so the event was left and showed as HIS message (a 15-line orange bubble).
+const FRAMES = [['<system-reminder>', '</system-reminder>'], ['<side-sessions-event>', '</side-sessions-event>'],
+                ['<ci-monitor-event', '</ci-monitor-event>']];
+const FRAME_RX = /<system-reminder>|<side-sessions-event>|<ci-monitor-event/i;
 function stripFraming(text) {
   let t = String(text || '');
-  for (let i = 0; i < 8; i++) {
-    const open = t.indexOf('<system-reminder>');
-    if (open < 0) break;
-    const close = t.indexOf('</system-reminder>', open);
-    if (close < 0) break;
-    t = (t.slice(0, open) + t.slice(close + '</system-reminder>'.length));
+  for (const [o, c] of FRAMES) {
+    for (let i = 0; i < 8; i++) {
+      const open = t.indexOf(o);
+      if (open < 0) break;
+      const close = t.indexOf(c, open);
+      if (close < 0) break;
+      t = (t.slice(0, open) + t.slice(close + c.length));
+    }
   }
   return t.trim();
+}
+
+/** An app-injected turn he did not type: side-session notes, a CI event, a status-only reminder, a relayed
+ *  message. The phone shows it as one thin bar (tap to open), never as his bubble, never read aloud. */
+function noticeOf(raw) {
+  const t = String(raw || '');
+  const names = [];
+  const rx = /The session "([^"]{1,80})" you started/g;
+  let m;
+  while ((m = rx.exec(t)) && names.length < 12) if (!names.includes(m[1])) names.push(m[1]);
+  let kind = null;
+  if (/<side-sessions-event>/i.test(t) || names.length) kind = 'side';
+  else if (/<ci-monitor-event/i.test(t)) kind = 'ci';
+  else if (/^\s*<cross-session-message/i.test(t)) kind = 'peer';
+  else if (/^\s*<system-reminder>/i.test(t) && !stripFraming(t)) kind = 'reminder';
+  if (!kind) return null;
+  if (kind === 'peer') { const n = t.match(/<cross-session-message[^>]*\bname="([^"]{1,60})"/); if (n) names.push(n[1]); }
+  return { kind, names };
 }
 
 function commandAsTyped(text) {
@@ -297,13 +325,19 @@ function commandAsTyped(text) {
 
 function unwrap(text) {
   const raw = String(text || '');
-  if (!isInjected(raw)) return { text: raw, injected: false };
+  // His own words first, framing after (an @upload line, his sentence, then the app's blocks): keep his words.
+  if (!isInjected(raw)) return { text: FRAME_RX.test(raw) ? (stripFraming(raw) || raw) : raw, injected: false };
   const bare = stripFraming(raw);
-  if (bare && bare.length > 12 && /<system-reminder>/i.test(raw) && !isInjected(bare)) {
+  if (bare && bare.length > 12 && FRAME_RX.test(raw) && !isInjected(bare)) {
     return { text: bare, injected: false };
   }
   return { text: raw, injected: true };
 }
+
+const noticeRow = (raw, ts) => {
+  const n = noticeOf(raw);
+  return n ? { role: 'notice', ts, kind: n.kind, names: n.names, text: clip(raw, TEXT_LIMIT) } : null;
+};
 
 const USER_ATTACHMENTS = new Set(['file', 'image', 'pasted_text', 'pasted_image', 'selected_lines', 'screenshot']);
 const TEXT_LIMIT = 4000;
@@ -401,7 +435,7 @@ function flatten(row) {
     }
     if (typeof c === 'string') {
       if (!c.trim()) return null;
-      { const u = unwrap(c); if (u.injected) return { role: 'system', ts, text: clip(u.text, 600) };
+      { const u = unwrap(c); if (u.injected) return noticeRow(c, ts) || { role: 'system', ts, text: clip(u.text, 600) };
         return { role: 'user', ts, text: clip(u.text, SPOKEN_LIMIT) }; }
       return { role: 'user', ts, text: clip(c, SPOKEN_LIMIT) };
     }
@@ -430,7 +464,7 @@ function flatten(row) {
       }
       const text = c.filter(b => b && b.type === 'text').map(b => b.text).join('\n');
       if (!text.trim()) return null;
-      { const u = unwrap(text); if (u.injected) return { role: 'system', ts, text: clip(u.text, 600) };
+      { const u = unwrap(text); if (u.injected) return noticeRow(text, ts) || { role: 'system', ts, text: clip(u.text, 600) };
         return { role: 'user', ts, text: clip(u.text, SPOKEN_LIMIT) }; }
       return { role: 'user', ts, text: clip(text, SPOKEN_LIMIT) };
     }
@@ -506,7 +540,7 @@ function flatten(row) {
 }
 
 const isSpoken = (m) => m.role === 'user' || m.role === 'peer' || (m.role === 'assistant' && m.text) ||
-                        m.role === 'system' || m.role === 'attachment';
+                        m.role === 'system' || m.role === 'attachment' || m.role === 'notice';
 
 const isUser = (m) => m.role === 'user';
 

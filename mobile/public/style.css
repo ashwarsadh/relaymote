@@ -250,6 +250,10 @@ details.peer[open] > summary::before{transform:rotate(90deg)}
 details.peer > summary{white-space:nowrap}
 details.peer > summary b{color:var(--txt); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto}
 details.peer > summary .line{flex:1; height:1px; background:var(--line)}
+/* 29-Oct: app-injected turns (side-session notes, CI, relayed) are one thin bar, text cut to one line */
+details.notice > summary .nl{overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto}
+details.notice .nbody{white-space:pre-wrap; font-size:12px; color:var(--dim)}
+details.notice .nbody + .nbody{margin-top:8px; padding-top:8px; border-top:1px dashed var(--line)}
 details.peer .body{border-left:2px solid var(--line); padding:2px 0 2px 10px; color:var(--txt); font-size:13.5px; overflow-wrap:anywhere}
 
 .live{flex:none; padding:4px 14px 0; font-size:12px; color:var(--dim); font-variant-numeric:tabular-nums}

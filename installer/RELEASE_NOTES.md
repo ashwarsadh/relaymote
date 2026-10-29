@@ -1,3 +1,7 @@
+## 0.2.153
+
+- Updates the app puts into a conversation (side-session notes, CI results, relayed messages) show as one thin bar, for example "⇄ 3 side-session updates · apps-growth-engine, marketing". Tap the bar to read them. Before, each one showed as a large bubble that looked like your own message, with a read-aloud button. Anything you typed in the same turn still shows as your message.
+
 ## 0.2.152
 
 - Send works on the first tap. Before, a tap could miss because the keyboard closing moved the button, or a slight finger slide cancelled it, and the message stayed in the box. Now the button acts as soon as your finger lifts, the keyboard stays open, and repeat taps send the message once.

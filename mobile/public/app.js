@@ -438,6 +438,23 @@ function systemLine(t) {
   return one.length > 120 ? one.slice(0, 120) + '…' : one;
 }
 
+/** "⇄ 2 side-session updates · Mail drafts, Memento" for a run of notices (see messageHtml). */
+function noticeLabel(all) {
+  const names = [], kinds = new Set();
+  let side = 0;
+  for (const n of all) {
+    kinds.add(n.kind);
+    if (n.kind === 'side') side += Math.max(1, (n.names || []).length);
+    for (const x of (n.names || [])) if (!names.includes(x)) names.push(x);
+  }
+  const who = names.length ? ' · ' + names.join(', ') : '';
+  if (kinds.size === 1 && kinds.has('side')) return '⇄ ' + (side > 1 ? side + ' side-session updates' : 'side-session update') + who;
+  if (kinds.size === 1 && kinds.has('ci')) return '⚙ ' + (all.length > 1 ? all.length + ' CI updates' : 'CI update');
+  if (kinds.size === 1 && kinds.has('peer')) return '↪ ' + (all.length > 1 ? all.length + ' relayed messages' : 'relayed message') + who;
+  if (kinds.size === 1 && kinds.has('reminder')) return '⚙ ' + (all.length > 1 ? all.length + ' status updates' : 'status update');
+  return '⇄ ' + all.length + ' app updates' + who;
+}
+
 function ageText(ts) {
   const t = Date.parse(ts || '');
   if (!t) return '';
@@ -586,6 +603,13 @@ function messageHtml(m) {
     out += `<details class="peer compact"><summary>Session compacted<span class="line"></span></summary>` +
            `<div class="body">${md(m.text)}</div>${stampHtml(m)}</details>`;
   }
+  else if (m.role === 'notice') {
+    // 29-Oct (Ashwar: "It should show in a compact manner, or maybe like a bar"): an app-injected turn he did not
+    // type is one thin bar, and a run of them is merged (m.group). Tap to read. No speaker, never read aloud.
+    const all = m.group || [m];
+    out += `<details class="peer notice"><summary><span class="nl">${esc(noticeLabel(all))}</span><span class="line"></span></summary>` +
+           `<div class="body">${all.map(x => `<div class="nbody">${esc(x.text)}</div>`).join('')}</div>${stampHtml(all[all.length - 1])}</details>`;
+  }
   else if (m.role === 'system') {
     out += `<div class="msg system"><span class="sysline">${esc(systemLine(m.text))}</span>` +
            `<span class="sysfull">${esc(m.text)}</span></div>`;
@@ -603,7 +627,7 @@ function turnOpen(msgs) {
   let open = false, lastTs = NaN;
   for (const m of msgs || []) {
     if (m.ts) { const t = Date.parse(m.ts); if (Number.isFinite(t)) lastTs = t; }
-    if (m.role === 'peer' || (m.role === 'user' && !m.queued)) open = !/^\s*\[Request interrupted/i.test(m.text || '');
+    if (m.role === 'peer' || m.role === 'notice' || (m.role === 'user' && !m.queued)) open = !/^\s*\[Request interrupted/i.test(m.text || '');
     else if (m.role === 'assistant' && m.stop === 'end_turn') open = false;
   }
   const quiet = Number.isFinite(lastTs) ? (Date.now() - lastTs) / 1000 : Infinity;
@@ -658,7 +682,7 @@ function blocks(messages) {
     // 0.2.65, which drew it as grey prose on a wrong reading of g1050).
     const working = (m.tools && m.tools.length) || m.role === 'result' || note;
     const speaks = m.role === 'assistant' && (m.text || m.ask);
-    const theirs = m.role === 'user' || m.role === 'answered' || m.role === 'attachment' || m.role === 'peer' || m.role === 'compact';
+    const theirs = m.role === 'user' || m.role === 'answered' || m.role === 'attachment' || m.role === 'peer' || m.role === 'compact' || m.role === 'notice';
 
     if (note && said) flushSaid();
 
@@ -675,7 +699,16 @@ function blocks(messages) {
       said.keys.push(k);
       said.ts = m.ts || said.ts;
     }
-    if (theirs) { endTurn(); out.push({ type: 'msg', key: k, html: cached(k, m) }); }
+    if (theirs) {
+      const prev = out[out.length - 1];
+      if (m.role === 'notice' && !run && !said && prev && prev.notice) {   // back-to-back notices: one bar
+        prev.notice.push(m); prev.key += '+' + k;
+        prev.html = cached(prev.key, { role: 'notice', group: prev.notice });
+      } else {
+        endTurn();
+        out.push({ type: 'msg', key: k, html: cached(k, m), notice: m.role === 'notice' ? [m] : undefined });
+      }
+    }
     // A file the session SENT is the point of the turn, not a step: it gets its own card (player,
     // preview, open) in the flow instead of hiding inside "Working · N steps".
     const sent = (m.tools || []).filter(t => t.files && t.files.length);
@@ -765,7 +798,7 @@ function liveState() {
   const msgs = state.messages || [];
   if (!state.open || !msgs.length || !isLive()) return null;
   let start = -1;
-  for (let i = msgs.length - 1; i >= 0; i--) { const r = msgs[i].role; if ((r === 'user' && !msgs[i].queued) || r === 'peer') { start = i; break; } }
+  for (let i = msgs.length - 1; i >= 0; i--) { const r = msgs[i].role; if ((r === 'user' && !msgs[i].queued) || r === 'peer' || r === 'notice') { start = i; break; } }
   const startTs = start >= 0 ? Date.parse(msgs[start].ts || '') : NaN;
   let tokens = 0, lastTs = NaN, toolsRunning = false;
   for (let i = Math.max(start, 0); i < msgs.length; i++) {

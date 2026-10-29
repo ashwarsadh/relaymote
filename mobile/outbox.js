@@ -211,4 +211,11 @@ function markResent(id, { ok, error, now = Date.now() } = {}) {
   return e;
 }
 
-module.exports = { STUCK_MS, redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };
+// True once the outbox has re-delivered this entry: the original send, if it ever wakes, must not type it again.
+const overtaken = (id) => { const e = id && get(id); return !!(e && (e.resendingAt || e.resentAt || e.state === 'confirmed')); };
+function markResending(id, now = Date.now()) {
+  const entries = load(); const e = entries.find(x => x.id === id);
+  if (e) { e.resendingAt = now; save(entries); }
+}
+
+module.exports = { overtaken, markResending, STUCK_MS, redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };

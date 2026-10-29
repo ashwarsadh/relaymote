@@ -49,11 +49,12 @@ async function run(mode) {
 async function runHang() {
   const w = H.world('redeliver-hang');
   const SID = w.sessions().map(s => s.sessionId || s.id).filter(Boolean)[0];
-  const d = await H.boot(w, { RELAYMOTE_FAKE_SEND: 'hang-first', RELAYMOTE_OUTBOX_STUCK_MS: '2000', RELAYMOTE_SEND_DEADLINE_MS: '1500' });
+  const d = await H.boot(w, { RELAYMOTE_FAKE_SEND: 'hang-first', RELAYMOTE_OUTBOX_STUCK_MS: '2000', RELAYMOTE_SEND_DEADLINE_MS: '1500', RELAYMOTE_FAKE_HANG_MS: '14000' });
   const text = 'Euro set reply: wrong photo, send a revised quote ' + Date.now();
   try {
     const ev = d.stream('phone-hang');
     const cmid = 'h' + Date.now().toString(36);
+    const t0 = Date.now();
     const r = await d.req('/api/send', { method: 'POST', headers: { 'X-Baton-Client': 'phone-hang' }, body: { id: SID, text, cmid } });
     check(r.status === 202 && r.json.ok, '[hang] the send is accepted', r.status);
     const res = await d.waitFor(ev, e => e.event === 'sendresult' && e.data.id === SID, 10000);
@@ -67,6 +68,11 @@ async function runHang() {
     const mine = (tr.json.transcript && tr.json.transcript.messages || []).filter(m => m.role === 'user' && String(m.text).includes(text));
     check(mine.length === 1 && /^\[Redelivered by Relaymote/.test(mine[0].text), '[hang] the session got it once, marked redelivered', mine.map(m => m.text.slice(0, 90)));
     check(/its send never finished\) -- REDELIVERED once via the composer: ok/.test(d.output()), '[hang] the log names why', d.output().split('\n').filter(l => /REDELIVERED|unfinished/.test(l)));
+    // 22:23 IST that night the hung send itself went through after all. It must stand down, not land a second copy.
+    await new Promise(r => setTimeout(r, Math.max(0, 16000 - (Date.now() - t0))));
+    const tr2 = await d.req('/api/session/' + SID + '?limit=20');
+    const all = (tr2.json.transcript && tr2.json.transcript.messages || []).filter(m => m.role === 'user' && String(m.text).includes(text));
+    check(all.length === 1, '[hang] when the hung send finally wakes, it does not deliver a second copy', all.length);
   } finally { await d.stop(); w.cleanup(); }
 }
 
@@ -75,5 +81,7 @@ async function runHang() {
   await run('drop-first');
   const w = await run('drop-all');
   check(/'redelivered — the first send was lost; checking it arrived'/.test(H.src('mobile/public/app.js')), 'the phone bubble says "redelivered" while it is checked');
+  check(/mineHere\.includes\(bodyOf\(e\.text\)\)/.test(H.src('mobile/public/app.js')), "the phone draws its own copy and the PC's copy of one message once, not twice (29-Oct)");
+  check(/m\.role === 'user' \|\| m\.role === 'peer'/.test(H.src('mobile/public/app.js')), 'a message the PC recovered and relayed counts as delivered on the phone');
   H.finish(w);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -1010,7 +1010,10 @@ function renderLog(messages, force) {
     // attachment lines and the bubble does not, so match on the outbox id, else on the text without them.
     const bodyOf = (t) => nn(String(t || '').split(NL).filter(l => !/^@/.test(l)).join(NL));
     const pend = state.pending;
-    const isPending = (e) => !!pend && (e.id === pend.outboxId || bodyOf(e.text) === nn(pend.text));
+    // 29-Oct: the phone's own copy of a message (its outbox, below) and the PC's are one message too; showing both
+    // drew his Euro Seta message twice, one "sending…" and one "handing it to Claude…".
+    const mineHere = obItems.filter(x => x.sid === state.open).map(x => nn(x.text));
+    const isPending = (e) => (!!pend && (e.id === pend.outboxId || bodyOf(e.text) === nn(pend.text))) || mineHere.includes(bodyOf(e.text));
     for (const e of (state.outbox || [])) {
       if (e.session !== state.open) continue;
       if (inLog(e.text)) continue;
@@ -1027,7 +1030,8 @@ function renderLog(messages, force) {
               ? 'queued — goes in at its next step' + waitedNote(e.ageMs) + sn
               : e.delivery === 'queued'
                 ? 'queued — goes in at its next step' + waitedNote(e.ageMs) + sn + heldNote(e.at)
-                : e.redelivered ? 'redelivered — the first send was lost; checking it arrived' : 'sending…'}</span>`) +
+                : e.redelivered ? 'redelivered — the first send was lost; checking it arrived'
+                : !e.delivery && (e.ageMs || 0) > 60000 ? 'on the PC — Claude is slow to take it; the PC sends it again by itself' : 'sending…'}</span>`) +
         `</div>`;
     }
   }
@@ -1063,6 +1067,7 @@ function renderLog(messages, force) {
     const tick = failed ? 'not sent — ' + esc(p2.error || 'no answer from the PC') +
                    ' <button class="pend-retry">Retry</button> <button class="pend-edit">Edit</button>'
                : p2.status === 'sent' ? 'sent ✓'
+               : p2.status === 'pc' ? 'on the PC — Claude is slow to take it; the PC sends it again by itself'
                : p2.status === 'queued' ? 'queued — goes in at its next step' + waitedNote(Date.now() - (p2.at || Date.now())) + sn2 + (p2.held ? '' : heldNote(p2.at))
                : 'sending…';
     html += `<div class="msg user pending${sn2 || failed ? ' act' : ''}${failed ? ' failed' : ''}">${body}<span class="tick">${tick}</span></div>`;
@@ -2960,7 +2965,8 @@ function obRepaint(sid) { if (sid === state.open) renderLog(state.messages, fals
 const obNorm = (t) => String(t || '').replace(/\s+/g, ' ').trim();
 function obSeen(it, messages) {
   const want = obNorm(it.text).slice(0, 60);
-  return !!want && (messages || []).some(m => m.role === 'user' && obNorm(m.text).includes(want));
+  // A message the PC recovered and passed on arrives as a relayed (peer) turn: that is delivered too (29-Oct).
+  return !!want && (messages || []).some(m => (m.role === 'user' || m.role === 'peer') && obNorm(m.text).includes(want));
 }
 const obInLog = (it) => it.sid === state.open && obSeen(it, state.messages);
 
@@ -3028,7 +3034,7 @@ function obResult(it, r) {
   }
   obRemove(it.cmid);
   if (it.sid === state.open) {
-    state.pending = { sid: it.sid, text: it.text, atts: it.atts, status: r.confirmed ? 'sent' : 'queued', held: !!r.held,
+    state.pending = { sid: it.sid, text: it.text, atts: it.atts, status: r.confirmed ? 'sent' : r.delivery === 'pc-outbox' ? 'pc' : 'queued', held: !!r.held,
                       outboxId: r.outboxId || null, jobId: r.jobId || it.jobId, at: Date.now() };
   }
   if (r.delivery === 'queued') sendNowBlocked.delete(it.sid);

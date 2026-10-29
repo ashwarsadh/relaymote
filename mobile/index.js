@@ -625,7 +625,13 @@ async function notifyAttention(all) {
       tag: 'sess-' + s.id,
       url: '/?s=' + encodeURIComponent(s.id),
     };
-    if (st === 'awaiting') await approvalEvent(s, evt);
+    // 29-Oct: this peek queued behind Desktop UI steps stuck 300 s each and held the whole poll for 37 min, so no
+    // send result, outbox change or new reply reached the phone. The alert goes without its buttons instead.
+    if (st === 'awaiting') {
+      let tm; const late = new Promise(r => { tm = setTimeout(() => r('late'), APPROVAL_PEEK_MS); });
+      if (await Promise.race([approvalEvent(s, evt).catch(() => {}), late]) === 'late') log(`notify: approval read for ${s.id} still waiting after ${APPROVAL_PEEK_MS / 1000}s; alert sent without its buttons`);
+      clearTimeout(tm);
+    }
     let aud = null;
     try { require('./principal-touch').refresh(board.CONDUCTOR_DIR, (id) => sessions.transcriptPath(sessions.get(id))); aud = alertAudience(s); }
     catch (e) { log('notify: audience failed, sending to every phone: ' + e.message); }
@@ -958,6 +964,7 @@ function finishSend(job, out) {
 // FIRST send is accepted and then lost, as when Desktop crashes after taking it; later sends (the re-delivery) land.
 // 'drop-all': every send and re-delivery is lost (the NOT delivered path).
 const FAKE_SEND = process.env.RELAYMOTE_FAKE_SEND || '';
+const APPROVAL_PEEK_MS = Number(process.env.RELAYMOTE_APPROVAL_PEEK_MS) || 20000;
 const SEND_DEADLINE_MS = Number(process.env.RELAYMOTE_SEND_DEADLINE_MS) || 3 * 60 * 1000;
 let fakeDropped = false;
 function fakeWrite(id, body) {
@@ -974,7 +981,7 @@ async function redeliver(e, text) {
   return ui(() => desktop.sendMessage(e.session, text, { queue: true }));
 }
 
-async function doSend(id, text, attachments, { noUi = false } = {}) {
+async function doSend(id, text, attachments, { noUi = false, onSlip = null } = {}) {
   let body = String(text || '');
   if (Array.isArray(attachments) && attachments.length) {
     body = attachments.map(a => '@' + a).join('\n') + (body ? '\n' + body : '');
@@ -985,7 +992,13 @@ async function doSend(id, text, attachments, { noUi = false } = {}) {
   if (FAKE_SEND === '1') { fakeWrite(id, body); return { ok: true, confirmed: true, delivery: 'sent' }; }
   if (FAKE_SEND === 'hang-first') {   // the 29-Oct case: the send goes into the outbox, then never finishes
     const slip0 = outbox.add({ session: id, text: body });
-    if (!fakeDropped) { fakeDropped = true; return new Promise(() => {}); }
+    if (onSlip && slip0) onSlip(slip0.id);
+    if (!fakeDropped) {
+      fakeDropped = true;
+      // RELAYMOTE_FAKE_HANG_MS: the hung send finally goes through, as it did at 22:23 IST, after the PC re-delivered it.
+      const late = Number(process.env.RELAYMOTE_FAKE_HANG_MS) || 0;
+      return new Promise(r => { if (late) setTimeout(() => r(outbox.overtaken(slip0 && slip0.id) ? { ok: true, delivery: 'redelivered-by-outbox' } : (fakeWrite(id, body), { ok: true, delivery: 'generating' })), late); });
+    }
     fakeWrite(id, body); if (slip0) outbox.markSent(slip0.id, { ok: true, delivery: 'generating' });
     return { ok: true, delivery: 'generating', outboxId: slip0 && slip0.id };
   }
@@ -998,12 +1011,18 @@ async function doSend(id, text, attachments, { noUi = false } = {}) {
   }
 
   const slip = outbox.add({ session: id, text: body });
+  if (onSlip && slip) onSlip(slip.id);
+  // 29-Oct: a send stuck on Desktop's debugger link went through 37 min later, after the PC had re-delivered it. Once
+  // the outbox has re-sent it, this send stands down rather than type it a second time.
+  const overtaken = () => !!slip && outbox.overtaken(slip.id);
+  const stoodDown = () => { log(`send ${slip.id}: the PC outbox already re-delivered it; not sent again`); return { ok: true, delivery: 'redelivered-by-outbox', outboxId: slip.id }; };
 
   // Attachments travel as "@<path>" lines in the text (the composer delivers them the same way), so a
   // message with attachments takes the bridge too and gets a handle for Send now and ×.
   {
     let live = null;
     try { live = await desktop.readAppliedModel(id); } catch { live = null; }
+    if (overtaken()) return stoodDown();
     if (live && live.ok && live.running) {
       const r = await desktop.sendQueued(id, body);
       if (r.ok) {
@@ -1037,10 +1056,12 @@ async function doSend(id, text, attachments, { noUi = false } = {}) {
 
   let last = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
+    if (overtaken()) return stoodDown();
     try {
       // Another principal's message goes through the app's own channel only, never the composer, which opens the
       // session in Ashwar's window (22-Oct). A refusal stays in that phone's outbox and is retried.
-      last = await ui(() => desktop.sendMessage(id, body, { queue: true, backgroundOnly: noUi }));
+      last = await ui(() => overtaken() ? { ok: true, delivery: 'redelivered-by-outbox', stoodDown: true } : desktop.sendMessage(id, body, { queue: true, backgroundOnly: noUi }));
+      if (last && last.stoodDown) return stoodDown();
     } catch (e) {
       const why = String((e && e.message) || 'threw');
       log(`send attempt ${attempt} threw: ${why}`);
@@ -2068,6 +2089,15 @@ async function handle(req, res) {
       const seen = cmid && cmidStore().get(cmid);
       if (seen && !seen.done && sendJobs.has(seen.jobId)) return json(res, 202, { ok: true, queued: true, jobId: seen.jobId, again: true });
       if (seen && seen.done && seen.ok) return json(res, 200, { ok: true, already: true, jobId: seen.jobId, result: seen.result });
+      // Its job was lost (the PC restarted mid-send) but the PC's outbox still holds it and will re-deliver it: the
+      // phone's retry is that same message, not a second one.
+      const held = seen && !seen.done && seen.outboxId && outbox.get(seen.outboxId);
+      if (held && held.state !== 'failed') {
+        const result = { jobId: seen.jobId, id: held.session, ok: true, error: null, delivery: 'pc-outbox', confirmed: held.state === 'confirmed', outboxId: held.id };
+        cmidStore().set(cmid, { ...seen, done: true, ok: true, result }); cmidSave();
+        log(`send retry ${cmid}: ${held.id} is already in the PC outbox (${held.state}); not sent twice`);
+        return json(res, 200, { ok: true, already: true, jobId: seen.jobId, result });
+      }
       const jobId = crypto.randomBytes(6).toString('hex');
       const job = { id: jobId, session: body.id, text: String(body.text || ''), at: Date.now(),
                     origin: res._agoClient || null, cmid };
@@ -2081,10 +2111,11 @@ async function handle(req, res) {
       const settle = (out) => { if (settled) return; settled = true; clearTimeout(dl); finishSend(job, out); };
       const dl = setTimeout(() => {
         log(`send ${jobId} to ${body.id} still unfinished after ${SEND_DEADLINE_MS / 1000}s: left to the PC outbox to re-deliver`);
-        settle({ ok: true, delivery: 'pc-outbox' });
+        settle({ ok: true, delivery: 'pc-outbox', outboxId: job.outboxId || null });
       }, SEND_DEADLINE_MS);
       if (dl.unref) dl.unref();
-      doSend(body.id, body.text, body.attachments, { noUi: windowBusy(req, url) === 'another principal' })
+      const onSlip = (obId) => { job.outboxId = obId; if (cmid) { const v = cmidStore().get(cmid); if (v) { v.outboxId = obId; cmidSave(); } } };
+      doSend(body.id, body.text, body.attachments, { noUi: windowBusy(req, url) === 'another principal', onSlip })
         .then(out => settle(out))
         .catch(e => settle({ ok: false, error: e.message }));
       return json(res, 202, { ok: true, queued: true, jobId });
@@ -2504,6 +2535,7 @@ async function outboxTickInner() {
   for (const e of acc.resend) {
     const text = outbox.redeliveryText(e);
     let r = null;
+    outbox.markResending(e.id);   // from here the original send, should it wake, stands down
     try { r = await redeliver(e, text); } catch (x) { r = { ok: false, error: x.message }; }
     outbox.markResent(e.id, { ok: !!(r && r.ok), error: r && (r.detail || r.error) });
     log(`outbox: ${e.id} never reached ${e.session} (${e.delivery ? 'no queue or user row in ' + outbox.ACCEPT_MS / 1000 + 's' : 'its send never finished'}) -- REDELIVERED once ` +

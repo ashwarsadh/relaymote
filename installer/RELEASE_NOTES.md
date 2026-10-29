@@ -1,3 +1,11 @@
+## 0.2.155
+
+- One message stuck on the PC now shows once, not twice ("sending…" and "handing it to Claude…" were the same message). Its label says the PC will send it again by itself.
+- When a hung send finally goes through after the PC has already re-delivered it, it stands down. Claude gets the message once.
+- A message the PC recovered and passed on counts as delivered on the phone.
+- A phone retry after the PC restarts no longer sends a second copy of a message still in the PC outbox.
+- Reading a permission prompt for an alert is limited to 20 s. On 29-Oct it held every phone update for 37 minutes.
+
 ## 0.2.154
 
 - A message whose send hangs on the PC (Claude Desktop's link timing out) is no longer lost. After 3 minutes the PC re-delivers it by itself, marked "Redelivered by Relaymote", and the phone stops waiting on it. On 29-Oct one message at 21:46 IST was stuck this way.

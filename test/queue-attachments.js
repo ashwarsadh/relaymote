@@ -43,12 +43,16 @@ check(/const held = \(state\.outbox/.test(app), 'a held message is drawn once, f
   const a = app.indexOf('const NL = String.fromCharCode(10);', app.indexOf('function renderLog'));
   const b = app.indexOf('\n', app.indexOf('const isPending', a));
   check(a > 0 && b > a, 'renderLog has the pending/outbox matcher');
-  const make = (pend) => new Function('nn', 'state', app.slice(a, b) + '\nreturn isPending;')(
-    (t) => String(t || '').replace(/\s+/g, ' ').trim(), { pending: pend });
+  const make = (pend, obItems = []) => new Function('nn', 'state', 'obItems', app.slice(a, b) + '\nreturn isPending;')(
+    (t) => String(t || '').replace(/\s+/g, ' ').trim(), { pending: pend, open: 's1' }, obItems);
   const isPending = make({ text: 'I see duplicate messages', outboxId: null });
   check(isPending({ id: 'ob1', text: '@C:\\up\\shot.jpg\nI see duplicate messages' }), 'an attachment send matches its own bubble by text');
   check(make({ text: '', outboxId: 'ob2' })({ id: 'ob2', text: '@C:\\up\\a.jpg' }), 'an attachment-only send matches by outbox id');
   check(!isPending({ id: 'ob3', text: 'See above' }), 'a different message is not hidden');
+  // 29-Oct: the phone's own outbox copy and the PC's copy of one stuck message were drawn twice.
+  const viaPhone = make(null, [{ sid: 's1', text: 'In the Euro set reply, wrong photo' }]);
+  check(viaPhone({ id: 'ob4', text: '@C:\\up\\g.jpg\nIn the Euro set reply, wrong photo' }), "the PC's copy hides behind the phone's own outbox copy");
+  check(!viaPhone({ id: 'ob5', text: 'Something else' }), 'but not a different message');
   check(!make(null)({ id: 'ob1', text: 'x' }), 'no bubble pending: every outbox entry shows');
 }
 

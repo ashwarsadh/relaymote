@@ -1,3 +1,7 @@
+## 0.2.157
+
+- Same as 0.2.155 and 0.2.156. Those builds were never published because two tests had not been updated for their changes.
+
 ## 0.2.156
 
 - Starred sessions are on top of the list, above working and waiting ones. Working-first ordering applies within the starred sessions and within the rest. A starred session is never cut from the list, however old.

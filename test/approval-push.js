@@ -94,7 +94,7 @@ for (const [t, risky] of [
     check(wb(null, true, true) === null, "Ashwar's own phone, PC idle 2 min: allowed (and restored)");
     const mr = idx.slice(idx.indexOf("if (p === '/api/mark-read')"), idx.indexOf("if (p === '/api/mark-read')") + 1400);
     check(mr.indexOf('windowBusy(req, url)') > 0 && mr.indexOf('windowBusy(req, url)') < mr.indexOf('desktop.markRead'), 'mark-read checks windowBusy BEFORE it clicks anything');
-    check(/doSend\(body\.id, body\.text, body\.attachments, \{ noUi: windowBusy\(req, url\) === 'another principal' \}\)/.test(idx)
+    check(/doSend\(body\.id, body\.text, body\.attachments, \{ noUi: windowBusy\(req, url\) === 'another principal', onSlip \}\)/.test(idx)
       && /backgroundOnly: noUi/.test(idx), "another principal's send goes by the app's own channel only");
     const dsk = fs.readFileSync(path.join(root, 'lib', 'desktop.js'), 'utf8');
     const w = dsk.slice(dsk.indexOf('  sendMessage: async (sessionId, message, opts = {}) => {'));
@@ -117,7 +117,7 @@ for (const [t, risky] of [
     check(w('c', [tu('1', 'Bash'), tr('1')]) === null, 'a transcript whose calls all have results is not');
     check(pendingApproval(path.join(tmp, 'missing')) === null, 'no transcript -> not an approval (nothing is opened)');
   }
-  check(/if \(st === 'awaiting'\) await approvalEvent\(s, evt\);/.test(idx), 'notifyAttention enriches every awaiting push');
+  check(/if \(st === 'awaiting'\) \{[\s\S]{0,200}approvalEvent\(s, evt\)/.test(idx), 'notifyAttention enriches every awaiting push');
   check(!/answerPermission\(/.test(fnSrc), 'approvalEvent never answers anything itself');
 
   // 3. sw.js shows the buttons and answers ONLY from his tap on one.

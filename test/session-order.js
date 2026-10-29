@@ -13,5 +13,5 @@ if (got !== 'ebadc') { console.error('FAIL order ' + got + ' (want ebadc: workin
 console.log('ok working first, then awaiting, then the rest');
 ctx.state.favs = new Set(['a', 'c']);
 const starred = ctx.sortSessions(rows).map(r => r.id).join('');
-if (starred !== 'ebadc') { console.error('FAIL starred order ' + starred + ' (want ebadc: a star never lifts a waiting or idle session above a working one)'); process.exit(1); }
-console.log('ok a star lifts a session only within its own group');
+if (starred !== 'acebd') { console.error('FAIL starred order ' + starred + ' (want acebd: starred on top, even an idle one above working and waiting; working first within each)'); process.exit(1); }
+console.log('ok starred sessions are on top, active-first within the starred and within the rest (29-Oct)');

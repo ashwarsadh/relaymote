@@ -36,6 +36,9 @@ const { check } = H;
     check(ids[1] === 'local_waiting', 'the waiting session is next, above 100 newer idle ones', ids.slice(0, 4));
     const row = r.json.sessions[0] || {};
     check(row.running && now - row.at < 5 * 60e3 && !row.stalled, "its time is the transcript's last write, so it is not shown as stalled", { at: row.at, stalled: row.stalled });
+    // 29-Oct: a starred session the phone keeps is never cut, however old (the phone puts starred on top).
+    const k = await d.req('/api/sessions?limit=5&keep=local_idle99');
+    check((k.json.sessions || []).some(s => s.id === 'local_idle99'), 'a starred session older than the cut still reaches the phone', (k.json.sessions || []).map(s => s.id));
   } finally { await d.stop(); w.cleanup(); }
   H.finish(null);
 })().catch(e => { console.error(e); process.exit(1); });

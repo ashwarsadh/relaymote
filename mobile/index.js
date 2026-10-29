@@ -1323,6 +1323,9 @@ async function handle(req, res) {
     if (folder) out = out.filter(s => s.cwd === folder);
     if (q) out = out.filter(s => (s.title || '').toLowerCase().includes(q) || (s.cwd || '').toLowerCase().includes(q));
     out = byAttention(out);
+    // The phone's starred sessions (kept on the phone) always make the cut, however old (29-Oct: starred on top).
+    const keep = new Set(String(url.searchParams.get('keep') || '').split(',').filter(Boolean).slice(0, 100));
+    if (keep.size) out = [...out.filter(s => keep.has(s.id)), ...out.filter(s => !keep.has(s.id))];
     const snap = desktop.loadSnapshot() || {};
     return json(res, 200, {
       ok: true, total: out.length,

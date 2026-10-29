@@ -1323,12 +1323,12 @@ function sortSessions(list) {
   const arr = list.slice();
   if (state.sort === 'fav') return arr.filter(s => state.favs.has(s.id)).sort((a, b) => b.at - a.at);
   if (state.sort === 'recent') return arr.sort((a, b) => b.at - a.at);
-  // Working (blue) above waiting (yellow) above the rest; a star lifts a session within its own group.
+  // Starred sessions on top (Ashwar 29-Oct: "As conductor is a starred session, it should be on the top"); within the
+  // starred and within the rest, working (blue) above waiting (yellow) above idle, newest first.
   return arr.sort((a, b) => {
-    const r = rank(a) - rank(b);
-    if (r) return r;
     const f = (state.favs.has(b.id) ? 1 : 0) - (state.favs.has(a.id) ? 1 : 0);
-    return f || b.at - a.at;
+    if (f) return f;
+    return rank(a) - rank(b) || b.at - a.at;
   });
 }
 
@@ -1480,6 +1480,7 @@ async function loadSessions() {
   if (state.folder) p.set('folder', state.folder);
   if (state.q) p.set('q', state.q);
   p.set('limit', '80');
+  if (state.favs.size) p.set('keep', [...state.favs].slice(0, 100).join(','));
   try {
     const d = await api('/api/sessions?' + p);
     renderSessions(d.sessions);

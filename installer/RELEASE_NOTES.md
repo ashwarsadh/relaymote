@@ -1,3 +1,7 @@
+## 0.2.156
+
+- Starred sessions are on top of the list, above working and waiting ones. Working-first ordering applies within the starred sessions and within the rest. A starred session is never cut from the list, however old.
+
 ## 0.2.155
 
 - One message stuck on the PC now shows once, not twice ("sending…" and "handing it to Claude…" were the same message). Its label says the PC will send it again by itself.

@@ -106,6 +106,18 @@ const owner = require('../lib/owner');
   const log = fs.readFileSync(organizer.LOG(), 'utf8').trim().split('\n');
   check(log.length === 9 && log.filter(l => / FAILED /.test(l)).length === 1, 'every assignment logged', log.length + ' lines');
 
+  // 03-Nov-2026: a session the sidebar does not have is final (each lookup cost ~30 s, retried 3x), and a pass
+  // yields the UI lane after its time budget instead of holding it for the 300 s cap.
+  const stFile = path.join(config.STATE, 'organizer-state.json');
+  const st = JSON.parse(fs.readFileSync(stFile, 'utf8'));
+  check((st.attempts[id('Alpha nested work')] || {}).fails === 3, 'NO_SUCH_SESSION is not retried', JSON.stringify(st.attempts[id('Alpha nested work')]));
+  fs.unlinkSync(stFile);
+  const slow = async (sid) => { calls.push({ sid }); await new Promise(r => setTimeout(r, 60)); return { ok: true }; };
+  const before = calls.length;
+  t = await organizer.tick({ index: ix, setGroup: slow, isIdle: () => true, budgetMs: 100 });
+  check(t.skipped === 'time budget' && calls.length - before === 2, 'a pass stops at its time budget', `${calls.length - before} moves, skipped=${t.skipped}`);
+  check(Object.keys(JSON.parse(fs.readFileSync(stFile, 'utf8')).attempts).length === 2, 'moves are saved as they happen');
+
   config.set({ modules: { organizer: false } });
   t = await organizer.tick({ index: ix, setGroup: stub([]), isIdle: () => true });
   check(t.skipped === 'module off', 'module toggle switches it off');

@@ -1,3 +1,8 @@
+## 0.2.158
+
+- A message from the phone goes straight through Claude's own channel instead of waiting behind other PC work. On 2-3 Nov, 12 messages waited 6-10 minutes each behind a stuck step.
+- Dismiss on a PC box no longer stops a running session. It presses the box's own Close button. If the box has none and Claude is working, the phone says so instead of sending Esc.
+
 ## 0.2.157
 
 - Same as 0.2.155 and 0.2.156. Those builds were never published because two tests had not been updated for their changes.

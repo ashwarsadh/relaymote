@@ -66,7 +66,8 @@ check(writeOk && !/dialog\/press/.test(writeOk), 'a scoped sub-user cannot press
 const app = fs.readFileSync(path.join(root, 'mobile', 'public', 'app.js'), 'utf8');
 check(/\/api\/dialog\/press/.test(app) && /class="permbtn dlgbtn"/.test(app), 'the phone renders the dialog\'s buttons and sends his tap');
 check(!/answer this on the PC/.test(app), 'the phone no longer tells him to go to the PC');
-check(/data-i="-1">Dismiss \(Esc\)/.test(app) && /label === DISMISS && Number\(index\) === -1/.test(src) && /keyCode:'Escape'/.test(src), 'a single Dismiss sends Esc on the PC');
+// #382: Dismiss presses the box's own close button first and sends Esc only when no turn runs (dismiss-running.js replays it).
+check(/data-i="-1">Dismiss</.test(app) && /label === DISMISS && Number\(index\) === -1/.test(src) && /CLOSE_JS/.test(src) && /WOULD_INTERRUPT/.test(src) && /keyCode:'Escape'/.test(src), 'a single Dismiss closes the box without stopping a running turn');
 
 if (fails) { console.log(fails + ' failure(s)'); process.exit(1); }
 console.log('dialog-press: all passed');

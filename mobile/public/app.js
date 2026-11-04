@@ -1572,7 +1572,7 @@ function renderBlocker(b) {
     + (btns.length ? '<div class="permacts">' + btns.map((t, i) =>
         `<button class="permbtn dlgbtn" data-i="${i}">${esc(t)}</button>`).join('') + '</div>' : '')
     // Esc on the PC: closes it without choosing any of its buttons.
-    + '<div class="permacts"><button class="permbtn dlgbtn" data-i="-1">Dismiss (Esc)</button></div>'
+    + '<div class="permacts"><button class="permbtn dlgbtn" data-i="-1">Dismiss</button></div>'
     + '<div class="bk-acts"><button class="linkish" id="bk-hide">Hide on this phone</button></div>';
   const h = $('bk-hide');
   if (h) h.onclick = () => { state.blockerDismissed = key; el.classList.add('hidden'); el.innerHTML = ''; };

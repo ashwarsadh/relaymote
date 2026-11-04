@@ -816,7 +816,15 @@ function slimSession(s) {
   };
 }
 
-const ui = (fn) => desktop.serializeUi(fn);
+// A stuck step was logged "UI step anonymous" 12 times on 03-Nov, with no way to tell which caller held the queue:
+// an unnamed step is named after the line that queued it.
+const ui = (fn) => {
+  if (!fn.name || fn.name === 'fn') {
+    const at = (String(new Error().stack).split('\n')[2] || '').trim().replace(/^at\s+/, '').replace(/.*[\\/]/, '').slice(0, 80);
+    try { Object.defineProperty(fn, 'name', { value: 'from ' + at }); } catch {}
+  }
+  return desktop.serializeUi(fn);
+};
 
 let cdpAt = 0, cdpVal = false;
 const MODELS_FILE = path.join(require('../lib/config').STATE, 'models.json');
@@ -966,6 +974,7 @@ function finishSend(job, out) {
 const FAKE_SEND = process.env.RELAYMOTE_FAKE_SEND || '';
 const APPROVAL_PEEK_MS = Number(process.env.RELAYMOTE_APPROVAL_PEEK_MS) || 20000;
 const SEND_DEADLINE_MS = Number(process.env.RELAYMOTE_SEND_DEADLINE_MS) || 3 * 60 * 1000;
+const BG_SEND_MS = Number(process.env.RELAYMOTE_BG_SEND_MS) || 30000;
 let fakeDropped = false;
 function fakeWrite(id, body) {
   const s = sessions.index().list.find(x => x.id === id);
@@ -1053,6 +1062,31 @@ async function doSend(id, text, attachments, { noUi = false, onSlip = null } = {
       });
     } catch { return false; }
   };
+
+  // 03-Nov: 12 sends in two days took 6-10 min. Each waited in the UI queue behind a step stuck for 300 s, hit
+  // SEND_DEADLINE_MS, then waited STUCK_MS more for the outbox, though the app's own channel clicks nothing. So that
+  // channel goes first, outside the queue; only the composer fallback below needs the queue.
+  if (!FAKE_SEND && desktop.sendMessageBackground) {
+    if (overtaken()) return stoodDown();
+    let bg;
+    try {
+      let t;
+      bg = await Promise.race([desktop.sendMessageBackground(id, body),
+        new Promise(r => { t = setTimeout(() => r({ ok: false, error: 'BG_TIMEOUT' }), BG_SEND_MS); if (t.unref) t.unref(); })])
+        .finally(() => clearTimeout(t));
+    } catch (e) { bg = { ok: false, error: 'threw: ' + e.message }; }
+    if (bg && bg.ok) {
+      if (slip) outbox.markSent(slip.id, { ok: true, delivery: bg.delivery || 'accepted' });
+      log(`send ${slip ? slip.id : '?'} -> ${bg.result || 'ok'} via background, unqueued` + `${bg.delivery ? ' (' + bg.delivery + ')' : ''}`);
+      return { ...bg, attempts: 1, outboxId: slip && slip.id };
+    }
+    if (bg && bg.error === 'BG_TIMEOUT' && await landed()) {
+      if (slip) outbox.markSent(slip.id, { ok: true, delivery: 'generating', proven: true });
+      log(`send ${slip ? slip.id : '?'} -> background timed out but landed`);
+      return { ok: true, delivery: 'generating', transport: 'background', attempts: 1, outboxId: slip && slip.id };
+    }
+    log(`send ${slip ? slip.id : '?'}: unqueued background send ${(bg && (bg.result || bg.error)) || 'failed'}; using the queue`);
+  }
 
   let last = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -2605,4 +2639,4 @@ function start() {
   return { servers: [...bound.values()], token: TOKEN, port: PORT, tailscale: ts ? ts.address : null };
 }
 
-module.exports = Object.assign(start, { start, TOKEN, PORT, tailscaleAddrs, wantedAddrs, outbox, outboxTick, transcriptTail, TAIL_BYTES, buildReport: clientBuildReport });
+module.exports = Object.assign(start, { start, TOKEN, PORT, tailscaleAddrs, wantedAddrs, outbox, outboxTick, transcriptTail, TAIL_BYTES, buildReport: clientBuildReport, doSend });

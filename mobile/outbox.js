@@ -6,6 +6,10 @@ const STATE = require('../lib/config').STATE;
 const FILE = path.join(STATE, 'outbox.json');
 
 const SUSPECT_MS = 15 * 60 * 1000;
+// 04-Nov-2026 (g2399, his 29-Oct "this reply is not going"): a busy session stopped the 15-min clock with no
+// limit, so a message held for an always-running session (the Conductor) sat "pending" for up to 7 days and
+// nobody was told. Past BUSY_CAP_MS it is flagged anyway, marked heldLong, so the phone says what is happening.
+const BUSY_CAP_MS = Number(process.env.RELAYMOTE_OUTBOX_BUSY_CAP_MS) || 45 * 60 * 1000;
 const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 // g1783: Desktop silently dropped a bridge send made 157 ms before a turn boundary. No queue row, no user
 // row, yet the phone said "delivered" for 73 min. A bridge send (it has a uuid) must show up in the
@@ -154,7 +158,8 @@ function reconcile(readText, now = Date.now(), busy = null) {
     } else if (!e.suspectedAt && (now - e.at) > SUSPECT_MS) {
       let working = false;
       if (busy) { try { working = !!busy(e.session); } catch { working = false; } }
-      if (working) continue;
+      if (working && (now - e.at) <= BUSY_CAP_MS) continue;
+      if (working) e.heldLong = true;
       e.suspectedAt = now;
       suspect.push(e);
     }
@@ -218,4 +223,4 @@ function markResending(id, now = Date.now()) {
   if (e) { e.resendingAt = now; save(entries); }
 }
 
-module.exports = { overtaken, markResending, STUCK_MS, redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, KEEP_MS, FILE };
+module.exports = { overtaken, markResending, STUCK_MS, redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, BUSY_CAP_MS, KEEP_MS, FILE };

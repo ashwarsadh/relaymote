@@ -1619,7 +1619,7 @@ async function handle(req, res) {
     return json(res, 200, { ok: true, pending: outbox.pending().map(e => ({
       id: e.id, session: e.session, text: e.text, at: e.at,
       delivery: e.delivery, state: e.state, error: e.error || null,
-      ageMs: Date.now() - e.at, suspect: !!e.suspectedAt,
+      ageMs: Date.now() - e.at, suspect: !!e.suspectedAt, heldLong: !!e.heldLong,
       held: e.state === 'pending' && e.delivery === 'held' && !!e.uuid,
       accepted: !!e.acceptedAt, notDelivered: !!e.notDelivered, resent: !!e.resentAt, redelivered: !!e.redelivered,
     })) });

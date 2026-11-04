@@ -937,6 +937,7 @@ function jumpToBottom() {
 function obStatus(e) {
   if (e.notDelivered || e.state === 'failed') return 'NOT delivered — the PC never took it';
   if (e.accepted) return 'delivered, waiting for a reply';
+  if (e.heldLong) return 'still waiting — that session has been busy since you sent it';
   return 'not seen arriving yet';
 }
 

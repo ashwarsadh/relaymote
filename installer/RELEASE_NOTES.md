@@ -1,3 +1,7 @@
+## 0.2.159
+
+- Reply to a message, as on WhatsApp: swipe it right on the phone, or tap ↩ Reply beside its time. A chip with the quote sits above the box; × cancels it. Swipe several messages to answer them together. The session gets each quote in full above your words, and your bubble shows them trimmed (tap to read all).
+
 ## 0.2.158
 
 - A message from the phone goes straight through Claude's own channel instead of waiting behind other PC work. On 2-3 Nov, 12 messages waited 6-10 minutes each behind a stuck step.

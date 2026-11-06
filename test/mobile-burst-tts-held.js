@@ -98,7 +98,7 @@ console.log('--- g780: sending, and a growing reply, never move him (29-Sep 00:5
   check(sendLine && !/scrollToBottomNext = true/.test(sendLine), 'sending does not force the view to the bottom (at the bottom it follows anyway)', sendLine.trim());
   const vm = require('vm');
   const grab = (name) => { const i = app.indexOf('function ' + name + '('); const rest = app.slice(i); return rest.slice(0, rest.search(/\n\}\n/) + 2); };
-  const ctx = { CLAMP_AT: 20, speakBtn: () => '' };
+  const ctx = { esc: (s) => String(s), CLAMP_AT: 20, speakBtn: () => '' };
   vm.createContext(ctx);
   vm.runInContext(grab('hash') + grab('clampable') + ';globalThis.C = clampable;', ctx);
   const ck = (h) => (/data-ck="([^"]+)"/.exec(h) || [])[1];

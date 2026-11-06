@@ -408,13 +408,59 @@ function speakBtn(cls) {
 // never by the text: a reply still being written grows, and a text-keyed bubble that grew in the same
 // update that started a newer one came back CLAMPED, throwing him from mid-reply to its start (g780).
 function clampable(html, text, cls, id) {
-  if (text.length <= CLAMP_AT) return `<div class="${cls}">${speakBtn(cls)}${html}</div>`;
+  const mts = id ? ` data-mts="${esc(id)}"` : '';
+  if (text.length <= CLAMP_AT) return `<div class="${cls}"${mts}>${speakBtn(cls)}${html}</div>`;
   const ck = hash(id ? cls.split(' ').slice(0, 2).join(' ') + '@' + id : text);
-  return `<div class="${cls}">${speakBtn(cls)}<div class="body clamp" data-ck="${ck}">${html}</div>` +
+  return `<div class="${cls}"${mts}>${speakBtn(cls)}<div class="body clamp" data-ck="${ck}">${html}</div>` +
          '<button class="more">Show more</button></div>';
 }
 
+/* ---- Reply to a message (06-Nov, Ashwar: "like I do on WhatsApp by swiping it on right and typing the reply, and you
+   keep the context so you understand which message I am replying to, and I can reply to multiple messages like this").
+   On the wire a reply is plain markdown, so any session reads it without help and the PC needs no new field:
+     > Replying to Claude (6 Nov, 19:40):
+     > the quoted text, whole
+     (blank line)
+     his words
+   The quote goes in full; only the bubble and the chip trim it. Past QUOTE_MAX the middle is cut and says so. */
+const QUOTE_MAX = 20000;
+const QUOTE_HEAD = /^Replying to (.+?)(?: \(([^()]*)\))?:$/;
+function quoteBlock(q) {
+  let t = String(q.text || '').replace(/\r/g, '').trim();
+  if (t.length > QUOTE_MAX) {
+    t = t.slice(0, 14000) + '\n[… ' + (t.length - 19000) + ' characters cut here; the whole message is earlier in this session …]\n' + t.slice(-5000);
+  }
+  const head = 'Replying to ' + (q.mine ? 'my message' : (q.who || 'Claude')) + (q.when ? ' (' + q.when + ')' : '') + ':';
+  return [head].concat(t.split('\n')).map(l => (l ? '> ' + l : '>')).join('\n');
+}
+function composeReply(quotes, text) {
+  const blocks = (quotes || []).map(quoteBlock);
+  if (text) blocks.push(text);
+  return blocks.join('\n\n');
+}
+// The leading "> " blocks of a message, and what follows them. A pasted "> foo" is a quote too, just with no header.
+function splitQuotes(raw) {
+  const lines = String(raw == null ? '' : raw).replace(/\r/g, '').split('\n');
+  let i = 0;
+  const lead = [];
+  while (i < lines.length && (!lines[i].trim() || /^@(?:[A-Za-z]:[\\/]|[\\/~]|\.{1,2}[\\/])/.test(lines[i].trim()))) { if (lines[i].trim()) lead.push(lines[i]); i++; }
+  const quotes = [];
+  while (i < lines.length && /^>/.test(lines[i])) {
+    const got = [];
+    while (i < lines.length && /^>/.test(lines[i])) got.push(lines[i++].replace(/^> ?/, ''));
+    while (i < lines.length && !lines[i].trim()) i++;
+    const h = QUOTE_HEAD.exec(got[0] || '');
+    const who = h ? h[1] : '';
+    quotes.push({ who: who === 'my message' ? '' : who, mine: who === 'my message', when: h ? (h[2] || '') : '', text: (h ? got.slice(1) : got).join('\n').trim() });
+  }
+  if (!quotes.length) return { quotes, body: String(raw == null ? '' : raw), lead: [] };
+  return { quotes, lead, body: lines.slice(i).join('\n').trim() };
+}
+/* ---- end of the reply helpers ---- */
+
 const htmlCache = new Map();
+const openQuotes = new Set();     // the quotes he tapped open; a rebuild keeps them open
+const replyIndex = new Map();     // role|ts -> the message as drawn (merged rows included), so a swipe quotes all of it
 
 function keyOf(m) {
   return m.role + (m.queued ? ':q' : '') + ':' + (m.ts || '') + ':' + ((m.text || '').length) + ':' +
@@ -473,13 +519,15 @@ function stampHtml(m) {
   if (!m.ts) return '';
   const full = new Date(Date.parse(m.ts)).toLocaleString();
   return `<div class="stamp ${m.role === 'user' ? 'mine' : ''}" data-ts="${esc(m.ts)}" ` +
-         `title="${esc(full)}">${esc(ageText(m.ts))}</div>`;
+         `title="${esc(full)}"><span class="age">${esc(ageText(m.ts))}</span>` +
+         (m.text && /^(assistant|user|peer)$/.test(m.role) ? `<button class="msg-reply" type="button" data-role="${esc(m.role)}" data-ts="${esc(m.ts)}" aria-label="Reply to this message">↩ Reply</button>` : '') + `</div>`;
 }
 
 function tickStamps() {
   document.querySelectorAll('.stamp[data-ts]').forEach(el => {
     const t = ageText(el.getAttribute('data-ts'));
-    if (el.textContent !== t) el.textContent = t;
+    const age = el.querySelector('.age') || el;
+    if (age.textContent !== t) age.textContent = t;
   });
   document.querySelectorAll('[data-at]').forEach(el => {
     const t = ago(Number(el.getAttribute('data-at')));
@@ -538,8 +586,20 @@ setInterval(() => {
   }
 }, 10000);
 
+// His bubble: the quotes he replied to, each trimmed until tapped, then his words.
+function quoteHtml(q) {
+  const who = q.mine ? 'You' : q.who;
+  return `<div class="quote" data-qk="${hash(q.text)}">` + (who ? `<span class="qwho">${esc(who)}${q.when ? ' · ' + esc(q.when) : ''}</span>` : '') +
+         `<div class="qtext">${md(q.text)}</div></div>`;
+}
+function userBody(text) {
+  const s = splitQuotes(text);
+  if (!s.quotes.length) return md(text);
+  return (s.lead.length ? md(s.lead.join('\n')) : '') + s.quotes.map(quoteHtml).join('') + (s.body ? md(s.body) : '');
+}
 function messageHtml(m) {
   let out = '';
+  if (m.ts && m.text && replyIndex.size < 5000) replyIndex.set(m.role + '|' + m.ts, m);
   if (m.role === 'assistant' && (m.text || m.ask || (m.asks && m.asks.length))) {
     if (m.text) out += clampable(md(m.text), m.text, 'msg assistant', m.ts);
     const askList = m.asks && m.asks.length ? m.asks : (m.ask ? [m.ask] : []);
@@ -588,7 +648,8 @@ function messageHtml(m) {
     out += stampHtml({ ...m, role: 'user' });
   }
   else if (m.role === 'user') {
-    out += clampable(md(m.text), m.text, 'msg user' + (m.queued ? ' queued' : ''), m.ts);
+    // Only his words count towards "Show more": the quote trims itself.
+    out += clampable(userBody(m.text), splitQuotes(m.text).body, 'msg user' + (m.queued ? ' queued' : ''), m.ts);
     if (m.queued) out += '<div class="queuetag">queued · waiting to be picked up' + waitedNote(Date.now() - (Date.parse(m.ts || '') || Date.now())) + sendNowBtn() + '</div>';
     out += stampHtml(m);
   }
@@ -596,7 +657,7 @@ function messageHtml(m) {
     out += `<div class="msg attachment">📎 ${esc(m.text)}</div>`;
   }
   else if (m.role === 'peer') {
-    out += `<details class="peer"><summary>Received message from <b>${esc(peerName(m))}</b><span class="line"></span></summary>` +
+    out += `<details class="peer"${m.ts ? ` data-mts="${esc(m.ts)}"` : ''}><summary>Received message from <b>${esc(peerName(m))}</b><span class="line"></span></summary>` +
            `<div class="body">${md(m.text)}</div>${stampHtml(m)}</details>`;
   }
   else if (m.role === 'compact') {
@@ -1006,7 +1067,7 @@ function renderLog(messages, force) {
     const spoken = (t) => { const L = String(t || '').split(NL); let i = 0;
       while (i < L.length && (!L[i].trim() || /^@(?:[A-Za-z]:[\\/]|[\\/~]|\.{1,2}[\\/])/.test(L[i].trim()))) i++;
       return L.slice(i).join(NL); };
-    const inLog = (t) => { const w = nn(spoken(t)).slice(0, 60); return !!w && messages.some(m => nn(m.text).includes(w)); };
+    const inLog = (t) => { const w = deliveryNeedle(spoken(t)); return !!w && messages.some(m => nn(m.text).includes(w)); };
     // The just-sent bubble and its outbox entry are ONE message. The outbox text carries the "@<path>"
     // attachment lines and the bubble does not, so match on the outbox id, else on the text without them.
     const bodyOf = (t) => nn(String(t || '').split(NL).filter(l => !/^@/.test(l)).join(NL));
@@ -1022,7 +1083,7 @@ function renderLog(messages, force) {
       const mins = Math.round((e.ageMs || 0) / 60000);
       const bad = e.suspect || e.state === 'failed';
       const sn = !bad && e.held ? heldControls(e.id) : (!bad && e.delivery === 'queued' ? sendNowBtn() : '');
-      html += `<div class="msg user pending${bad ? ' stuck' : ''}${sn ? ' act' : ''}">${md(e.text)}` +
+      html += `<div class="msg user pending${bad ? ' stuck' : ''}${sn ? ' act' : ''}">${userBody(e.text)}` +
         (bad
           ? `<span class="tick">${obStatus(e)}${mins ? ' · ' + mins + 'm' : ''} ` +
             `<button class="linkish ob-retry" data-ob="${esc(e.id)}">Send again</button> ` +
@@ -1045,7 +1106,7 @@ function renderLog(messages, force) {
     const mine = obItems.filter(x => x.sid === state.open);
     mine.forEach((it, i) => {
       const names = (it.atts || []).map(a => esc(String(a).split(/[\\/]/).pop()));
-      const body = it.text ? md(it.text) : '<div class="muted">attached: ' + names.join(', ') + '</div>';
+      const body = it.text ? userBody(it.text) : '<div class="muted">attached: ' + names.join(', ') + '</div>';
       const b = (cls, label) => ` <button class="linkish ${cls}" data-cmid="${esc(it.cmid)}">${label}</button>`;
       const tick = it.state === 'stuck' ? 'not sent — ' + esc(it.error) + b('obx-now', 'Retry') + b('obx-edit', 'Edit') + b('obx-drop', 'Discard')
         : it.state === 'accepted' ? 'on the PC — handing it to Claude…'
@@ -1060,7 +1121,7 @@ function renderLog(messages, force) {
   if (state.pending) {
     const p2 = state.pending;
     const names = (p2.atts || []).map(a => esc(String(a).split(/[/\\/]/).pop()));
-    const body = p2.text ? md(p2.text)
+    const body = p2.text ? userBody(p2.text)
       : names.length ? '<div class="muted">attached: ' + names.join(', ') + '</div>'
       : '<div class="muted">(empty)</div>';
     const sn2 = p2.status === 'queued' ? (p2.held && p2.outboxId ? heldControls(p2.outboxId) : sendNowBtn()) : '';
@@ -1075,6 +1136,7 @@ function renderLog(messages, force) {
   }
   log.innerHTML = html || '<div class="empty">No messages yet.</div>';
   if (tts.el) { ttsRelink(); ttsWake(); }
+  if (openQuotes.size) log.querySelectorAll('.quote').forEach(q => { if (openQuotes.has(q.dataset.qk)) q.classList.add('open'); });
   log.querySelectorAll('.obx-now').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); obRetryNow(b.dataset.cmid); }; });
   log.querySelectorAll('.obx-edit').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); obEdit(b.dataset.cmid); }; });
   log.querySelectorAll('.obx-drop').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); obDiscard(b.dataset.cmid); }; });
@@ -1217,7 +1279,7 @@ $('log').addEventListener('scroll', noteAnchor, { passive: true });
 $('log').addEventListener('loadedmetadata', learnMedia, true);
 $('log').addEventListener('load', learnMedia, true);
 $('log').addEventListener('pointerdown', (e) => {
-  if (!e.target.closest('summary, .more, .speak, details, button')) return;
+  if (!e.target.closest('summary, .more, .speak, details, button, .quote')) return;
   userTapAt = Date.now();
   heldAnchor = readingAnchor($('log'));      // taken NOW, before the tap changes anything
 }, { capture: true, passive: true });
@@ -1844,8 +1906,9 @@ async function openChatInner(id) {
   // app, and attachments lived only in memory. They are kept per session, like the draft, until sent or removed.
   if (!sameSession) state.attachments = loadAtts(id);
   renderAttachments();
+  renderQuotes();
   state.openGroups.clear();
-  htmlCache.clear(); lastSig = '';
+  htmlCache.clear(); replyIndex.clear(); lastSig = '';
   logAtBottom = true; logNew = 0; seenMsgIds = new Set(); seenReplyTs = ''; scrollToBottomNext = true;
   $('pick-hint') && $('pick-hint').remove();
   $('log').innerHTML = '<div class="empty">Loading…</div>';
@@ -2906,7 +2969,7 @@ async function send(target) {
     return toast('A question is open — sending will DISMISS it. Tap Send again to send.', true);
   }
   state.sentDismissWarning = 0; armSendButton(0);
-  const text = $('input').value.trim();
+  let text = $('input').value.trim();
 
   const failedUps = state.uploads.filter(u => u.failed);
   if (failedUps.length) {
@@ -2924,11 +2987,17 @@ async function send(target) {
   }
 
   const atts = state.attachments.filter(a => !a.native).map(a => a.path);
-  if (!text && !atts.length) return;
+  const quotes = loadQuotes(state.open);
+  if (!text && !atts.length) {
+    if (quotes.length) { toast('Type your reply first.'); $('input').focus(); }
+    return;
+  }
 
   const id = state.open;
+  if (quotes.length) text = composeReply(quotes, text);
   obAdd(id, text, atts);                 // in the outbox (localStorage) before the box is touched
   $('input').value = ''; clearDraft(id);
+  saveQuotes(id, []); renderQuotes();
   try {
     autosize();
     state.attachments = []; renderAttachments();
@@ -2965,8 +3034,14 @@ function obRemove(cmid) { obItems = obItems.filter(x => x.cmid !== cmid); obSave
 const obBackoff = (n) => Math.min(60000, 3000 * Math.pow(2, Math.max(0, n - 1)));
 function obRepaint(sid) { if (sid === state.open) renderLog(state.messages, false); renderDeskState(); }
 const obNorm = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+// What the outbox looks for in the transcript. Every reply to one message starts the same, so its START would call
+// a new reply delivered on sight of the last one; its END is the part that is his.
+function deliveryNeedle(t) {
+  const n = String(t || '').replace(/\s+/g, ' ').trim();
+  return n[0] === '>' ? n.slice(-60) : n.slice(0, 60);
+}
 function obSeen(it, messages) {
-  const want = obNorm(it.text).slice(0, 60);
+  const want = deliveryNeedle(it.text);
   // A message the PC recovered and passed on arrives as a relayed (peer) turn: that is delivered too (29-Oct).
   return !!want && (messages || []).some(m => (m.role === 'user' || m.role === 'peer') && obNorm(m.text).includes(want));
 }
@@ -3067,6 +3142,9 @@ function obEdit(cmid) {
   obRemove(cmid);
   if (state.open === it.sid) {
     const cur = $('input').value.trim();
+    // A reply goes back as it was composed: its quotes on chips, only his words in the box.
+    const parts = splitQuotes(it.text);
+    if (parts.quotes.length) { saveQuotes(it.sid, loadQuotes(it.sid).concat(parts.quotes)); renderQuotes(); it.text = parts.body; }
     $('input').value = cur ? it.text + '\n\n' + cur : it.text; autosize(); saveDraft(it.sid, $('input').value);
     state.attachments = (it.atts || []).map(x => ({ name: String(x).split(/[\\/]/).pop(), path: x }));
     renderAttachments();
@@ -4282,7 +4360,7 @@ try { tts.rate = ttsNearestRate(Number(localStorage.getItem('baton.ttsRate')) ||
 
 function ttsText(el) {
   const c = el.cloneNode(true);
-  c.querySelectorAll('button, .stamp, .tick').forEach(n => n.remove());
+  c.querySelectorAll('button, .stamp, .tick, .quote').forEach(n => n.remove());
   c.querySelectorAll('pre').forEach(n => n.replaceWith(' (code block) '));   // code read aloud is noise
   return (c.innerText || c.textContent || '').replace(/[•#*_`>|]+/g, ' ').replace(/[ \t]+/g, ' ').trim();
 }
@@ -5005,3 +5083,118 @@ async function landAtAnchor(sid, { uuid = '', text = '', raised = '' } = {}) {
   return false;
 }
 window.landAtAnchor = landAtAnchor;
+
+// The reply chips above the box, one per message he is answering. Kept per session, like the draft.
+function quotesKey(id) { return 'baton.quotes.' + id; }
+function loadQuotes(id) {
+  try { const a = JSON.parse(localStorage.getItem(quotesKey(id)) || '[]'); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+function saveQuotes(id, list) {
+  if (!id) return;
+  try { if (list.length) localStorage.setItem(quotesKey(id), JSON.stringify(list)); else localStorage.removeItem(quotesKey(id)); } catch {}
+}
+function renderQuotes() {
+  const wrap = $('quotes');
+  if (!wrap) return;
+  const list = state.open ? loadQuotes(state.open) : [];
+  wrap.classList.toggle('hidden', !list.length);
+  wrap.innerHTML = list.map((q, i) => '<div class="qchip"><div class="qchip-text"><span class="qwho">Replying to ' + esc(q.mine ? 'yourself' : (q.who || 'Claude')) + '</span>' +
+    '<div class="qchip-line">' + esc(String(q.text || '').replace(/\*\*|`/g, '').replace(/\s+/g, ' ').slice(0, 200)) + '</div></div>' +
+    '<button class="x" type="button" data-qi="' + i + '" aria-label="Cancel this reply">&times;</button></div>').join('');
+}
+function quoteWhen(ts) {
+  const d = new Date(Date.parse(ts || ''));
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+// role + time name the message; the index holds it as drawn, and the bubble's own text covers a row it no longer has.
+function replyTo(role, ts, el) {
+  if (!state.open) return;
+  const m = replyIndex.get(role + '|' + ts);
+  let text = m ? String(m.text || '') : '';
+  if (role === 'user' && text) { const p = splitQuotes(text); text = p.body || p.quotes.map(q => q.text).join('\n'); }
+  if (!text && el) { const c = el.cloneNode(true); c.querySelectorAll('button, .stamp, .tick, .quote, summary').forEach(n => n.remove()); text = (c.innerText || c.textContent || '').trim(); }
+  if (!text) return toast('Nothing to quote in that message.');
+  const list = loadQuotes(state.open);
+  if (list.some(q => q.ts === ts && q.role === role)) { $('input').focus(); return; }   // the same message twice is one quote
+  list.push({ role, ts, text, when: quoteWhen(ts), mine: role === 'user', who: role === 'peer' ? (m ? peerName(m) : 'another session') : role === 'assistant' ? 'Claude' : '' });
+  saveQuotes(state.open, list);
+  renderQuotes();
+  $('input').focus();
+}
+$('quotes').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-qi]');
+  if (!b) return;
+  const list = loadQuotes(state.open);
+  list.splice(Number(b.dataset.qi), 1);
+  saveQuotes(state.open, list);
+  renderQuotes();
+});
+$('log').addEventListener('click', (e) => {
+  const r = e.target.closest('.msg-reply');
+  if (r) { e.stopPropagation(); return replyTo(r.dataset.role, r.dataset.ts); }
+  const q = e.target.closest('.quote');
+  if (q && !e.target.closest('a')) {
+    q.classList.toggle('open');
+    if (q.classList.contains('open')) openQuotes.add(q.dataset.qk); else openQuotes.delete(q.dataset.qk);
+  }
+});
+/* Swipe a message right to reply. The bubbles are touch-action:pan-y, so the browser keeps every vertical scroll and
+   only a sideways drag reaches this code; no listener here can hold up a scroll. Nothing starts from the screen's left
+   edge (the phone's own back gesture), inside a sideways-scrolling code block or table, over selected text, or after a
+   long press (he is selecting). The log is rebuilt under the finger when a reply arrives, so the row is found again by id. */
+(function swipeToReply() {
+  const log = $('log');
+  const FIRE = 60, EDGE = 24, LOCK = 10, MAX = 92;
+  let s = null;
+  const rowOf = (t) => t.closest && t.closest('.msg.assistant[data-mts], .msg.user[data-mts], details.peer[data-mts]');
+  const scrollsSideways = (t, top) => { for (let n = t; n && n !== top; n = n.parentElement) { if (n.scrollWidth > n.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(n).overflowX)) return true; } return false; };
+  const live = () => { if (s.el.isConnected) return s.el; const n = log.querySelector(s.sel); if (n) s.el = n; return n; };
+  const paint = (dx, animate) => {
+    const el = live(); if (!el) return;
+    el.style.transition = animate ? 'transform .18s ease' : 'none';
+    el.style.transform = dx ? 'translateX(' + dx + 'px)' : '';
+    el.classList.toggle('swiping', dx > 0);
+    el.style.setProperty('--swipe', String(Math.min(1, dx / FIRE)));
+  };
+  // A touch keeps firing at the node it began on even after a rebuild removes it, and a removed node no longer bubbles to
+  // the log. So the rest of the gesture listens on that node.
+  const onMove = (e) => {
+    if (!s) return;
+    if (e.touches.length !== 1) { if (s.on) paint(0, true); s = null; return; }
+    const t = e.touches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (!s.on) {
+      if (Math.abs(dx) < LOCK && Math.abs(dy) < LOCK) return;
+      if (dx <= 0 || Math.abs(dx) < Math.abs(dy) * 1.5 || Date.now() - s.at > 450) { s = null; return; }
+      s.on = true;
+    }
+    s.dx = Math.max(0, dx);
+    const shown = s.dx < FIRE ? s.dx : Math.min(MAX, FIRE + (s.dx - FIRE) * 0.35);
+    paint(shown, false);
+    if (s.dx >= FIRE && !s.buzzed) { s.buzzed = true; if (navigator.vibrate) { try { navigator.vibrate(12); } catch {} } }
+    if (s.dx < FIRE) s.buzzed = false;
+  };
+  const onEnd = (e) => {
+    const node = e.currentTarget;
+    node.removeEventListener('touchmove', onMove);
+    node.removeEventListener('touchend', onEnd);
+    node.removeEventListener('touchcancel', onEnd);
+    if (!s) return;
+    const g = s;
+    if (g.on) { paint(0, true); if (e.type === 'touchend' && g.dx >= FIRE) replyTo(g.role, g.ts, live() || g.el); }
+    s = null;
+  };
+  log.addEventListener('touchstart', (e) => {
+    s = null;
+    if (e.touches.length !== 1) return;
+    const el = rowOf(e.target), t = e.touches[0];
+    if (!el || t.clientX < EDGE || scrollsSideways(e.target, el)) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    const role = el.matches('.peer') ? 'peer' : el.matches('.user') ? 'user' : 'assistant';
+    s = { el, role, ts: el.dataset.mts, sel: (role === 'peer' ? 'details.peer' : '.msg.' + role) + '[data-mts="' + CSS.escape(el.dataset.mts) + '"]', x: t.clientX, y: t.clientY, at: Date.now(), on: false, dx: 0, buzzed: false };
+    e.target.addEventListener('touchmove', onMove, { passive: true });
+    e.target.addEventListener('touchend', onEnd, { passive: true });
+    e.target.addEventListener('touchcancel', onEnd, { passive: true });
+  }, { passive: true });
+})();

@@ -870,6 +870,9 @@ async function cdpCached(ttl = 4000) {
 }
 
 function deskNow() { deskState.note({ cdp: cdpVal }); return deskState.get(); }
+// What the phone is told: a drop still inside its grace is not reported (red dot, both banners). cdpVal stays the truth
+// for everything that acts on the link.
+const cdpShown = () => { const st = deskNow().state; return cdpVal || st === 'ok'; };
 // g1638: "shud restart if app opened". Opening the app (bootstrap / list) or sending while the link is down
 // reopens Claude Desktop in this Windows session (desktop-state.js wake: single-flight, 90 s apart).
 function wakeDesktop(why) {
@@ -1322,7 +1325,7 @@ async function handle(req, res) {
         awaiting: all.filter(s => s.awaiting).length,
       },
       summary: isSubuser(identity) ? undefined : orch.summary(),
-      cdp: await cdpCached(),
+      cdp: (await cdpCached(), cdpShown()),
       desktop: deskNow(),
       vapid: push.publicKey(),
       // 24-Oct: whether THIS phone's person has any phone subscribed, and how many of their alerts found none.
@@ -1363,7 +1366,7 @@ async function handle(req, res) {
     const snap = desktop.loadSnapshot() || {};
     return json(res, 200, {
       ok: true, total: out.length,
-      cdp: await cdpCached(),
+      cdp: (await cdpCached(), cdpShown()),
       desktop: deskNow(),
       snapshotAt: snap.at || null,
       build: assetVersion(),
@@ -1691,7 +1694,7 @@ async function handle(req, res) {
   if (p === '/api/desktop') {
     const cdp = await require('../lib/heal').checkCdp();
     cdpVal = !!cdp.healthy; cdpAt = Date.now();
-    return json(res, 200, { ok: true, platform: process.platform, cdp: !!cdp.healthy, cdpPort: config.get().cdpPort, desktop: deskNow(),
+    return json(res, 200, { ok: true, platform: process.platform, cdp: cdpShown(), cdpPort: config.get().cdpPort, desktop: deskNow(),
       desktopData: fs.existsSync(path.join(config.APPDATA, 'Claude')), devMode: devModeOn(), canAutoEnable: process.platform === 'win32' });
   }
   if (p === '/api/desktop/dev-mode' && req.method === 'POST') {

@@ -16,6 +16,8 @@ const heal = require('./lib/heal');
 const deskState = require('./lib/desktop-state');
 // g1638: once Relaymote has reopened Desktop, switch its link on as soon as it is up, not on the next minute.
 deskState.onLaunched = () => { debuggerNext = 0; };
+// Every drop is logged with its length, so the banner's grace (desktop-state.js LINK_GRACE_MS) can be re-measured.
+deskState.onLink = ({ ms, shown }) => orch.log(`desktop link: back after ${Math.round(ms / 1000)} s (${shown ? 'banner was shown' : 'no banner'})`);
 // g1662: "didnt enable even when i opened relaymote app". The switch-on runs OUTSIDE the UI queue (with the link
 // down no queued CDP step can run anyway, and after a reboot one hung step held the queue for ever), one at a
 // time; opening the app tries again at once (at most once a minute) even after three misses.
@@ -197,7 +199,8 @@ async function debuggerTick() {
   if (debuggerTries >= 3) return;
   const early = Date.now() < debuggerBurstUntil;
   const r = await heal.enableDebugger().catch(e => ({ ok: false, code: -3, message: e.message }));
-  deskState.note({ debugger: { code: r.code, message: r.message, at: Date.now() }, cdp: r.ok ? true : false });
+  // Exit 0 can mean only "the port is listening". Ask again, or a busy Desktop would look healthy every minute.
+  deskState.note({ debugger: { code: r.code, message: r.message, at: Date.now() }, cdp: r.ok ? await desktop.cdpAvailable() : false });
   if (r.code === 3 && deskState.ensureDevMode()) orch.log('Developer Mode was off — switched it on in developer_settings.json; Claude Desktop must be restarted to read it');
   if (r.ok) { lastCdpOk = true; debuggerTries = 0; lastDebuggerWait = null; orch.log('debugger auto-enable: on again (switch-on took ' + Math.round((r.ms || 0) / 1000) + ' s)'); return; }
   if (DEBUGGER_WAITING.has(r.code)) {

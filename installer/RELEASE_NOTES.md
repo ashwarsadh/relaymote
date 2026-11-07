@@ -1,3 +1,9 @@
+## 0.2.160
+
+- The "link to Relaymote is off" banner no longer appears when nothing is wrong. When Relaymote itself was busy for a few seconds, it mistook a slow check for a dropped link; it now reads the answer that was already waiting.
+- A real drop stays quiet for its first 2 minutes, because it recovers by itself and messages wait meanwhile. After that the banner shows. If the link is on but Claude is not answering, it now says "slow to answer".
+- Anything only you can fix (PC locked, signed out, Claude closed) still shows at once.
+
 ## 0.2.159
 
 - Reply to a message, as on WhatsApp: swipe it right on the phone, or tap ↩ Reply beside its time. A chip with the quote sits above the box; × cancels it. Swipe several messages to answer them together. The session gets each quote in full above your words, and your bubble shows them trimmed (tap to read all).

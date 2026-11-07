@@ -49,7 +49,7 @@ const { check: chk, src } = H;
   console.log('\n--- the client can SEE the link state and the data age ---');
   {
     const m = src('mobile/index.js');
-    chk(/cdp:\s*await cdpCached\(\)/.test(m), 'every session list carries the live desktop-link state');
+    chk(/cdp:\s*\(await cdpCached\(\), cdpShown\(\)\)/.test(m), 'every session list carries the live desktop-link state');
     chk(/snapshotAt/.test(m), 'and the age of the snapshot the dots came from');
     const a = src('mobile/public/app.js');
     chk(/function noteLinkState/.test(a), 'the client acts on that state');

@@ -1608,7 +1608,7 @@ function renderDeskState() {
   const n = obItems.length;
   // While the phone cannot reach the PC, the PC's last-known state is stale: hide that banner (settings-ui).
   document.body.classList.toggle('pc-unreachable', !!c);
-  const coming = !c && d && /^(restarting|starting|link-off)$/.test(d.state);
+  const coming = !c && d && /^(restarting|starting|link-off|slow)$/.test(d.state);
   if (coming && !state.deskPoll) state.deskPoll = setInterval(() => { if (!document.hidden) loadSessions(); }, 8000);
   if (!coming && state.deskPoll) { clearInterval(state.deskPoll); state.deskPoll = null; }
   if (!c && !d) { el.classList.add('hidden'); el.innerHTML = ''; return; }

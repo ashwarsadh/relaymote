@@ -1,3 +1,7 @@
+## 0.2.163
+
+- The app no longer freezes for up to 17 seconds every 10 minutes while it tidies the Board, so your phone gets its answer without that wait.
+
 ## 0.2.162
 
 - Relaymote now records what makes it slow to answer: a pause of 2 seconds or more is logged with the code that caused it. Nothing changes on screen.

@@ -780,6 +780,7 @@ async function evictWedgedHolder(reason) {
     // Straight after an update: record it, remove the one-shot task, bring the tray back (lib/updater.js landed()).
     setTimeout(() => { try { if (config.mod('autoUpdate')) require('./lib/updater').landed(); } catch (e) { orch.log('update landed: ' + e.message); } }, 30000);
 
+    try { require('./lib/loop-watch').start(orch.log); } catch (e) { orch.log('loop watch: ' + e.message); }
     try {
       if (config.mod('app')) require('./mobile')();
       else orch.log('app module is off (Settings > Modules)');

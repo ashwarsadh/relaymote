@@ -1,3 +1,7 @@
+## 0.2.162
+
+- Relaymote now records what makes it slow to answer: a pause of 2 seconds or more is logged with the code that caused it. Nothing changes on screen.
+
 ## 0.2.160
 
 - The "link to Relaymote is off" banner no longer appears when nothing is wrong. When Relaymote itself was busy for a few seconds, it mistook a slow check for a dropped link; it now reads the answer that was already waiting.

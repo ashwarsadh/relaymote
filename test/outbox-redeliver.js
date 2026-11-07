@@ -48,7 +48,7 @@ async function run(mode) {
 // and the PC re-delivers it after STUCK_MS, once, with the visible line.
 async function runHang() {
   const w = H.world('redeliver-hang');
-  const SID = w.sessions().map(s => s.sessionId || s.id).filter(Boolean)[0];
+  const SID = w.sessions().filter(s => !/^Migrate database/.test(s.title || '')).map(s => s.sessionId || s.id).filter(Boolean)[0] /* not the demo session with an open question */;
   const d = await H.boot(w, { RELAYMOTE_FAKE_SEND: 'hang-first', RELAYMOTE_OUTBOX_STUCK_MS: '2000', RELAYMOTE_SEND_DEADLINE_MS: '1500', RELAYMOTE_FAKE_HANG_MS: '14000' });
   const text = 'Euro set reply: wrong photo, send a revised quote ' + Date.now();
   try {

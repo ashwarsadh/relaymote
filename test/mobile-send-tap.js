@@ -29,7 +29,8 @@ const PAGE_HOOK = `(() => {
 (async () => {
   const fake = await H.fakeDesktop();
   const w = H.world('sendtap', { settings: { cdpPort: fake.port } });
-  const id = w.sessions().map(s => s.sessionId || s.id).filter(Boolean)[0];
+  // Not the demo session holding an open question ('Migrate database ...'): ids are random, so [0] was that one 1 run in 6.
+  const id = w.sessions().filter(s => !/^Migrate database/.test(s.title || '')).map(s => s.sessionId || s.id).filter(Boolean)[0];
   const d = await H.boot(w);
   const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'sendtap-'));
   const dbg = 30000 + Math.floor(Math.random() * 20000);
@@ -71,7 +72,9 @@ const PAGE_HOOK = `(() => {
     for (let i = 0; i < 60 && !(await ev(`typeof openChat === 'function' && !!document.getElementById('btn-send') && !!navigator.serviceWorker.controller`)); i++) await H.wait(250);
     await H.wait(1500);
     for (let i = 0; i < 60 && !(await ev(`typeof openChat === 'function' && !!document.getElementById('btn-send')`)); i++) await H.wait(250);
-    await ev(`openChat(${JSON.stringify(id)}).catch(() => {})`);
+    // As every opening path in the app does (list tap, link, notification): the drawer closes. On a slow first load the
+    // app may have opened it ('list: empty') before the test's openChat, and its chips then sat under the warm-up taps.
+    await ev(`openChat(${JSON.stringify(id)}).catch(() => {}); drawer(false)`);
     for (let i = 0; i < 40 && (await ev(`state.open`)) !== id; i++) await H.wait(250);
     await H.wait(800);
     await ev(`window.__toasts = []; { const t0 = toast; toast = function (m) { window.__toasts.push(String(m)); return t0.apply(this, arguments); }; }`);

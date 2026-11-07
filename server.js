@@ -40,6 +40,7 @@ const projects = require('./lib/projects');
 const organizer = require('./lib/organizer');
 const goals = require('./lib/goals');
 const boardBuild = require('./lib/board-build');
+const offThread = require('./lib/off-thread');
 
 try { process.chdir(require('os').homedir()); } catch {}
 const PORT = config.get().port;
@@ -248,9 +249,10 @@ async function indexTick() {
   if (!config.mod('orchestrator') && !config.mod('organizer')) return null;
   try {
     const intel = require('./lib/summarize');
-    const ix = await projects.build(intel.buildOpts());
+    const buildIndex = () => offThread.run('slow', 'index.build', intel.buildOpts());
+    const ix = await buildIndex();
     // after the build (digests included): overviews, then the roles DB — its own lock, throttle and budgets, never awaited here
-    intel.cycle({ log: orch.log, rebuild: () => projects.build(intel.buildOpts()) }).catch(e => orch.log('intel cycle: ' + e.message));
+    intel.cycle({ log: orch.log, rebuild: buildIndex }).catch(e => orch.log('intel cycle: ' + e.message));
     // transcripts are read under a per-tick time budget; while a first index is still catching up,
     // come back in a minute rather than in half an hour (one pending catch-up at a time)
     if (ix && ix.transcripts && ix.transcripts.pending && !indexTick.catchUp) {
@@ -281,7 +283,7 @@ async function goalsTick() {
   }
   await hygieneTick();
   if (config.mod('board')) {
-    try { const b = await boardBuild.build(); if (!b.written) orch.log('board: ' + b.reason); }
+    try { const b = await offThread.run('slow', 'board.build'); if (!b.written) orch.log('board: ' + b.reason); }
     catch (e) { orch.log('board build error: ' + e.message); }
   }
 }
@@ -317,7 +319,10 @@ let lastHygiene = null;
 async function hygieneTick() {
   if (!config.mod('hygiene')) return;
   try {
-    const r = await require('./lib/hygiene').cycle({ compact: (id) => serialise(() => require('./lib/hygiene').composerCompact(id)) });
+    // Sending /compact drives the Desktop UI, so with autoCompact on the pass stays on this thread.
+    const r = config.mod('autoCompact')
+      ? await require('./lib/hygiene').cycle({ compact: (id) => serialise(() => require('./lib/hygiene').composerCompact(id)) })
+      : await offThread.run('slow', 'hygiene.cycle');
     if (r.skipped) return;
     lastHygiene = r;
     if (!r.ok) return orch.log('hygiene: ' + r.error);

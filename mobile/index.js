@@ -271,7 +271,7 @@ function warmRecent(list) {
   warmAt = Date.now();
   const top = (list || []).slice().sort((a, b) => (b.lastActivityAt || 0) - (a.lastActivityAt || 0)).slice(0, 12);
   let i = 0;
-  const step = () => { const x = top[i++]; if (!x) return; try { const s1 = sessions.get(x.id); if (s1) sessions.backgroundTasks(s1); } catch {} setTimeout(step, 50); };
+  const step = () => { const x = top[i++]; if (!x) return; try { const s1 = sessions.get(x.id); if (s1) sessions.backgroundTasksSoon(s1); } catch {} setTimeout(step, 50); };
   setTimeout(step, 200);
 }
 
@@ -1866,12 +1866,13 @@ async function handle(req, res) {
     const dec = sessions.decorate([sess], desktop.loadSnapshot())[0];
     const beforeRaw = url.searchParams.get('before');
     const before = beforeRaw === null ? null : Number(beforeRaw);
+    // Awaited first: the messages must be read after the wait, or a reply landing during it is missing from the answer.
+    const bg = before === null ? await sessions.backgroundTasksSoon(sess) : [];
     const tr = sessions.transcript(sess, {
       limit: Math.min(Number(url.searchParams.get('limit') || 60), 200),
       before: Number.isFinite(before) ? before : null,
     });
     const pq = before === null ? sessions.pendingQuestion(sess) : null;
-    const bg = before === null ? sessions.backgroundTasks(sess) : [];
     const chips = before === null ? sessions.pendingChips(sess, sessions.index().list) : [];
     return json(res, 200, { ok: true, meta: slimSession(dec), running: bg,
                             transcript: { ...tr, pendingQuestion: pq, chips } });
@@ -1920,7 +1921,7 @@ async function handle(req, res) {
     if (!id) return json(res, 400, { ok: false, error: 'id required' });
     await sessions.refresh();
     const sess = sessions.get(id);
-    const running = sess ? sessions.backgroundTasks(sess) : [];
+    const running = sess ? await sessions.backgroundTasksSoon(sess) : [];
     let fromTranscript = [];
     try { fromTranscript = sess ? sessions.pendingChips(sess, sessions.index().list) : []; } catch {}
 

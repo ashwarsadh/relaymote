@@ -41,7 +41,7 @@ for (let i = 7; i < 37; i++) MSGS.push({ role: i % 2 ? 'user' : 'assistant', ts:
 (async () => {
   const fake = await H.fakeDesktop();
   const w = H.world('replyswipe', { settings: { cdpPort: fake.port } });
-  const id = w.sessions().map(s => s.sessionId || s.id).filter(Boolean)[0];
+  const id = w.sessions().filter(s => !/^Migrate database/.test(s.title || '')).map(s => s.sessionId || s.id).filter(Boolean)[0] /* not the demo session with an open question */;
   const d = await H.boot(w);
   const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'replyswipe-'));
   const dbg = 30000 + Math.floor(Math.random() * 20000);

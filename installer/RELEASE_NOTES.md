@@ -1,3 +1,8 @@
+## 0.2.164
+
+- Heavy background work now runs apart from the part that answers your phone, so the short freezes of a few seconds should go.
+- Opening a chat can no longer flash older messages before the newest ones.
+
 ## 0.2.163
 
 - The app no longer freezes for up to 17 seconds every 10 minutes while it tidies the Board, so your phone gets its answer without that wait.

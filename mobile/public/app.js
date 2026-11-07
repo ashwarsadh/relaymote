@@ -1872,6 +1872,8 @@ async function firstScreen(touched0 = navTouched) {
   let place = null;
   try { place = JSON.parse(localStorage.getItem(PLACE_KEY) || 'null'); } catch {}
   try { await syncPrincipal(); } catch {}
+  // Asked again after the wait: a chat opened meanwhile (a tap, a notification link) was covered by the drawer.
+  if (!untouched()) return 'user';
   const p = pickFirstScreen(place, state.rawSessions || state.sessions || [], { board: typeof window.openBoard === 'function', home: principalHome() });
   if (p.kind === 'board') window.openBoard();
   else if (p.kind === 'chat') {
@@ -4066,7 +4068,8 @@ async function createSession() {
 }
 
 async function loadMore() {
-  if (state.loadingMore || !state.hasMore || !state.open) return;
+  // Not while a chat is opening: oldestByte is still the previous chat's, and the older page painted the new chat without its newest messages.
+  if (state.loadingMore || !state.hasMore || !state.open || state.openingId) return;
   state.loadingMore = true;
   try {
     const forSession = state.open;

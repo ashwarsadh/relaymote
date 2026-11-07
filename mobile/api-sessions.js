@@ -47,9 +47,9 @@ function ids() {
   return out;
 }
 
-function isApi(s) {
+function isApi(s, known) {
   if (!s) return false;
-  return ids().has(s.id) || TITLE_RX.test(String(s.title || ''));
+  return (known || ids()).has(s.id) || TITLE_RX.test(String(s.title || ''));
 }
 
 module.exports = { isApi, ids, stateFile, TITLE_RX, _reset() { cache = {}; } };

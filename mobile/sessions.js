@@ -168,10 +168,11 @@ function decorate(list, snapshot) {
   const active = snapshot && snapshot.active ? snapshot.active : null;
   const seen = loadAcks();
   const apiS = require('./api-sessions');
+  const apiIds = apiS.ids();   // once: per session it was two stats and a Set merge, ~2,000 stats per list on the phone's thread
   return list.map(s => {
     const d0 = dots.get(s.id);
     // An API session (claude-api service, g1871) answers a program: it never shows an unread or awaiting dot.
-    const api = apiS.isApi(s);
+    const api = apiS.isApi(s, apiIds);
     const d = d0 && api ? { ...d0, awaiting: false, unread: false, dot: d0.running ? d0.dot : null } : d0;
     const ack = seen[s.id];
     const acked = !!(d && (d.awaiting || d.unread) && !d.running && ack && s.turnMark && ack.mark === s.turnMark);
@@ -702,7 +703,27 @@ const own = (s) => s == null ? s : Buffer.from(String(s), 'utf8').toString('utf8
 const bgCache = new Map();   // file -> { size, launched, finished }
 function backgroundTasks(sess) {
   const file = transcriptPath(sess);
+  return file ? backgroundFromFile(file) : [];
+}
+
+// 08-Nov: the first scan of a long transcript held the event loop 2-3 s (272 MB exists). It now runs in a worker, which
+// keeps the incremental place. The phone waits at most BG_WAIT_MS and then gets the last list known; a later poll has the rest.
+const BG_WAIT_MS = 1500;
+const bgLast = new Map();   // file -> the last list a worker returned
+async function backgroundTasksSoon(sess) {
+  const file = transcriptPath(sess);
   if (!file) return [];
+  const scan = require('../lib/off-thread').run('fast', 'bg.scan', { file }).then((list) => {
+    bgLast.delete(file); bgLast.set(file, list);
+    if (bgLast.size > 200) bgLast.delete(bgLast.keys().next().value);
+    return list;
+  }).catch(() => bgLast.get(file) || []);
+  let timer;
+  const late = new Promise((res) => { timer = setTimeout(() => res(bgLast.get(file) || []), BG_WAIT_MS); if (timer.unref) timer.unref(); });
+  try { return await Promise.race([scan, late]); } finally { clearTimeout(timer); }
+}
+
+function backgroundFromFile(file) {
   let size;
   try { size = fs.statSync(file).size; } catch { return []; }
   let c = bgCache.get(file);
@@ -962,7 +983,7 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
 }
 
 module.exports = { unwrapForTest: unwrap, flattenForTest: flatten, byTypedTimeForTest: byTypedTime,
-  refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasks, transcriptStamp, transcriptPath, slugFor,
+  refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasksSoon, backgroundFromFile, backgroundTasks, transcriptStamp, transcriptPath, slugFor,
   searchTranscripts, searchSession, ackDot, ackVersion,
   STORE, PROJECTS,
 };

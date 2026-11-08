@@ -712,16 +712,18 @@ function backgroundTasks(sess) {
 // keeps the incremental place. The phone waits at most BG_WAIT_MS and then gets the last list known; a later poll has the rest.
 const BG_WAIT_MS = 1500;
 const bgLast = new Map();   // file -> the last list a worker returned
-async function backgroundTasksSoon(sess) {
+// opts.all: every live run_in_background job, Bash included -- the same source as the list's half-blue dot (09-Nov).
+async function backgroundTasksSoon(sess, opts = {}) {
   const file = transcriptPath(sess);
   if (!file) return [];
-  const scan = require('../lib/off-thread').run('fast', 'bg.scan', { file }).then((list) => {
-    bgLast.delete(file); bgLast.set(file, list);
+  const key = opts.all ? 'all:' + file : file;
+  const scan = require('../lib/off-thread').run('fast', opts.all ? 'bg.live' : 'bg.scan', { file }).then((list) => {
+    bgLast.delete(key); bgLast.set(key, list);
     if (bgLast.size > 200) bgLast.delete(bgLast.keys().next().value);
     return list;
-  }).catch(() => bgLast.get(file) || []);
+  }).catch(() => bgLast.get(key) || []);
   let timer;
-  const late = new Promise((res) => { timer = setTimeout(() => res(bgLast.get(file) || []), BG_WAIT_MS); if (timer.unref) timer.unref(); });
+  const late = new Promise((res) => { timer = setTimeout(() => res(bgLast.get(key) || []), BG_WAIT_MS); if (timer.unref) timer.unref(); });
   try { return await Promise.race([scan, late]); } finally { clearTimeout(timer); }
 }
 

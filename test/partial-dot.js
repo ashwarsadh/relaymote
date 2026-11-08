@@ -51,6 +51,12 @@ check(/\.dot\.partial\{[^}]*linear-gradient\(90deg,var\(--run\) 50%,transparent 
 check(/bgJobs: d && d\.running \? 0/.test(H.src('mobile/sessions.js')), 'a running session never also shows background jobs');
 check(/sessions\.refreshLiveJobs\(all\)/.test(idx) && /bgJobs: s\.bgJobs \|\| undefined/.test(idx), '/api/sessions refreshes and sends bgJobs');
 
+// 09-Nov: the panel said "0 running" while the dot was half-blue (it read only the PC's task button). The panel now
+// gets the same jobs the dot reads, and shows them when the PC lists none.
+check(/backgroundTasksSoon\(sess, \{ all: true \}\)/.test(idx) && /running, jobs, offered/.test(idx), '/api/chips sends the live jobs the dot reads');
+check(/const extra = running\.length \? \[\] : cj;/.test(app) && /!running\.length && !extra\.length && !chips\.length/.test(app),
+  'the panel lists transcript jobs when the PC shows none, so it never says "Nothing running" under a half-blue dot');
+
 try { fs.rmSync(path.dirname(file), { recursive: true, force: true }); } catch {}
 w.cleanup();
 if (H.failures()) { console.error(H.failures() + ' failed'); process.exit(1); }

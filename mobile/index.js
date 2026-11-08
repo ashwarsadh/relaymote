@@ -1924,13 +1924,16 @@ async function handle(req, res) {
     await sessions.refresh();
     const sess = sessions.get(id);
     const running = sess ? await sessions.backgroundTasksSoon(sess) : [];
+    // 09-Nov (Nirvaan Gyaan): the list showed half-blue for a live ffmpeg render while this panel said "0 running" --
+    // the panel read only the PC's own task button. `jobs` is what the dot reads, so the two cannot disagree.
+    const jobs = sess ? await sessions.backgroundTasksSoon(sess, { all: true }) : [];
     let fromTranscript = [];
     try { fromTranscript = sess ? sessions.pendingChips(sess, sessions.index().list) : []; } catch {}
 
     if (url.searchParams.get('peek') === '1') {
       const snap = desktop.loadSnapshot() || {};
       if (String(snap.active || '') !== id) {
-        return json(res, 200, { ok: true, running, offered: [], fromTranscript, skipped: 'not-the-open-session' });
+        return json(res, 200, { ok: true, running, jobs, offered: [], fromTranscript, skipped: 'not-the-open-session' });
       }
     }
 
@@ -1955,7 +1958,7 @@ async function handle(req, res) {
         for (const c of clients) { if (!isSubuser(c.identity)) sseSend(c, 'chips', { id, uiRunning, liveTasks, offered, note }); }
       })().catch(e => log('chips background failed: ' + e.message));
     }
-    return json(res, 200, { ok: true, running, offered: [], fromTranscript, pending: true });
+    return json(res, 200, { ok: true, running, jobs, offered: [], fromTranscript, pending: true });
   }
 
   // g1719: errors the phone hit (see clientLog in app.js), so a phone-only failure leaves evidence on the PC.

@@ -2716,6 +2716,7 @@ async function openChips() {
   $('chiplist').innerHTML = '<div class="empty">Reading background tasks…</div>';
   try {
     const d = await api('/api/chips?id=' + encodeURIComponent(state.open) + '&offered=1');
+    state.chipJobs = { id: state.open, jobs: d.jobs || [] };
     if (d.fromTranscript && d.fromTranscript.length) {
       renderChips(d.running || [], d.fromTranscript.map(c => ({ title: c.title, tldr: 'suggested task' })), null, true);
     }
@@ -2774,8 +2775,13 @@ function setChipBadge(n) {
 
 function renderChips(running, chips, uiRunning, pending) {
   const sd = (state.boot && state.boot.startDefaults) || null;
+  // 09-Nov: the PC's task button can read 0 while the transcript has a live background job (an ffmpeg render) --
+  // the job the list's half-blue dot shows. Show those too, without Stop: Stop needs the PC's own row.
+  const cj = state.chipJobs && state.chipJobs.id === state.open ? state.chipJobs.jobs : [];
+  const extra = running.length ? [] : cj;
+  const count = Math.max(uiRunning != null ? uiRunning : running.length, running.length + extra.length);
   $('chip-sub').innerHTML =
-    `<span style="color:var(--run)">${uiRunning != null ? uiRunning : running.length} running</span>` +
+    `<span style="color:var(--run)">${count} running</span>` +
     `<span class="muted">${chips.length} offered</span>` +
     (pending ? '<span class="muted">checking…</span>' : '') +
     (sd && sd.model ? `<span class="muted">starts on ${esc(shortModel(sd.model))} · ${esc(sd.effort || 'medium')}</span>` : '');
@@ -2807,6 +2813,16 @@ function renderChips(running, chips, uiRunning, pending) {
     ul.appendChild(li);
   });
 
+  extra.forEach((j) => {
+    const li = document.createElement('li');
+    li.className = 'row';
+    const at = j.startedAt ? new Date(j.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    li.innerHTML = '<span class="dot running"></span><div class="row-main">' +
+      `<div class="row-title">${esc(j.description || j.name || 'background job')}</div>` +
+      `<div class="row-meta"><span>${esc(j.name || 'background')}</span><span>running${at ? ' since ' + esc(at) : ''}</span></div></div>`;
+    ul.appendChild(li);
+  });
+
   chips.forEach((c, i) => {
     const li = document.createElement('li');
     li.className = 'row';
@@ -2817,7 +2833,7 @@ function renderChips(running, chips, uiRunning, pending) {
     ul.appendChild(li);
   });
 
-  if (!running.length && !chips.length) {
+  if (!running.length && !extra.length && !chips.length) {
     ul.innerHTML = pending
       ? '<div class="empty">Checking the session…</div>'
       : '<div class="empty">Nothing running or offered here.</div>';

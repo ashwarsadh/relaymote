@@ -1,3 +1,7 @@
+## 0.2.167
+
+- The Background tasks panel now lists a background job that the session itself started (a render, a build), so it no longer says "Nothing running" while the session's dot is half-blue. Such a job has no Stop button there; stop it from the PC.
+
 ## 0.2.166
 
 - A session that has finished its turn but still has a background job running (a render, a build, a helper agent) now shows a half-blue dot and "background job running", instead of a plain grey dot.

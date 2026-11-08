@@ -44,6 +44,36 @@ check(S.backgroundFromFile(file, { all: true }).map(j => j.id).join() === 'toolu
 fs.appendFileSync(file, stop('agentX') + '\n');
 check(S.backgroundFromFile(file, { all: true }).length === 1, 'a stop of an unrelated task id changes nothing');
 
+// 09-Nov, NG's live v3 render: Desktop 2.1.317 resends the request as an `api-request-blob` row with NO timestamp that
+// repeats the launch; it used to overwrite startedAt with null, and the undated job was dropped everywhere.
+// Same day, Agent Teams lane: an Agent is background by default, with no run_in_background; its result says so.
+{
+  const blob = (inner) => JSON.stringify({ type: 'api-request-blob', sessionId: 's', hash: 'h', message: { role: 'user', content: [inner] } });
+  const agentUse = (id, desc, msAgo) => JSON.stringify({ type: 'assistant', timestamp: iso(msAgo),
+    message: { role: 'assistant', content: [{ type: 'tool_use', id, name: 'Agent', input: { name: 'R1', model: 'sonnet', description: desc, prompt: 'p' } }] } });
+  const agentRes = (id, text) => JSON.stringify({ type: 'user', timestamp: iso(1000), message: { role: 'user', content: [{ tool_use_id: id, type: 'tool_result', content: [{ type: 'text', text }] }] } });
+  const f2 = path.join(path.dirname(file), 't2.jsonl');
+  const v3 = JSON.parse(launch('toolu_V3', 'Bash', 'Final render v3 with one-take voice', 7 * 60000)).message.content[0];
+  fs.writeFileSync(f2, [
+    launch('toolu_V3', 'Bash', 'Final render v3 with one-take voice', 7 * 60000), started('toolu_V3', 'b546d7szs'),
+    blob(v3), blob(v3),
+    agentUse('toolu_AG1', 'teammate R1', 60000),
+    agentRes('toolu_AG1', 'Async agent launched successfully. (internal)\nagentId: a498211af30da33d7 (internal ID)\nThe agent is working in the background.'),
+    agentUse('toolu_AG2', 'a foreground agent', 50000), agentRes('toolu_AG2', 'Here is what I found: ...'),
+    agentUse('toolu_AG3', 'background agent, finished', 40000),
+    agentRes('toolu_AG3', 'Async agent launched successfully.\nagentId: aend123 (internal ID)'),
+    notify('<task-id>aend123</task-id>\n<tool-use-id>toolu_AG3</tool-use-id>'),
+  ].join('\n') + '\n');
+  const live = S.backgroundFromFile(f2, { all: true });
+  const v = live.find(j => j.id === 'toolu_V3');
+  check(v && v.startedAt && v.taskId === 'b546d7szs', 'a launch repeated in an undated api-request-blob row keeps its time and stays live', v);
+  check(live.some(j => j.id === 'toolu_AG1' && j.taskId === 'a498211af30da33d7'), 'an Agent with no run_in_background whose result says "Async agent launched" is live');
+  check(!live.some(j => j.id === 'toolu_AG2'), 'a foreground Agent is not a background job');
+  check(!live.some(j => j.id === 'toolu_AG3'), 'a default-background Agent ends by its notification');
+  fs.appendFileSync(f2, stop('a498211af30da33d7') + '\n');
+  check(!S.backgroundFromFile(f2, { all: true }).some(j => j.id === 'toolu_AG1'), '...and by TaskStop of its agentId');
+}
+
 // The list and the dot.
 const app = H.src('mobile/public/app.js'), css = H.src('mobile/public/style.css'), idx = H.src('mobile/index.js');
 check(/s\.awaiting \? 'awaiting' : s\.bgJobs \? 'partial' : 'idle'/.test(app), 'an idle session with a live job gets the "partial" dot; running and awaiting win');

@@ -769,7 +769,7 @@ function backgroundFromFile(file, opts = {}) {
   let size;
   try { size = fs.statSync(file).size; } catch { return []; }
   let c = bgCache.get(file);
-  if (!c || size < c.size) { c = { size: 0, launched: new Map(), finished: new Map() }; bgCache.set(file, c); }
+  if (!c || size < c.size) { c = { size: 0, launched: new Map(), finished: new Map(), agents: new Map() }; bgCache.set(file, c); }
   // g1132: read in line-aligned chunks. The first look at a session used to read the WHOLE transcript
   // (up to 272 MB) into one string, and every id kept from it pinned that string: 1-2 GB retained.
   if (size > c.size) {
@@ -785,7 +785,7 @@ function backgroundFromFile(file, opts = {}) {
             if (got < BG_CHUNK) break;              // a half-written last line: next time
             c.size += got; continue;                // one line longer than a chunk: it is never a launch row we need
           }
-          scanBackground(buf.toString('utf8', 0, lastNl + 1), c.launched, c.finished);
+          scanBackground(buf.toString('utf8', 0, lastNl + 1), c.launched, c.finished, c.agents);
           c.size += lastNl + 1;
         }
       } finally { fs.closeSync(fd); }
@@ -804,28 +804,53 @@ function backgroundFromFile(file, opts = {}) {
   return out;
 }
 
-function scanBackground(text, launched, finished) {
+// 09-Nov, two misses found on NG's live v3 render (ffmpeg pid 160924, 02:03 IST) and by the Agent Teams lane:
+// - Desktop 2.1.317 writes `api-request-blob` rows: a resend of the whole request, WITHOUT a timestamp, repeating
+//   earlier tool_use blocks. Re-reading the launch there replaced its startedAt with null, and {all} drops an undated
+//   job, so a live render vanished from the list, the header and the sheet. Those rows are skipped, and a launch is
+//   never overwritten.
+// - An Agent runs in the background BY DEFAULT now, with no run_in_background in its input. Such a call is held in
+//   `agents` until its result: "Async agent launched successfully ... agentId: X" makes it a live job (ended like any
+//   other, by its notification or TaskStop X); any other result (a foreground agent) drops it.
+const AGENT_LAUNCH = 'Async agent launched';
+function scanBackground(text, launched, finished, agents = new Map()) {
   const idRx = /<tool-use-id>(toolu_[A-Za-z0-9]+)<\/tool-use-id>/g;
   const statusRx = /<status>(\w+)<\/status>/;
   for (const line of text.split('\n')) {
     if (!line.includes('run_in_background') && !line.includes('tool-use-id') && !line.includes('<task-id>')
-        && !line.includes('background with ID') && !line.includes('agentId') && !line.includes('TaskStop')) continue;
+        && !line.includes('background with ID') && !line.includes('agentId') && !line.includes('TaskStop')
+        && !line.includes('"name":"Agent"') && !line.includes('"name":"Task"')
+        && !(agents.size && line.includes('"tool_use_id"'))) continue;
+    if (line.includes('"type":"api-request-blob"')) continue;
     const t = line.trim();
     if (!t) continue;
     let row;
     try { row = JSON.parse(t); } catch { continue; }
+    if (row.type === 'api-request-blob') continue;
     const content = row.message && row.message.content;
     if (Array.isArray(content)) {
       for (const b of content) {
-        if (!b || b.type !== 'tool_use' || !b.id) continue;
+        if (!b) continue;
+        if (b.type === 'tool_result' && b.tool_use_id && agents.has(b.tool_use_id)) {
+          const info = agents.get(b.tool_use_id); agents.delete(b.tool_use_id);
+          const txt = typeof b.content === 'string' ? b.content : JSON.stringify(b.content || '');
+          if (txt.includes(AGENT_LAUNCH) && !launched.has(info.id)) {
+            const aid = /agentId: ([A-Za-z0-9_-]+)/.exec(txt);
+            launched.set(info.id, aid ? { ...info, taskId: own(aid[1]) } : info);
+          }
+          continue;
+        }
+        if (b.type !== 'tool_use' || !b.id) continue;
         const inp = b.input || {};
-        if (!inp.run_in_background) continue;
-        launched.set(own(b.id), {
+        const info = {
           id: own(b.id),
           name: own(b.name),
           description: own(String(inp.description || inp.command || inp.prompt || b.name).slice(0, 120)),
           startedAt: own(row.timestamp || null),
-        });
+        };
+        if (launched.has(info.id)) continue;
+        if (inp.run_in_background) launched.set(info.id, info);
+        else if (b.name === 'Agent' || b.name === 'Task') agents.set(info.id, info);
       }
     }
     // 08-Nov: a job is also ended by TaskStop {task_id} (no notification follows), and a notification may name only its

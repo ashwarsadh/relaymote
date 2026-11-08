@@ -1,3 +1,9 @@
+## 0.2.169
+
+- A background job no longer drops off the dots and the Background tasks sheet while it runs: a newer Claude Desktop repeats each request without a time, and that copy erased the job's start time (a live render showed grey).
+- Helper agents that run in the background by default (no "background" flag) now count as background jobs too, until they finish or are stopped.
+- Masters: a master's own view on the phone, and the Conductor can appoint a master.
+
 ## 0.2.168
 
 - Inside a session, the header dot is now half-blue too while one of its background jobs runs (it stayed grey before, though the session list showed half-blue).

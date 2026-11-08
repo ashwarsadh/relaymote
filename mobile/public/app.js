@@ -1717,6 +1717,28 @@ function renderSuggestion(meta) {
   if (again) again.onclick = (e) => fetchLive(e.currentTarget, '…');
 }
 
+// 09-Nov (Ashwar: "the half blue dot is only in the session list but not inside"): the header uses the list's rule.
+function headDotClass(meta, waiting) {
+  if (waiting) return 'awaiting';
+  if (/running/i.test(String(meta.dot || '')) || meta.running) return 'running';
+  return meta.bgJobs ? 'partial' : '';
+}
+
+// The sheet's "running" = the Desktop's own task list (it can Stop them) plus every live run_in_background job the
+// transcript shows that the Desktop list does not name (a background Bash render is often missing there). The count is
+// never below either source, so the sheet cannot say 0 while the list's dot says a job is running.
+function mergeRunning(fromTranscript, fromDesktop, uiCount) {
+  const ui = (fromDesktop || []).map((t, i) => ({ ...t, index: t.index != null ? t.index : i }));
+  const norm = (x) => String(x || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const names = ui.map(t => norm(t.label || t.description || t.name)).filter(Boolean);
+  const extra = (fromTranscript || []).filter(j => {
+    const d = norm(j.description || j.name);
+    return !d || !names.some(n => n.includes(d) || d.includes(n));
+  }).map(j => ({ ...j, fromTranscript: true }));
+  const list = ui.concat(extra);
+  return { list, count: Math.max(uiCount != null ? uiCount : 0, list.length) };
+}
+
 function renderHeader(meta) {
   const wasWaiting = state.meta && /awaiting/i.test(String(state.meta.dot || ''));
   state.meta = meta;
@@ -1725,8 +1747,7 @@ function renderHeader(meta) {
   if (!nowWaiting) renderPermission(null);
   renderSuggestion(meta);
   $('chat-title').textContent = meta.title;
-  $('chat-state').className = 'dot ' + (nowWaiting ? 'awaiting'
-    : /running/i.test(String(meta.dot || '')) ? 'running' : '');
+  $('chat-state').className = 'dot ' + headDotClass(meta, nowWaiting);
   const bits = [];
   if (meta.dot) bits.push(meta.dot);
   if (meta.model) bits.push(shortModel(meta.model));
@@ -2037,6 +2058,10 @@ function connectStream(watch) {
       if (wasRunning && !nowRunning && !$('sheet').classList.contains('hidden')) renderTier(state.meta);
       state._tierWasRunning = nowRunning;
       if (row && state.meta.running !== !!row.running) { state.meta.running = !!row.running; renderLive(); renderLog(state.messages || [], true); renderSuggestion(state.meta); }
+      if (row && (state.meta.bgJobs || 0) !== (row.bgJobs || 0)) {
+        state.meta.bgJobs = row.bgJobs; state.meta.bgWhat = row.bgWhat;
+        $('chat-state').className = 'dot ' + headDotClass(state.meta, /awaiting/i.test(String(state.meta.dot || '')));
+      }
     }
     if (!state.folder && !state.q) renderSessions(d.sessions);
     if (state.boot) {
@@ -2067,7 +2092,8 @@ function connectStream(watch) {
     if (c.id !== state.open) return;
     setChipBadge((c.offered || []).length);
     if ($('chipsheet').classList.contains('hidden')) return;
-    renderChips(c.liveTasks || [], c.offered || [], c.uiRunning, !!c.partial);
+    const m = mergeRunning(c.running || [], c.liveTasks || [], c.uiRunning);
+    renderChips(m.list, c.offered || [], m.count, !!c.partial);
   });
 
   es.addEventListener('suggestion', ev => {
@@ -2716,11 +2742,9 @@ async function openChips() {
   $('chiplist').innerHTML = '<div class="empty">Reading background tasks…</div>';
   try {
     const d = await api('/api/chips?id=' + encodeURIComponent(state.open) + '&offered=1');
-    state.chipJobs = { id: state.open, jobs: d.jobs || [] };
-    if (d.fromTranscript && d.fromTranscript.length) {
-      renderChips(d.running || [], d.fromTranscript.map(c => ({ title: c.title, tldr: 'suggested task' })), null, true);
-    }
-    renderChips(d.liveTasks || [], d.offered || [], d.uiRunning, true);
+    // Painted from the transcript at once; the Desktop's own list follows over SSE ('chips') and is merged, never swapped in.
+    const m = mergeRunning(d.running || [], d.liveTasks || [], d.uiRunning);
+    renderChips(m.list, (d.fromTranscript || []).map(c => ({ title: c.title, tldr: 'suggested task' })), m.count, true);
   } catch (e) {
     $('chiplist').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
@@ -2775,11 +2799,8 @@ function setChipBadge(n) {
 
 function renderChips(running, chips, uiRunning, pending) {
   const sd = (state.boot && state.boot.startDefaults) || null;
-  // 09-Nov: the PC's task button can read 0 while the transcript has a live background job (an ffmpeg render) --
-  // the job the list's half-blue dot shows. Show those too, without Stop: Stop needs the PC's own row.
-  const cj = state.chipJobs && state.chipJobs.id === state.open ? state.chipJobs.jobs : [];
-  const extra = running.length ? [] : cj;
-  const count = Math.max(uiRunning != null ? uiRunning : running.length, running.length + extra.length);
+  // `running` is mergeRunning's list: the PC's task rows plus the transcript's live jobs it does not name (09-Nov).
+  const count = Math.max(uiRunning != null ? uiRunning : 0, running.length);
   $('chip-sub').innerHTML =
     `<span style="color:var(--run)">${count} running</span>` +
     `<span class="muted">${chips.length} offered</span>` +
@@ -2792,9 +2813,10 @@ function renderChips(running, chips, uiRunning, pending) {
   running.forEach((t, i) => {
     const li = document.createElement('li');
     li.className = 'row';
+    const at = t.fromTranscript && t.startedAt ? new Date(t.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
     li.innerHTML = '<span class="dot running"></span><div class="row-main">' +
       `<div class="row-title">${esc(t.label || t.description || 'task')}</div>` +
-      `<div class="row-meta"><span>${esc(t.name || 'background')}</span><span>running</span></div></div>`;
+      `<div class="row-meta"><span>${esc(t.name || 'background')}</span><span>running${at ? ' since ' + esc(at) : ''}</span></div></div>`;
     const stop = document.createElement('button');
     stop.className = 'ghost danger';
     stop.style.cssText = 'flex:0 0 auto;width:auto;padding:8px 14px';
@@ -2809,17 +2831,7 @@ function renderChips(running, chips, uiRunning, pending) {
         else { toast('Task stopped'); openChips(); }
       } catch (e) { toast('Stop failed: ' + e.message, true); revert(); }
     };
-    li.appendChild(stop);
-    ul.appendChild(li);
-  });
-
-  extra.forEach((j) => {
-    const li = document.createElement('li');
-    li.className = 'row';
-    const at = j.startedAt ? new Date(j.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-    li.innerHTML = '<span class="dot running"></span><div class="row-main">' +
-      `<div class="row-title">${esc(j.description || j.name || 'background job')}</div>` +
-      `<div class="row-meta"><span>${esc(j.name || 'background')}</span><span>running${at ? ' since ' + esc(at) : ''}</span></div></div>`;
+    if (!t.fromTranscript) li.appendChild(stop);   // the Desktop list's index is what Stop presses
     ul.appendChild(li);
   });
 
@@ -2833,7 +2845,7 @@ function renderChips(running, chips, uiRunning, pending) {
     ul.appendChild(li);
   });
 
-  if (!running.length && !extra.length && !chips.length) {
+  if (!running.length && !chips.length) {
     ul.innerHTML = pending
       ? '<div class="empty">Checking the session…</div>'
       : '<div class="empty">Nothing running or offered here.</div>';

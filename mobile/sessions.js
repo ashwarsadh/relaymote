@@ -712,18 +712,21 @@ function backgroundTasks(sess) {
 // keeps the incremental place. The phone waits at most BG_WAIT_MS and then gets the last list known; a later poll has the rest.
 const BG_WAIT_MS = 1500;
 const bgLast = new Map();   // file -> the last list a worker returned
-// opts.all: every live run_in_background job, Bash included -- the same source as the list's half-blue dot (09-Nov).
-async function backgroundTasksSoon(sess, opts = {}) {
+// 09-Nov (Ashwar: "the half blue dot is only in the session list but not inside when I open the session"): this read
+// 'bg.scan', which counts Agent/Task only, so NG's ffmpeg render (a background Bash) was in the list's dot and missing
+// from the sheet and the header. It now reads 'bg.live' only -- every live run_in_background job, the list's source --
+// and what it finds also feeds the list's cache (noteLive), so the list, the header and the sheet cannot disagree.
+async function backgroundTasksSoon(sess) {
   const file = transcriptPath(sess);
   if (!file) return [];
-  const key = opts.all ? 'all:' + file : file;
-  const scan = require('../lib/off-thread').run('fast', opts.all ? 'bg.live' : 'bg.scan', { file }).then((list) => {
-    bgLast.delete(key); bgLast.set(key, list);
+  const scan = require('../lib/off-thread').run('fast', 'bg.live', { file }).then((list) => {
+    bgLast.delete(file); bgLast.set(file, list);
     if (bgLast.size > 200) bgLast.delete(bgLast.keys().next().value);
+    noteLive(sess.id, list);
     return list;
-  }).catch(() => bgLast.get(key) || []);
+  }).catch(() => bgLast.get(file) || []);
   let timer;
-  const late = new Promise((res) => { timer = setTimeout(() => res(bgLast.get(key) || []), BG_WAIT_MS); if (timer.unref) timer.unref(); });
+  const late = new Promise((res) => { timer = setTimeout(() => res(bgLast.get(file) || []), BG_WAIT_MS); if (timer.unref) timer.unref(); });
   try { return await Promise.race([scan, late]); } finally { clearTimeout(timer); }
 }
 
@@ -736,6 +739,11 @@ const LIVE_JOB_MAX_MS = 12 * 3600000;
 const liveLast = new Map();   // session id -> { n, what, at }
 const LIVE_EVERY_MS = 15000;
 function liveJobs(id) { const e = liveLast.get(id); return e && e.n ? e : null; }
+function noteLive(id, jobs) {
+  if (!id) return;
+  const last = jobs.length ? jobs[jobs.length - 1] : null;
+  liveLast.set(id, { n: jobs.length, what: last ? String(last.description || last.name || '') : '', at: Date.now() });
+}
 let liveBusy = false;
 async function refreshLiveJobs(list) {
   if (liveBusy) return;
@@ -751,7 +759,7 @@ async function refreshLiveJobs(list) {
       if (!file) continue;
       let jobs = [];
       try { jobs = await require('../lib/off-thread').run('fast', 'bg.live', { file }); } catch { continue; }
-      liveLast.set(s.id, { n: jobs.length, what: jobs.length ? String(jobs[jobs.length - 1].description || jobs[jobs.length - 1].name || '') : '', at: Date.now() });
+      noteLive(s.id, jobs);
     }
     for (const id of liveLast.keys()) if (!want.some(s => s.id === id) && !(list || []).some(s => s.id === id && s.running)) liveLast.delete(id);
   } finally { liveBusy = false; }
@@ -1034,7 +1042,7 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
 }
 
 module.exports = { unwrapForTest: unwrap, flattenForTest: flatten, byTypedTimeForTest: byTypedTime,
-  refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasksSoon, backgroundFromFile, backgroundTasks, refreshLiveJobs, liveJobs, transcriptStamp, transcriptPath, slugFor,
+  refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasksSoon, backgroundFromFile, backgroundTasks, refreshLiveJobs, liveJobs, noteLive, transcriptStamp, transcriptPath, slugFor,
   searchTranscripts, searchSession, ackDot, ackVersion,
   STORE, PROJECTS,
 };

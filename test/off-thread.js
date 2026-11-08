@@ -62,7 +62,7 @@ const failed = (p) => p.then(() => null, e => e);
 
   // The real tasks, from a worker.
   const t = path.join(dir, 't.jsonl');
-  const launch = (id) => JSON.stringify({ timestamp: '2026-11-08T00:00:00Z', message: { content: [{ type: 'tool_use', id, name: 'Agent', input: { run_in_background: true, description: 'x' } }] } }) + '\n';
+  const launch = (id) => JSON.stringify({ timestamp: new Date().toISOString(), message: { content: [{ type: 'tool_use', id, name: 'Agent', input: { run_in_background: true, description: 'x' } }] } }) + '\n';
   fs.writeFileSync(t, launch('toolu_a'));
   let bg = await off.run('fast', 'bg.scan', { file: t });
   check(bg.length === 1 && bg[0].id === 'toolu_a', 'bg.scan reads a transcript', bg.length);

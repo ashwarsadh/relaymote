@@ -1,3 +1,8 @@
+## 0.2.168
+
+- Inside a session, the header dot is now half-blue too while one of its background jobs runs (it stayed grey before, though the session list showed half-blue).
+- The Background tasks sheet now always lists those jobs, also when the PC shows other tasks, and counts them; the list, the header and the sheet read the same source.
+
 ## 0.2.167
 
 - The Background tasks panel now lists a background job that the session itself started (a render, a build), so it no longer says "Nothing running" while the session's dot is half-blue. Such a job has no Stop button there; stop it from the PC.

@@ -51,13 +51,45 @@ check(/\.dot\.partial\{[^}]*linear-gradient\(90deg,var\(--run\) 50%,transparent 
 check(/bgJobs: d && d\.running \? 0/.test(H.src('mobile/sessions.js')), 'a running session never also shows background jobs');
 check(/sessions\.refreshLiveJobs\(all\)/.test(idx) && /bgJobs: s\.bgJobs \|\| undefined/.test(idx), '/api/sessions refreshes and sends bgJobs');
 
-// 09-Nov: the panel said "0 running" while the dot was half-blue (it read only the PC's task button). The panel now
-// gets the same jobs the dot reads, and shows them when the PC lists none.
-check(/backgroundTasksSoon\(sess, \{ all: true \}\)/.test(idx) && /running, jobs, offered/.test(idx), '/api/chips sends the live jobs the dot reads');
-check(/const extra = running\.length \? \[\] : cj;/.test(app) && /!running\.length && !extra\.length && !chips\.length/.test(app),
-  'the panel lists transcript jobs when the PC shows none, so it never says "Nothing running" under a half-blue dot');
+// 09-Nov (0.2.167 kept): /api/chips still sends `jobs` for a phone holding the older app.js.
+check(/running, jobs, offered/.test(idx), '/api/chips still sends jobs (= running) for an older phone');
+// 09-Nov, Ashwar: "the half blue dot is only in the session list but not inside when I open the session". NG's render
+// (b4wnqw1g3, a background Bash) made the list half-blue, but the sheet read 'bg.scan' (Agent/Task only) and the header
+// ignored bgJobs, so inside it was grey with "0 running ... Nothing running or offered here".
+(async () => {
+  const cwd = path.join(w.dir, 'ng'), cli = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', id = 'local_ngtest';
+  const dir = path.join(S.PROJECTS, S.slugFor(cwd));
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, cli + '.jsonl'), [
+    launch('toolu_NGR', 'Bash', 'Render portrait final (x264, 1 thread)', 5 * 60000), started('toolu_NGR', 'b4wnqw1g3'),
+    launch('toolu_NGD', 'Bash', 'an earlier probe', 9 * 60000), started('toolu_NGD', 'bprobe'), notify('<task-id>bprobe</task-id>'),
+  ].join('\n') + '\n');
+  const sess = { id, cwd, cliSessionId: cli };
+  const sheet = await S.backgroundTasksSoon(sess);
+  check(sheet.length === 1 && sheet[0].id === 'toolu_NGR' && /Render/.test(sheet[0].description), 'the sheet (session open, /api/chips) lists the live background Bash render', sheet.map(j => j.description));
+  const list = S.liveJobs(id);
+  check(list && list.n === sheet.length && /Render/.test(list.what), 'the list dot reads the same jobs: the open feeds its cache', list);
 
-try { fs.rmSync(path.dirname(file), { recursive: true, force: true }); } catch {}
-w.cleanup();
-if (H.failures()) { console.error(H.failures() + ' failed'); process.exit(1); }
-console.log('partial-dot: all checks passed');
+  // The phone side, from the shipped app.js: the header dot and the sheet's merge with the Desktop's own (empty) list.
+  const vm = require('vm');
+  const grab = (name) => { const i = app.indexOf('function ' + name + '('); let d = 0, j = app.indexOf('{', i);
+    for (; j < app.length; j++) { if (app[j] === '{') d++; else if (app[j] === '}' && --d === 0) break; } return app.slice(i, j + 1); };
+  const ctx = {}; vm.runInNewContext(grab('headDotClass') + '\n' + grab('mergeRunning') + '\nthis.h = headDotClass; this.m = mergeRunning;', ctx);
+  check(ctx.h({ running: false, bgJobs: list.n }, false) === 'partial', 'the header dot is half-blue for an idle session with a live job');
+  check(ctx.h({ running: true, bgJobs: 1 }, false) === 'running' && ctx.h({ bgJobs: 1 }, true) === 'awaiting' && ctx.h({}, false) === '', 'running and awaiting still win; nothing is grey');
+  let m = ctx.m(sheet, [], 0);
+  check(m.count === 1 && m.list.length === 1 && m.list[0].fromTranscript, 'Desktop says 0: the sheet still shows 1 running, the render (no Stop: the Desktop list cannot press it)', m.count);
+  m = ctx.m(sheet, [{ label: 'Render portrait final (x264, 1 thread)', index: 0 }], 1);
+  check(m.count === 1 && !m.list[0].fromTranscript, 'Desktop names the same job: it is shown once, with its Stop', m.count);
+  m = ctx.m(sheet, [{ label: 'some other agent', index: 0 }], 1);
+  check(m.count === 2, 'Desktop names a different job: both are shown', m.count);
+  check(/renderChips\(m\.list, c\.offered/.test(app) && !/renderChips\(c\.liveTasks/.test(app) && !/renderChips\(d\.liveTasks/.test(app), 'no render path swaps the transcript list for the Desktop list');
+  check(/sseSend\(c, 'chips', \{ id, running,/.test(idx), 'the chips SSE carries the transcript list too');
+  check(/backgroundTasksSoon\(sess\) : \[\];\s*\n\s*\/\/[^\n]*\n\s*const dec = sessions\.decorate/.test(idx), '/api/session decorates after the scan, so its meta has bgJobs');
+
+  try { fs.rmSync(path.dirname(file), { recursive: true, force: true }); } catch {}
+  w.cleanup();
+  if (H.failures()) { console.error(H.failures() + ' failed'); process.exit(1); }
+  console.log('partial-dot: all checks passed');
+  process.exit(0);
+})().catch(e => { console.error(e); process.exit(1); });

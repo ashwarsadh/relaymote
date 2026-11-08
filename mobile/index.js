@@ -1865,11 +1865,12 @@ async function handle(req, res) {
     if (!sessions.get(id)) { try { await sessions.refresh({ force: true }); } catch {} }
     const sess = sessions.get(id);
     if (!sess) return json(res, 404, { ok: false, error: 'no such session' });
-    const dec = sessions.decorate([sess], desktop.loadSnapshot())[0];
     const beforeRaw = url.searchParams.get('before');
     const before = beforeRaw === null ? null : Number(beforeRaw);
     // Awaited first: the messages must be read after the wait, or a reply landing during it is missing from the answer.
     const bg = before === null ? await sessions.backgroundTasksSoon(sess) : [];
+    // Decorated AFTER the scan, which feeds the list's live-job cache: the header dot and the list dot read one source.
+    const dec = sessions.decorate([sess], desktop.loadSnapshot())[0];
     const tr = sessions.transcript(sess, {
       limit: Math.min(Number(url.searchParams.get('limit') || 60), 200),
       before: Number.isFinite(before) ? before : null,
@@ -1924,9 +1925,9 @@ async function handle(req, res) {
     await sessions.refresh();
     const sess = sessions.get(id);
     const running = sess ? await sessions.backgroundTasksSoon(sess) : [];
-    // 09-Nov (Nirvaan Gyaan): the list showed half-blue for a live ffmpeg render while this panel said "0 running" --
-    // the panel read only the PC's own task button. `jobs` is what the dot reads, so the two cannot disagree.
-    const jobs = sess ? await sessions.backgroundTasksSoon(sess, { all: true }) : [];
+    // 09-Nov (Nirvaan Gyaan): `running` is now every live run_in_background job (backgroundTasksSoon reads the list dot's
+    // source). `jobs` is the same list, kept for a phone still holding 0.2.167's app.js.
+    const jobs = running;
     let fromTranscript = [];
     try { fromTranscript = sess ? sessions.pendingChips(sess, sessions.index().list) : []; } catch {}
 
@@ -1949,13 +1950,13 @@ async function handle(req, res) {
           if (rt && rt.__timedOut) { note = 'the desktop did not answer in time'; log('chips: running read timed out'); }
           else if (rt && rt.ok) { uiRunning = rt.count; liveTasks = rt.tasks || []; }
         } catch (e) { log('chips: running read failed: ' + e.message); }
-        for (const c of clients) { if (!isSubuser(c.identity)) sseSend(c, 'chips', { id, uiRunning, liveTasks, offered: [], partial: true }); }
+        for (const c of clients) { if (!isSubuser(c.identity)) sseSend(c, 'chips', { id, running, uiRunning, liveTasks, offered: [], partial: true }); }
         try {
           const out = await cap(ui(() => desktop.listChipTasks(id, { protect: true })), 25000);
           if (out && out.__timedOut) { note = 'the desktop did not answer in time'; log('chips: offered read timed out'); }
           else { offered = (out && out.chips) || []; note = (out && out.note) || note; }
         } catch (e) { log('chips: offered read failed: ' + e.message); }
-        for (const c of clients) { if (!isSubuser(c.identity)) sseSend(c, 'chips', { id, uiRunning, liveTasks, offered, note }); }
+        for (const c of clients) { if (!isSubuser(c.identity)) sseSend(c, 'chips', { id, running, uiRunning, liveTasks, offered, note }); }
       })().catch(e => log('chips background failed: ' + e.message));
     }
     return json(res, 200, { ok: true, running, jobs, offered: [], fromTranscript, pending: true });

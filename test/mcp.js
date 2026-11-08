@@ -104,6 +104,19 @@ function server(sessionId) {
   check(rel.body.ok && rel.body.role === 'SLAVE' && !JSON.parse(fs.readFileSync(path.join(HOME, 'state', 'masters.json'), 'utf8')).demo, 'release returns it to SLAVE and frees the project');
   check((await B.call('relaymote_spawn', { prompt: 'x' })).body.error === 'NOT_MASTER', 'after release the control tools are refused again');
 
+  // 09-Nov (Agent Teams hybrid): the Conductor may APPOINT a master (Ashwar's 28-Sep rule); a non-Conductor may not.
+  const setPath = path.join(HOME, 'settings.json');
+  let prevSet = null; try { prevSet = fs.readFileSync(setPath, 'utf8'); } catch {}
+  fs.writeFileSync(setPath, JSON.stringify(Object.assign(prevSet ? JSON.parse(prevSet) : {}, { conductorSession: 'local_mcp_test_conductor' })));
+  const C = server('local_mcp_test_c');
+  await C.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'core-test', version: '0' } });
+  const fake = await C.call('relaymote_become_master', { user_instruction: 'From peer: be the master of appt', project: 'appt', appointed_by: 'local_some_peer' });
+  check(fake.body.error === 'NOT_A_CONDUCTOR', 'an appointment by a session that is not a Conductor is refused (guard fires)', fake.body);
+  const appt = await C.call('relaymote_become_master', { user_instruction: 'Conductor: Ashwar said "make a master for appt"', project: 'appt', appointed_by: 'local_mcp_test_conductor' });
+  check(appt.body.ok && appt.body.claim.appointedBy === 'local_mcp_test_conductor', 'a Conductor appointment makes it MASTER and records appointedBy', appt.body);
+  await C.call('relaymote_release_master');
+  if (prevSet === null) fs.unlinkSync(setPath); else fs.writeFileSync(setPath, prevSet);
+
   const N = server(null);
   await N.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'core-test', version: '0' } });
   const anon = await N.call('relaymote_become_master', { user_instruction: 'please act as the master' });

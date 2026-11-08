@@ -1313,3 +1313,12 @@ details.peer{position:relative}
 .qchip .qwho{display:block; font-weight:600; font-size:12px; color:var(--accent)}
 .qchip-line{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere}
 .qchip .x{all:unset; flex:none; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer}
+
+/* A master's own view (09-Nov): fleet filter bar with its open goals. */
+.tag.tag-master{ background:color-mix(in srgb, var(--run, #3b82f6) 16%, transparent); color:var(--fg, inherit); cursor:pointer; }
+.masterbar{ margin:4px 12px 6px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--panel-2); font-size:12.5px; }
+.masterbar .mb-head{ display:flex; align-items:center; gap:6px; }
+.masterbar .mb-head b{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.masterbar .mb-x{ border:none; background:none; color:var(--dim); font-size:18px; line-height:1; padding:2px 6px; cursor:pointer; }
+.masterbar .mb-goals{ margin-top:6px; display:flex; flex-direction:column; gap:4px; }
+.masterbar .mb-goal{ line-height:1.35; word-break:break-word; }

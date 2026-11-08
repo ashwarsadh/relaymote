@@ -1449,6 +1449,7 @@ function renderSessions(list, opts = {}) {
     const meta = [];
     const tag = s.folder || s.group;
     if (tag) meta.push(`<span class="tag">${esc(tag)}</span>`);
+    if (s.master && s.master.fleet) meta.push(`<span class="tag tag-master" data-master="${esc(s.id)}" title="Show this master's sessions and goals">master · ${s.master.fleet}</span>`);
     if (s.by && s.by.length) meta.push(`<span class="tag tag-by">${esc(s.by.map(b => b.name).join(', '))}</span>`);
     meta.push(`<span data-at="${Number(s.at) || 0}">${ago(s.at)}</span>`);
     if (s.model) meta.push(`<span>${esc(shortModel(s.model))}</span>`);
@@ -1466,6 +1467,8 @@ function renderSessions(list, opts = {}) {
       `<button class="star${state.favs.has(s.id) ? ' on' : ''}" data-fav="${esc(s.id)}" ` +
       `aria-label="${state.favs.has(s.id) ? 'Unstar' : 'Star'}">${state.favs.has(s.id) ? '★' : '☆'}</button>`;
     li.onclick = (e) => {
+      const mt = e.target.closest('.tag-master');
+      if (mt) { e.stopPropagation(); openMasterView(mt.dataset.master, s.title); return; }
       const st = e.target.closest('.star');
       if (st) { e.stopPropagation(); toggleFav(st.dataset.fav); return; }
       // A search hit opens ON its message (29-Sep), not at the bottom of the session.
@@ -1540,10 +1543,42 @@ async function prefetchChats(list) {
   }
 }
 
+/* A master's own view (09-Nov, Agent Teams hybrid): the list narrows to the master and its fleet, and a bar
+   above it shows that fleet's open goals from the register. Tap the bar's x to go back to everything. */
+async function openMasterView(id, title) {
+  state.master = { id, title };
+  await loadSessions();
+  paintMasterBar();
+}
+async function paintMasterBar() {
+  const bar = $('masterbar');
+  if (!bar) return;
+  if (!state.master) { bar.hidden = true; bar.innerHTML = ''; return; }
+  bar.hidden = false;
+  bar.innerHTML = `<div class="mb-head"><b>${esc(state.master.title || 'Master')}</b> — its sessions and goals ` +
+    `<button class="mb-x" aria-label="Show all sessions">&times;</button></div><div class="mb-goals muted">Loading goals…</div>`;
+  bar.querySelector('.mb-x').onclick = () => { state.master = null; paintMasterBar(); loadSessions(); };
+  try {
+    const d = await api('/api/goals?master=' + encodeURIComponent(state.master.id));
+    const open = (d.goals || []).filter(g => g.status === 'open');
+    const el = bar.querySelector('.mb-goals');
+    if (!el) return;
+    el.classList.toggle('muted', !open.length);
+    el.innerHTML = open.length
+      ? open.slice(0, 12).map(g => `<div class="mb-goal"><span class="tag">${esc(g.id)}</span> ${esc(g.title)}` +
+          `${g.condition ? ` <span class="muted">· ${esc(g.condition)}</span>` : ''}${g.ownerTitle ? ` <span class="muted">· ${esc(g.ownerTitle)}</span>` : ''}</div>`).join('')
+      : 'No open goals for this fleet.';
+  } catch (e) {
+    const el = bar.querySelector('.mb-goals');
+    if (el) el.textContent = e && e.code === 'OWNER_ONLY' ? 'Goals are visible to the owner only.' : 'Could not load goals.';
+  }
+}
+
 async function loadSessions() {
   const p = new URLSearchParams();
   if (state.folder) p.set('folder', state.folder);
   if (state.q) p.set('q', state.q);
+  if (state.master) p.set('master', state.master.id);
   p.set('limit', '80');
   if (state.favs.size) p.set('keep', [...state.favs].slice(0, 100).join(','));
   try {

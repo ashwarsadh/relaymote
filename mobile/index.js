@@ -804,6 +804,13 @@ function effortFor(s) {
   return o.effort;
 }
 
+/** Tag master rows with their fleet size, so the phone can open a master's own view. */
+function withMasterBadges(rows) {
+  let b = {}; try { b = require('../lib/master-view').badges(); } catch {}
+  for (const r of rows) if (b[r.id]) r.master = b[r.id];
+  return rows;
+}
+
 function slimSession(s) {
   return {
     id: s.id, title: s.title, cwd: s.cwd, folder: s.cwd ? path.basename(s.cwd) : null,
@@ -1360,6 +1367,9 @@ async function handle(req, res) {
     const limit = Math.min(Number(url.searchParams.get('limit') || 60), 300);
     let out = all.filter(s => !!s.archived === wantArchived);
     if (folder) out = out.filter(s => s.cwd === folder);
+    // ?master=<id>: that master and its fleet only (09-Nov, Agent Teams hybrid: "a master must see its own sessions").
+    const masterId = url.searchParams.get('master');
+    if (masterId) { const fl = require('../lib/master-view').fleetOf(masterId) || new Set([masterId]); out = out.filter(s => fl.has(s.id)); }
     if (q) out = out.filter(s => (s.title || '').toLowerCase().includes(q) || (s.cwd || '').toLowerCase().includes(q));
     out = byAttention(out);
     // The phone's starred sessions (kept on the phone) always make the cut, however old (29-Oct: starred on top).
@@ -1375,7 +1385,7 @@ async function handle(req, res) {
       buildAgeMs: assetVer.since ? Date.now() - assetVer.since : null,
       version: APP_VERSION,
       blocker: snap.blocker || null,
-      sessions: out.slice(0, limit).map(slimSession),
+      sessions: withMasterBadges(out.slice(0, limit).map(slimSession)),
     });
   }
 
@@ -1604,7 +1614,9 @@ async function handle(req, res) {
     }
     const cond = new Map(items.map(i => [i.id, i]));
     const titles = new Map(list.map(s => [s.id, s.title]));
-    const all = goals.list({ all: true }).map(g => ({ ...g, condition: g.status === 'open' ? ((cond.get(g.id) || {}).condition || null) : null,
+    // ?master=<id>: only goals owned by that master or a session in its fleet.
+    const mf = url.searchParams.get('master') ? (require('../lib/master-view').fleetOf(url.searchParams.get('master')) || new Set([url.searchParams.get('master')])) : null;
+    const all = goals.list({ all: true }).filter(g => !mf || mf.has(g.ownerSessionId)).map(g => ({ ...g, condition: g.status === 'open' ? ((cond.get(g.id) || {}).condition || null) : null,
       ownerState: (cond.get(g.id) || {}).ownerState || null,
       ownerTitle: g.ownerSessionId ? (titles.get(g.ownerSessionId) || null) : null }));
     return json(res, 200, { ok: true, goals: all, ...goals.status(), modules: { goalChaser: config.mod('goalChaser'), cacheKeeper: config.mod('cacheKeeper') } });

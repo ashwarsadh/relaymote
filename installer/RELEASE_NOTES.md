@@ -1,3 +1,7 @@
+## 0.2.165
+
+- A false "Permission needed" card no longer appears when a session's title starts with "Allow". Its button did nothing because it was really that session's row in the PC sidebar.
+
 ## 0.2.164
 
 - Heavy background work now runs apart from the part that answers your phone, so the short freezes of a few seconds should go.

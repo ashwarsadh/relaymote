@@ -47,8 +47,17 @@ const READ_JS = `(function(){
   // 24-Oct: Desktop 3.x draws AskUserQuestion inside the same approval-card frame, and an option such as
   // "No, leave my phone" read as a Deny button, so a question showed as "Permission needed". A question is
   // never a permission prompt; the phone shows it as a question (answer.js).
+  // 08-Nov (Ashwar: "I pressed it. Didn't do anything."): a sidebar row for a session TITLED "Allow short dated holds on
+  // tax goals (g2498)" read as an Allow button, its neighbouring rows as the ask, so every session showed a false
+  // "PERMISSION NEEDED" card whose tap only clicked that sidebar row. A permission button is never a sidebar or nav
+  // row, and its label is a few words, not a session title.
+  function outsideChat(b){
+    return !!b.closest('[data-row-key],[data-row-main-button],[data-testid="sidebar-recents"],[data-recents-list],[data-group-list],nav,aside');
+  }
   var cand=Array.from(document.querySelectorAll('button')).filter(function(b){
-    return b.offsetParent!==null && !b.closest('[data-engine-native="AskUserQuestion"]') && isChoice(cl(b));
+    if(b.offsetParent===null || b.closest('[data-engine-native="AskUserQuestion"]') || outsideChat(b)) return false;
+    var t=cl(b);
+    return t.length<=80 && isChoice(t);
   });
   var withShortcut=cand.filter(function(b){ var t=cl(b); return pretty(t)!==t; });
   var opts=withShortcut.length ? withShortcut
@@ -70,7 +79,12 @@ const READ_JS = `(function(){
     return t.trim();
   }
   var ask=askOf(host);
-  for(var h=0; h<6 && host && ask.length<40; h++){ host=host.parentElement; ask=askOf(host); }
+  // Widening to find the ask stops before it would take in the sidebar's rows.
+  for(var h=0; h<6 && host && ask.length<40; h++){
+    var up=host.parentElement;
+    if(!up || up.querySelector('[data-row-key],[data-testid="sidebar-recents"]')) break;
+    host=up; ask=askOf(host);
+  }
 
   window.__relaymotePerm={};
   var list=[];

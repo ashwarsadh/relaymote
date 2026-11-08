@@ -812,6 +812,7 @@ function slimSession(s) {
     running: s.running, awaiting: s.awaiting, unread: s.unread, active: s.active,
     live: s.live, archived: s.archived, at: s.lastActivityAt, turns: s.turns,
     stalled: !!s.stalled, quietFor: s.quietFor || 0,
+    bgJobs: s.bgJobs || undefined, bgWhat: s.bgJobs ? s.bgWhat : undefined,
     by: s.by || undefined, othersOnly: s.othersOnly || undefined, api: s.api || undefined,
   };
 }
@@ -1352,6 +1353,7 @@ async function handle(req, res) {
     await sessions.refresh();
     const all = principalList(req, url, visibleSessions(identity, sessions.decorate(sessions.index().list, desktop.loadSnapshot())));
     warmRecent(all);
+    sessions.refreshLiveJobs(all).catch(() => {});
     const folder = url.searchParams.get('folder');
     const q = (url.searchParams.get('q') || '').toLowerCase();
     const wantArchived = url.searchParams.get('archived') === '1';

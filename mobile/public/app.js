@@ -1444,7 +1444,8 @@ function renderSessions(list, opts = {}) {
     if (firstOf.has(s)) ul.appendChild(foldHeader(firstOf.get(s)));
     const li = document.createElement('li');
     li.className = 'row' + (s.id === state.open ? ' current' : '');
-    const cls = s.running ? (s.stalled ? 'running stalled' : 'running') : s.awaiting ? 'awaiting' : 'idle';
+    // 08-Nov (Ashwar): idle, but a background job it started is still running: half a blue dot, "partly working".
+    const cls = s.running ? (s.stalled ? 'running stalled' : 'running') : s.awaiting ? 'awaiting' : s.bgJobs ? 'partial' : 'idle';
     const meta = [];
     const tag = s.folder || s.group;
     if (tag) meta.push(`<span class="tag">${esc(tag)}</span>`);
@@ -1452,6 +1453,7 @@ function renderSessions(list, opts = {}) {
     meta.push(`<span data-at="${Number(s.at) || 0}">${ago(s.at)}</span>`);
     if (s.model) meta.push(`<span>${esc(shortModel(s.model))}</span>`);
     if (s.awaiting) meta.push('<span style="color:var(--wait)">needs you</span>');
+    if (!s.running && !s.awaiting && s.bgJobs) meta.push(`<span style="color:var(--run)" title="${esc(s.bgWhat || '')}">${s.bgJobs > 1 ? s.bgJobs + ' background jobs' : 'background job'} running</span>`);
     if (s.stalled) meta.push(`<span class="muted">running · quiet ${Math.round(s.quietFor / 60000)}m</span>`);
     li.innerHTML =
       `<span class="dot ${cls}"></span>` +

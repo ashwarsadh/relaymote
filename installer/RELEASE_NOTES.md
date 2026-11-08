@@ -1,3 +1,7 @@
+## 0.2.166
+
+- A session that has finished its turn but still has a background job running (a render, a build, a helper agent) now shows a half-blue dot and "background job running", instead of a plain grey dot.
+
 ## 0.2.165
 
 - A false "Permission needed" card no longer appears when a session's title starts with "Allow". Its button did nothing because it was really that session's row in the PC sidebar.

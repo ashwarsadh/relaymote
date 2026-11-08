@@ -198,6 +198,8 @@ function decorate(list, snapshot) {
       live: !!d,
       stalled: !!(d && d.running && at && (Date.now() - at) > STALE_RUN_MS),
       quietFor: d && d.running && at ? Date.now() - at : 0,
+      bgJobs: d && d.running ? 0 : ((liveJobs(s.id) || {}).n || 0),
+      bgWhat: d && d.running ? '' : ((liveJobs(s.id) || {}).what || ''),
       api,
     };
   });
@@ -723,7 +725,37 @@ async function backgroundTasksSoon(sess) {
   try { return await Promise.race([scan, late]); } finally { clearTimeout(timer); }
 }
 
-function backgroundFromFile(file) {
+// opts.all (08-Nov, the dot for a session that is idle but has a job running): every unfinished run_in_background launch,
+// Bash included (an ffmpeg render), not only Agent/Task. One started more than LIVE_JOB_MAX_MS ago is taken as dead: a
+// Desktop restart kills the job without writing the notification that would close it.
+const LIVE_JOB_MAX_MS = 12 * 3600000;
+// The list reads liveJobs synchronously from what the worker last found; refreshLiveJobs asks again for the sessions
+// that could have one (idle, active in the last 12 h), at most once per LIVE_EVERY_MS each, one at a time.
+const liveLast = new Map();   // session id -> { n, what, at }
+const LIVE_EVERY_MS = 15000;
+function liveJobs(id) { const e = liveLast.get(id); return e && e.n ? e : null; }
+let liveBusy = false;
+async function refreshLiveJobs(list) {
+  if (liveBusy) return;
+  liveBusy = true;
+  try {
+    const now = Date.now();
+    const want = (list || []).filter(s => !s.running && !s.archived && (now - (s.lastActivityAt || 0)) < LIVE_JOB_MAX_MS)
+      .sort((x, y) => (y.lastActivityAt || 0) - (x.lastActivityAt || 0)).slice(0, 40);
+    for (const s of want) {
+      const prev = liveLast.get(s.id);
+      if (prev && now - prev.at < LIVE_EVERY_MS) continue;
+      const sess = get(s.id); const file = sess && transcriptPath(sess);
+      if (!file) continue;
+      let jobs = [];
+      try { jobs = await require('../lib/off-thread').run('fast', 'bg.live', { file }); } catch { continue; }
+      liveLast.set(s.id, { n: jobs.length, what: jobs.length ? String(jobs[jobs.length - 1].description || jobs[jobs.length - 1].name || '') : '', at: Date.now() });
+    }
+    for (const id of liveLast.keys()) if (!want.some(s => s.id === id) && !(list || []).some(s => s.id === id && s.running)) liveLast.delete(id);
+  } finally { liveBusy = false; }
+}
+
+function backgroundFromFile(file, opts = {}) {
   let size;
   try { size = fs.statSync(file).size; } catch { return []; }
   let c = bgCache.get(file);
@@ -752,8 +784,11 @@ function backgroundFromFile(file) {
   if (bgCache.size > 200) bgCache.delete(bgCache.keys().next().value);
   const out = [];
   for (const [id, info] of c.launched) {
-    if (c.finished.has(id)) continue;
-    if (info.name !== 'Agent' && info.name !== 'Task') continue;
+    if (c.finished.has(id) || (info.taskId && c.finished.has('task:' + info.taskId))) continue;
+    if (opts.all) {
+      const t = Date.parse(info.startedAt || '');
+      if (!t || Date.now() - t > LIVE_JOB_MAX_MS) continue;
+    } else if (info.name !== 'Agent' && info.name !== 'Task') continue;
     out.push(info);
   }
   return out;
@@ -763,7 +798,8 @@ function scanBackground(text, launched, finished) {
   const idRx = /<tool-use-id>(toolu_[A-Za-z0-9]+)<\/tool-use-id>/g;
   const statusRx = /<status>(\w+)<\/status>/;
   for (const line of text.split('\n')) {
-    if (!line.includes('run_in_background') && !line.includes('tool-use-id')) continue;
+    if (!line.includes('run_in_background') && !line.includes('tool-use-id') && !line.includes('<task-id>')
+        && !line.includes('background with ID') && !line.includes('agentId') && !line.includes('TaskStop')) continue;
     const t = line.trim();
     if (!t) continue;
     let row;
@@ -781,6 +817,19 @@ function scanBackground(text, launched, finished) {
           startedAt: own(row.timestamp || null),
         });
       }
+    }
+    // 08-Nov: a job is also ended by TaskStop {task_id} (no notification follows), and a notification may name only its
+    // <task-id>. So the launch's task id (from its result, "...in background with ID: b0rv704jr" or "agentId: ...") is
+    // kept, and a stop or notification by task id finishes it too.
+    {
+      const res = /"tool_use_id":"(toolu_[A-Za-z0-9]+)"/.exec(t);
+      const tid = /in background with ID: ([A-Za-z0-9_-]+)/.exec(t) || /agentId: ([A-Za-z0-9_-]+)/.exec(t);
+      if (res && tid && launched.has(res[1]) && !launched.get(res[1]).taskId) launched.get(res[1]).taskId = own(tid[1]);
+      const stopRx = /"name":"(?:TaskStop|KillShell|KillBash)","input":\{"(?:task_id|shell_id|bash_id)":"([A-Za-z0-9_-]+)"/g;
+      let sm;
+      while ((sm = stopRx.exec(t))) finished.set('task:' + own(sm[1]), 'stopped');
+      const tnRx = /<task-id>([A-Za-z0-9_-]+)<\/task-id>/g;
+      if (t.includes('<status>')) while ((sm = tnRx.exec(t))) finished.set('task:' + own(sm[1]), own((t.match(statusRx) || [])[1] || 'completed'));
     }
     if (t.includes('task-notification') || t.includes('<tool-use-id>')) {
       const st = (t.match(statusRx) || [])[1] || 'completed';
@@ -983,7 +1032,7 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
 }
 
 module.exports = { unwrapForTest: unwrap, flattenForTest: flatten, byTypedTimeForTest: byTypedTime,
-  refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasksSoon, backgroundFromFile, backgroundTasks, transcriptStamp, transcriptPath, slugFor,
+  refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasksSoon, backgroundFromFile, backgroundTasks, refreshLiveJobs, liveJobs, transcriptStamp, transcriptPath, slugFor,
   searchTranscripts, searchSession, ackDot, ackVersion,
   STORE, PROJECTS,
 };

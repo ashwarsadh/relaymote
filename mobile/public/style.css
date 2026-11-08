@@ -171,6 +171,7 @@ body{
 .dot{flex:none; width:10px; height:10px; border-radius:50%; margin-top:5px; background:var(--faint)}
 .dot.running{background:var(--run); animation:pulse 1.8s ease-in-out infinite}
 
+.dot.partial{background:linear-gradient(90deg,var(--run) 50%,transparent 50%); box-shadow:inset 0 0 0 1.5px var(--run)}
 .dot.running.stalled{animation:none; background:transparent; box-shadow:inset 0 0 0 2px var(--run)}
 .dot.awaiting{background:var(--wait); box-shadow:0 0 0 3px color-mix(in srgb,var(--wait) 25%,transparent)}
 .row:has(> .dot.awaiting){box-shadow:inset 3px 0 0 var(--wait)}

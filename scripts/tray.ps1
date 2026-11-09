@@ -45,8 +45,8 @@ function Node {
 function Health {
   $s = Settings
   try {
-    $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 "http://127.0.0.1:$($s.port)/api/health"
-    if ($r.StatusCode -eq 200) { $j = $r.Content | ConvertFrom-Json; if ($j.app -eq 'relaymote') { return $j } }
+    $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 10 "http://127.0.0.1:$($s.port)/api/health"
+    if ($r.StatusCode -eq 200) { $j = $r.Content | ConvertFrom-Json; if ($j.app -eq 'relaymote') { $script:frozen = 0; return $j } }
   } catch {}
   return $null
 }
@@ -56,9 +56,32 @@ function Healthy { return [bool](Health) }
 function FollowClaude { try { return ((Get-Content (Join-Path $Data 'settings.json') -Raw | ConvertFrom-Json).followClaude -eq $true) } catch { return $false } }
 function ClaudeUp { return [bool](Get-Process -Name claude -ErrorAction SilentlyContinue) }
 function Wanted { return (-not (FollowClaude)) -or (ClaudeUp) }
+# 10-Nov: the daemon froze for 15 min with its process up and its port held; a start then failed on the port and
+# nothing restarted it. A Relaymote node holding the port that has not answered two probes in a row (10 s each,
+# 20 s apart), and is past its first 2 minutes, is frozen: it is ended and started again.
+$script:frozen = 0
+function FrozenHolder {
+  $s = Settings
+  $c = Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort $s.port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $c) { return $null }
+  $p = Get-CimInstance Win32_Process -Filter "ProcessId=$($c.OwningProcess)" -ErrorAction SilentlyContinue
+  if (-not $p -or $p.Name -ne 'node.exe' -or $p.CommandLine -notmatch '(?i)relaymote|baton') { return $null }
+  if (((Get-Date) - $p.CreationDate).TotalSeconds -lt 120) { return $null }
+  return $p
+}
+function Log($m) { try { Add-Content -Path (Join-Path $State 'relaymote.log') -Value ('[' + (Get-Date).ToUniversalTime().ToString('o') + '] [tray] ' + $m) } catch {} }
 function StartDaemon {
   if (Healthy) { return }
   if (StoppedByUser) { return }
+  $held = FrozenHolder
+  if ($held) {
+    $script:frozen++
+    if ($script:frozen -lt 2) { return }
+    Log ("no answer to two health probes (10 s each) from pid " + $held.ProcessId + ": ending it and starting again")
+    Stop-Process -Id $held.ProcessId -Force -ErrorAction SilentlyContinue
+    $script:frozen = 0
+    Start-Sleep -Seconds 2
+  }
   # Through run-daemon.cmd, like every other start path: it rotates state\daemon-stdio.log at 10 MB,
   # writes a launch and an exit line, and keeps node's stderr - the only record of a hard crash.
   New-Item -ItemType Directory -Force $State | Out-Null

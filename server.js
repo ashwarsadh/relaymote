@@ -37,6 +37,7 @@ const goal = require('./lib/goal');
 const awaits = require('./lib/await');
 const config = require('./lib/config');
 const projects = require('./lib/projects');
+projects.prime();   // the 15 MB index loads in the background; see projects.prime
 const organizer = require('./lib/organizer');
 const goals = require('./lib/goals');
 const boardBuild = require('./lib/board-build');

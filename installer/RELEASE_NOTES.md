@@ -1,3 +1,9 @@
+## 0.2.173
+
+- If Relaymote stops answering for more than about 40 seconds while its process is still running, the tray now restarts it on its own (it waits 10 seconds for an answer each time instead of 3).
+- Faster start after a restart: the phone is answered while the session index loads, instead of waiting for it.
+- One more pause removed on a busy disk: the chip watcher keeps its state in memory.
+
 ## 0.2.172
 
 - Relaymote no longer freezes when the PC's disk is very busy: the message outbox and the Claude Desktop status are kept in memory instead of being re-read from disk on every refresh.

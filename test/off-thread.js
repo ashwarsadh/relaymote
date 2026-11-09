@@ -86,6 +86,17 @@ const failed = (p) => p.then(() => null, e => e);
 
   const ix = await off.run('slow', 'index.build', { transcripts: false, digests: false });
   check(ix && ix.builtAt && fs.existsSync(require('../lib/projects').INDEX_JSON), 'index.build writes the index and hands it back', ix && ix.builtAt);
+  const P = require('../lib/projects');
+  check(P.adopt(ix), 'the main thread adopts the index the worker built');
+  let reads = 0; const rf = fs.readFileSync;
+  fs.readFileSync = function (f, ...x) { if (f === P.INDEX_JSON) reads++; return rf.call(fs, f, ...x); };
+  const got = P.read(); fs.readFileSync = rf;
+  check(reads === 0 && got === ix, 'and read() returns it without reading index.json', reads);
+  check(JSON.stringify(got) === JSON.stringify(JSON.parse(rf.call(fs, P.INDEX_JSON, 'utf8'))), 'it is what the file holds');
+  const later = new Date(Date.now() + 5000); fs.utimesSync(P.INDEX_JSON, later, later);
+  reads = 0; fs.readFileSync = function (f, ...x) { if (f === P.INDEX_JSON) reads++; return rf.call(fs, f, ...x); };
+  P.read(); fs.readFileSync = rf;
+  check(reads === 1, 'a later write by anyone else is read again', reads);
   const hy = await off.run('slow', 'hygiene.cycle');
   check(hy && (hy.ok || hy.skipped || hy.error), 'hygiene.cycle answers', Object.keys(hy || {}).slice(0, 4));
   const bd = await off.run('slow', 'board.build');

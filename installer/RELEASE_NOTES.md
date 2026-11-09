@@ -1,3 +1,7 @@
+## 0.2.171
+
+- Two more pauses removed from what answers your phone: a re-read of the project index after each background rebuild, and a check of every session file on each refresh.
+
 ## 0.2.170
 
 - Fewer short freezes on the phone: the session index is read once per change instead of on every look (it is about 15 MB), and finding the files a session sent you no longer reads a long transcript in one go.

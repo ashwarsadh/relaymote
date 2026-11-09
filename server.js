@@ -249,7 +249,7 @@ async function indexTick() {
   if (!config.mod('orchestrator') && !config.mod('organizer')) return null;
   try {
     const intel = require('./lib/summarize');
-    const buildIndex = () => offThread.run('slow', 'index.build', intel.buildOpts());
+    const buildIndex = async () => { const x = await offThread.run('slow', 'index.build', intel.buildOpts()); projects.adopt(x); return x; };
     const ix = await buildIndex();
     // after the build (digests included): overviews, then the roles DB — its own lock, throttle and budgets, never awaited here
     intel.cycle({ log: orch.log, rebuild: buildIndex }).catch(e => orch.log('intel cycle: ' + e.message));

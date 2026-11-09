@@ -1673,7 +1673,7 @@ async function handle(req, res) {
     if (!isOwner(identity)) return json(res, 403, { ok: false, error: 'OWNER_ONLY' });
     const projects = require('../lib/projects');
     try {
-      const ix = url.searchParams.get('refresh') === '1' ? await projects.build({ force: true }) : await projects.fresh(30 * 60000);
+      const ix = url.searchParams.get('refresh') === '1' ? await require('../lib/off-thread').run('slow', 'index.build', { force: true }).then(x => (projects.adopt(x), x)) : await projects.fresh(30 * 60000);
       return json(res, 200, { ok: true, ...ix });
     } catch (e) { return json(res, 500, { ok: false, error: 'INDEX_FAILED', message: e.message }); }
   }

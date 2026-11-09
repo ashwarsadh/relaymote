@@ -10,7 +10,7 @@ const { check: chk } = H;
 
 const outbox = require('../mobile/outbox');
 const MIN = 60 * 1000;
-const reset = () => { try { fs.unlinkSync(outbox.FILE); } catch {} };
+const reset = () => { outbox._reset(); try { fs.unlinkSync(outbox.FILE); } catch {} };   // memory is the outbox now (10-Nov)
 const NL = '\n';
 
 (async () => {
@@ -73,6 +73,7 @@ const NL = '\n';
   {
     outbox.add({ session: 's1', text: 'first message that must survive' });
     outbox.add({ session: 's2', text: 'second message in another session' });
+    outbox.flush();   // written in the background within 200 ms, and on exit; here at once
     delete require.cache[require.resolve('../mobile/outbox')];
     const fresh = require('../mobile/outbox');
     chk(fresh.pending().length === 2, 'entries survive a full reload of the module -- they live on disk', fresh.pending().length);

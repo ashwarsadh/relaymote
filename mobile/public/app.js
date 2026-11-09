@@ -795,6 +795,19 @@ function learnMedia(e) {
   mediaDims.set(src, { w, h });
   htmlCache.clear();   // cached bubbles were built without the size
 }
+/* 10-Nov, Ashwar: an audio or video played inside a chat "plays for a few seconds and after that it stops". Every
+   render rewrites the log, which destroyed the playing <audio>/<video> with it. A player that is playing or part-played
+   is carried into the new log in place of its fresh copy (same tag and src). Put back in the same task, it never pauses. */
+function keepMedia(log, write) {
+  const live = [...log.querySelectorAll('audio, video')].filter(m => !m.paused || m.currentTime > 0);
+  write();
+  if (!live.length) return;
+  const fresh = [...log.querySelectorAll('audio, video')];
+  for (const old of live) {
+    const i = fresh.findIndex(n => n.tagName === old.tagName && n.getAttribute('src') === old.getAttribute('src'));
+    if (i >= 0) { fresh[i].replaceWith(old); fresh.splice(i, 1); }
+  }
+}
 function sentFileHtml(t) {
   const sid = state.open || '';
   let out = '<div class="msg sentfile">';
@@ -1134,7 +1147,7 @@ function renderLog(messages, force) {
                : 'sending…';
     html += `<div class="msg user pending${sn2 || failed ? ' act' : ''}${failed ? ' failed' : ''}">${body}<span class="tick">${tick}</span></div>`;
   }
-  log.innerHTML = html || '<div class="empty">No messages yet.</div>';
+  keepMedia(log, () => { log.innerHTML = html || '<div class="empty">No messages yet.</div>'; });
   if (tts.el) { ttsRelink(); ttsWake(); }
   if (openQuotes.size) log.querySelectorAll('.quote').forEach(q => { if (openQuotes.has(q.dataset.qk)) q.classList.add('open'); });
   log.querySelectorAll('.obx-now').forEach(b => { b.onclick = (ev) => { ev.stopPropagation(); obRetryNow(b.dataset.cmid); }; });

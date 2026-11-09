@@ -48,6 +48,7 @@ const w = H.world('queued');
     { ...base, id: 'ob_held', session: SID, text: 'held behind a running turn', uuid: crypto.randomUUID(), state: 'pending' },
   ];
   fs.writeFileSync(OB, JSON.stringify({ entries: readOb().concat(seeded) }, null, 1));
+  await new Promise(r => setTimeout(r, 1100));   // 10-Nov: the server keeps the outbox in memory and looks at the file's time once a second
   const held = (await d.req('/api/outbox')).json.pending.find(e => e.id === 'ob_held');
   check(!!held && held.held === true, '/api/outbox marks a slip with a handle as held', held);
 

@@ -36,21 +36,45 @@ function redeliveryText(e, now = Date.now()) {
   return `[Redelivered by Relaymote at ${ist(now)} IST: the first send at ${ist(e.at)} IST never reached this session]\n` + e.text;
 }
 
+// 10-Nov 01:45 IST, Ashwar: "relaymote still not working". With the disk saturated, the sync read of this 334 KB file on
+// every poll held the event loop 34-83 s (loop-watch: load outbox.js:39). The file is read once; from then on memory is
+// the outbox and the file is its copy, written in the background (only this process writes it). load() hands out a
+// copy of the list, so a caller that drops entries without save() changes nothing.
+let mem = null, dirty = false, writing = false, memMtime = 0, looked = 0;
 function load() {
-  try {
-    const j = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-    return Array.isArray(j.entries) ? j.entries : [];
-  } catch { return []; }
+  // An edit from outside (a test, a hand fix) is seen: the file's time is looked at no more than once a second.
+  if (mem && (dirty || writing || Date.now() - looked < 1000)) return mem.slice();
+  let m = 0;
+  try { m = fs.statSync(FILE).mtimeMs; } catch { if (!mem) mem = []; return mem.slice(); }
+  looked = Date.now();
+  if (mem && m === memMtime) return mem.slice();
+  try { const j = JSON.parse(fs.readFileSync(FILE, 'utf8')); mem = Array.isArray(j.entries) ? j.entries : []; memMtime = m; } catch { if (!mem) mem = []; }
+  return mem.slice();
 }
 
 function save(entries) {
-  try {
-    fs.mkdirSync(STATE, { recursive: true });
-    const tmp = FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ entries }, null, 1));
-    fs.renameSync(tmp, FILE);
-  } catch { }
+  mem = entries.slice();
+  dirty = true;
+  if (!writing) { writing = true; setImmediate(writeOut); }
 }
+
+async function writeOut() {
+  try {
+    while (dirty) {
+      dirty = false;
+      const body = JSON.stringify({ entries: mem }, null, 1), tmp = FILE + '.tmp';
+      try { await fs.promises.mkdir(STATE, { recursive: true }); await fs.promises.writeFile(tmp, body); await fs.promises.rename(tmp, FILE); memMtime = (await fs.promises.stat(FILE)).mtimeMs; } catch { }
+    }
+  } finally { writing = false; }
+}
+
+/** Write now, synchronously (process exit, tests). */
+function flush() {
+  if (!dirty && !writing) return;
+  dirty = false;
+  try { fs.mkdirSync(STATE, { recursive: true }); const tmp = FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ entries: mem }, null, 1)); fs.renameSync(tmp, FILE); memMtime = fs.statSync(FILE).mtimeMs; } catch { }
+}
+process.on('exit', flush);
 
 function norm(t) {
   return String(t || '').replace(/\s+/g, ' ').trim();
@@ -226,4 +250,4 @@ function markResending(id, now = Date.now()) {
   if (e) { e.resendingAt = now; save(entries); }
 }
 
-module.exports = { overtaken, markResending, STUCK_MS, redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, BUSY_CAP_MS, KEEP_MS, FILE };
+module.exports = { flush, _reset() { mem = null; dirty = false; memMtime = 0; looked = 0; }, overtaken, markResending, STUCK_MS, redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, BUSY_CAP_MS, KEEP_MS, FILE };

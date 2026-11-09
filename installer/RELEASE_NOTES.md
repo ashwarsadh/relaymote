@@ -1,3 +1,8 @@
+## 0.2.172
+
+- Relaymote no longer freezes when the PC's disk is very busy: the message outbox and the Claude Desktop status are kept in memory instead of being re-read from disk on every refresh.
+- An audio or video played inside a chat keeps playing while the session works; it no longer stops after a few seconds.
+
 ## 0.2.171
 
 - Two more pauses removed from what answers your phone: a re-read of the project index after each background rebuild, and a check of every session file on each refresh.

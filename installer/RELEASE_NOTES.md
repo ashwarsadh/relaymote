@@ -1,3 +1,7 @@
+## 0.2.170
+
+- Fewer short freezes on the phone: the session index is read once per change instead of on every look (it is about 15 MB), and finding the files a session sent you no longer reads a long transcript in one go.
+
 ## 0.2.169
 
 - A background job no longer drops off the dots and the Background tasks sheet while it runs: a newer Claude Desktop repeats each request without a time, and that copy erased the job's start time (a live render showed grey).

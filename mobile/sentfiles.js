@@ -32,6 +32,23 @@ const norm = (p) => { const r = path.resolve(String(p)); return process.platform
 // transcript file -> { size, files:Set } -- rescans only the bytes appended since the last look.
 const cache = new Map();
 
+// 09-Nov stall measurement: the first look read a whole transcript (up to 272 MB) into one buffer and split it in one go,
+// blocking a poll for 2.3 s. It now reads line-aligned chunks and yields between them.
+const CHUNK = 4 * 1048576;
+const yieldNow = () => new Promise(r => setImmediate(r));
+function scanSent(text, c) {
+  for (const line of text.split('\n')) {
+    if (line.indexOf('SendUserFile') < 0) continue;
+    let j; try { j = JSON.parse(line); } catch { continue; }
+    const content = j && j.message && Array.isArray(j.message.content) ? j.message.content : [];
+    for (const b of content) {
+      if (!b || b.type !== 'tool_use' || !/SendUserFile$/.test(b.name || '')) continue;
+      const files = b.input && Array.isArray(b.input.files) ? b.input.files : [];
+      for (const f of files) if (typeof f === 'string' && f) c.files.add(norm(path.isAbsolute(f) ? f : path.join(j.cwd || '', f)));
+    }
+  }
+}
+
 async function sentFiles(transcript) {
   const st = await fs.promises.stat(transcript);
   let c = cache.get(transcript);
@@ -39,23 +56,19 @@ async function sentFiles(transcript) {
   if (st.size > c.size) {
     const fh = await fs.promises.open(transcript, 'r');
     try {
-      const buf = Buffer.alloc(st.size - c.size);
-      await fh.read(buf, 0, buf.length, c.size);
-      const text = buf.toString('utf8');
-      // Only whole lines count; a half-written last line is picked up next time.
-      const end = text.lastIndexOf('\n');
-      if (end >= 0) {
-        for (const line of text.slice(0, end).split('\n')) {
-          if (line.indexOf('SendUserFile') < 0) continue;
-          let j; try { j = JSON.parse(line); } catch { continue; }
-          const content = j && j.message && Array.isArray(j.message.content) ? j.message.content : [];
-          for (const b of content) {
-            if (!b || b.type !== 'tool_use' || !/SendUserFile$/.test(b.name || '')) continue;
-            const files = b.input && Array.isArray(b.input.files) ? b.input.files : [];
-            for (const f of files) if (typeof f === 'string' && f) c.files.add(norm(path.isAbsolute(f) ? f : path.join(j.cwd || '', f)));
-          }
+      while (c.size < st.size) {
+        const want = Math.min(CHUNK, st.size - c.size);
+        const buf = Buffer.alloc(want);
+        const { bytesRead } = await fh.read(buf, 0, want, c.size);
+        // Only whole lines count; a half-written last line is picked up next time.
+        const end = buf.subarray(0, bytesRead).lastIndexOf(10);
+        if (end < 0) {
+          if (bytesRead < CHUNK) break;
+          c.size += bytesRead; continue;           // a line longer than a chunk (a pasted image): never a SendUserFile call
         }
-        c.size += Buffer.byteLength(text.slice(0, end + 1), 'utf8');
+        if (buf.indexOf('SendUserFile') >= 0) scanSent(buf.toString('utf8', 0, end), c);
+        c.size += end + 1;
+        if (c.size < st.size) await yieldNow();
       }
     } finally { await fh.close(); }
   }

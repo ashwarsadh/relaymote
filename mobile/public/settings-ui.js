@@ -659,7 +659,7 @@
     load().then(function (s) {
       if (!s) return; // a scoped sub-user: settings are owner-only
       loadDesk();
-      setInterval(loadDesk, 60000);
+      setInterval(function () { if (!document.hidden) loadDesk(); }, 60000);   // 11-Nov battery: nothing on the radio while hidden
       if (location.hash === '#pair') open('pair');
       else if (location.hash === '#settings') open('now');
       else if (location.hash === '#desktop') open('desktop');

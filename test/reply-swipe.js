@@ -51,10 +51,11 @@ for (let i = 7; i < 37; i++) MSGS.push({ role: i % 2 ? 'user' : 'assistant', ts:
     for (let i = 0; i < 40 && !targets; i++) { await H.wait(250); try { targets = await (await fetch(`http://127.0.0.1:${dbg}/json`)).json(); } catch {} }
     const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise(r => ws.on('open', r));
-    let n = 0; const waiting = new Map(), sends = [], errors = [];
+    let n = 0, lastNav = 0; const waiting = new Map(), sends = [], errors = [];
     ws.on('message', m => {
       const j = JSON.parse(m);
       if (j.id && waiting.has(j.id)) { waiting.get(j.id)(j); waiting.delete(j.id); return; }
+      if (j.method === 'Page.frameNavigated' && !j.params.frame.parentId) lastNav = Date.now();
       if (j.method === 'Runtime.exceptionThrown') errors.push(j.params.exceptionDetails.text + ' ' + ((j.params.exceptionDetails.exception || {}).description || ''));
       if (j.method === 'Fetch.requestPaused') {
         const r = j.params.request;
@@ -65,7 +66,9 @@ for (let i = 7; i < 37; i++) MSGS.push({ role: i % 2 ? 'user' : 'assistant', ts:
       }
     });
     const cdp = (method, params = {}) => new Promise(r => { const i = ++n; waiting.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
-    const ev = async (expr) => { const r = await cdp('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result && r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400)); return r.result.result.value; };
+    // A CDP-level error (no .result, e.g. "context destroyed" while a navigation lands) is retried (11-Nov flake).
+    const ev = async (expr) => { let r; for (let k = 0; k < 20; k++) { r = await cdp('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r && r.result) break; await H.wait(250); }
+      if (!r || !r.result) throw new Error('CDP evaluate failed: ' + JSON.stringify(r).slice(0, 200)); if (r.result && r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400)); return r.result.result.value; };
 
     await cdp('Emulation.setDeviceMetricsOverride', { width: 412, height: 860, deviceScaleFactor: 2, mobile: true });
     await cdp('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
@@ -77,6 +80,8 @@ for (let i = 7; i < 37; i++) MSGS.push({ role: i % 2 ? 'user' : 'assistant', ts:
     await cdp('Page.navigate', { url: `http://127.0.0.1:${d.app}/` });
     for (let i = 0; i < 60 && !(await ev(`typeof openChat === 'function' && !!document.getElementById('btn-send') && !!navigator.serviceWorker.controller`).catch(() => false)); i++) await H.wait(250);
     await H.wait(1500);
+    // The first-install reload can land later than 1.5 s on a loaded PC (11-Nov flake): wait for 3 s of no navigation.
+    for (let i = 0; i < 80 && Date.now() - lastNav < 3000; i++) await H.wait(250);
     for (let i = 0; i < 60 && !(await ev(`typeof openChat === 'function' && !!document.getElementById('btn-send')`).catch(() => false)); i++) await H.wait(250);
     await ev(`openChat(${JSON.stringify(id)}).catch(() => {})`);
     for (let i = 0; i < 40 && (await ev(`state.open`)) !== id; i++) await H.wait(250);

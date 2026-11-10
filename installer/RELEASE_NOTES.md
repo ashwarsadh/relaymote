@@ -1,3 +1,8 @@
+## 0.2.178
+
+- Less battery on a weak signal: when the connection to the PC drops, Relaymote now waits longer between retries (2 s, 4 s, 8 s … up to a minute) instead of retrying every 3 seconds, and does not retry at all while it is in the background. It reconnects the moment you open it.
+- The Settings check on Claude Desktop no longer runs while the app is in the background.
+
 ## 0.2.177
 
 - Less battery and data use on the phone. When Relaymote has been in the background for 30 seconds, it stops its live connection to the PC; notifications still arrive, and it reconnects the moment you come back. Read-aloud keeps it open while it plays.

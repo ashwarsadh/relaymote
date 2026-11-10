@@ -638,7 +638,7 @@ window.addEventListener('online', () => resumeNow());
 
 setInterval(() => {
   paintConnDot();
-  if (document.hidden || !state.es) return;
+  if (document.hidden || !state.es || state.esRetry) return;
   if (Date.now() - (state.esLastEvent || 0) > 50000) {
     connectStream(state.esWatch || undefined);
     reloadOpenChat(true);
@@ -2139,14 +2139,24 @@ async function reloadOpenChat(force, opts = {}) {
     if (d.transcript.chips) setChipBadge(d.transcript.chips.length);
     retireSpentDraft(d.transcript.messages);
     renderLog(applyTail(d.transcript.messages, d.transcript.startByte, d.transcript.hasMore), false);
-    if (!state.es || state.es.readyState === 2) connectStream(id);
+    if ((!state.es || state.es.readyState === 2) && !state.esRetry && !document.hidden) connectStream(id);   // never jumps a pending backoff
   } catch (e) {
     if (!(state.messages || []).length && /Loading/.test($('log').textContent || '')) openChat(id);
     if (opts.throwOnError) throw e;
   }
 }
 
+let esFails = 0;
+function scheduleReconnect() {
+  clearTimeout(state.esRetry); state.esRetry = null;
+  if (document.hidden) return;
+  const wait = Math.min(60000, 2000 * 2 ** esFails) * (0.8 + Math.random() * 0.4);
+  esFails++;
+  state.esRetry = setTimeout(() => { state.esRetry = null; if (!document.hidden && !state.es) connectStream(state.esWatch || undefined); }, wait);
+}
+
 function connectStream(watch) {
+  clearTimeout(state.esRetry); state.esRetry = null;
   if (state.es) { state.es.close(); state.es = null; }
   const es = new EventSource('/api/stream?client=' + encodeURIComponent(CLIENT_ID) +
                              (BUILD ? '&build=' + encodeURIComponent(BUILD) : '') + '&delta=1' +
@@ -2156,7 +2166,7 @@ function connectStream(watch) {
   state.es = es;
   state.esWatch = watch || null;
   state.esLastEvent = Date.now();
-  es.onopen = () => { state.esLastEvent = Date.now(); paintConnDot(); noteConnOk(); obFlush(); };
+  es.onopen = () => { esFails = 0; state.esLastEvent = Date.now(); paintConnDot(); noteConnOk(); obFlush(); };
   es.addEventListener('ping', () => { state.esLastEvent = Date.now(); paintConnDot(); });
   state.sseRows = null;   // a new stream starts with the full list
   es.addEventListener('sessions', ev => {
@@ -2305,7 +2315,15 @@ function connectStream(watch) {
     if (state.open && (d.confirmed || []).some(e => e.session === state.open)) { renderLog(state.messages, false); reloadOpenChat(true); }
     checkOutbox();
   });
-  es.onerror = () => { paintConnDot(); };
+  // 11-Nov battery (t1610): the browser's own retry reconnected a broken stream every ~3 s, forever, on a weak signal
+  // (measured: 21 attempts a minute, and on while hidden). Now we close it and retry ourselves, 2 s doubling to 60 s,
+  // and not at all while hidden (resumeNow reconnects the moment he looks).
+  es.onerror = () => {
+    paintConnDot();
+    if (es.readyState === 1 || state.es !== es) return;
+    es.close(); state.es = null;
+    scheduleReconnect();
+  };
 }
 
 /* The file viewer's own bytes: a sent file through /api/sent-file, any other through /api/file?raw=1

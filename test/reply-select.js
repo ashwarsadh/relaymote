@@ -50,10 +50,13 @@ for (let i = 4; i < 20; i++) MSGS.push({ role: i % 2 ? 'assistant' : 'user', ts:
     for (let i = 0; i < 40 && !targets; i++) { await H.wait(250); try { targets = await (await fetch(`http://127.0.0.1:${dbg}/json`)).json(); } catch {} }
     const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise(r => ws.on('open', r));
-    let n = 0; const waiting = new Map(), sends = [], errors = [];
+    let n = 0, lastNav = 0; const waiting = new Map(), sends = [], errors = [];
     ws.on('message', m => {
       const j = JSON.parse(m);
       if (j.id && waiting.has(j.id)) { waiting.get(j.id)(j); waiting.delete(j.id); return; }
+      // Headless Edge reloads the page once ~1.5 s after the first load (navigationType 'reload'; no app code path
+      // fired: 11-Nov trace). Steps wait until the page has stood still for 3 s.
+      if (j.method === 'Page.frameNavigated' && !j.params.frame.parentId) lastNav = Date.now();
       if (j.method === 'Runtime.exceptionThrown') errors.push(j.params.exceptionDetails.text + ' ' + ((j.params.exceptionDetails.exception || {}).description || ''));
       if (j.method === 'Fetch.requestPaused') {
         const r = j.params.request;
@@ -79,7 +82,7 @@ for (let i = 4; i < 20; i++) MSGS.push({ role: i % 2 ? 'assistant' : 'user', ts:
     const open = async () => {
       // A loaded machine can take >15 s to boot the page (10-Nov: 2 of 3 runs failed "openChat is not defined");
       // wait up to 30 s, reload once, then fail with a clear reason instead of a ReferenceError.
-      const ready = async () => { for (let i = 0; i < 120; i++) { if (await ev(`!window.__stale && typeof openChat === 'function' && !!document.getElementById('btn-send')`).catch(() => false)) return true; await H.wait(250); } return false; };
+      const ready = async () => { for (let i = 0; i < 120; i++) { if (Date.now() - lastNav > 3000 && await ev(`!window.__stale && typeof openChat === 'function' && !!document.getElementById('btn-send')`).catch(() => false)) return true; await H.wait(250); } return false; };
       if (!(await ready())) { await ev('window.__stale = 1').catch(() => {}); await cdp('Page.reload', {}); if (!(await ready())) throw new Error('the app did not boot within 60 s'); }
       await H.wait(800);
       await ev(`openChat(${JSON.stringify(id)}).catch(() => {})`);

@@ -52,14 +52,17 @@ const bin = [process.env.CHROME_BIN, 'C:\\Program Files (x86)\\Microsoft\\Edge\\
       for (let i = 0; i < 40 && !targets; i++) { await H.wait(250); try { targets = await (await fetch(`http://127.0.0.1:${dbg}/json`)).json(); } catch {} }
       const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
       await new Promise(r => ws.on('open', r));
-      let n = 0; const waiting = new Map();
-      ws.on('message', m => { const j = JSON.parse(m); if (j.id && waiting.has(j.id)) { waiting.get(j.id)(j); waiting.delete(j.id); } });
+      let n = 0, lastNav = 0; const waiting = new Map();
+      ws.on('message', m => { const j = JSON.parse(m); if (j.method === 'Page.frameNavigated' && !j.params.frame.parentId) lastNav = Date.now(); if (j.id && waiting.has(j.id)) { waiting.get(j.id)(j); waiting.delete(j.id); } });
       const cdp = (method, params = {}) => new Promise(r => { const i = ++n; waiting.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
       const ev = async (expr) => { const r = await cdp('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); return r.result && r.result.result && r.result.result.value; };
       await cdp('Network.setCookie', { name: 'baton_m', value: encodeURIComponent(d.token), url: `http://127.0.0.1:${d.app}/` });
+      await cdp('Page.enable');
       await cdp('Page.navigate', { url: `http://127.0.0.1:${d.app}/` });
       for (let i = 0; i < 60 && !(await ev(`typeof openChat === 'function' && !!navigator.serviceWorker.controller`)); i++) await H.wait(250);
       await H.wait(1500);   // the first service-worker install reloads the page once
+      // ...and on a loaded PC it lands later than 1.5 s (11-Nov flake): wait until no navigation for 3 s.
+      for (let i = 0; i < 60 && Date.now() - lastNav < 3000; i++) await H.wait(250);
       for (let i = 0; i < 60 && !(await ev(`typeof state === 'object' && !!state.es && state.es.readyState === 1`)); i++) await H.wait(250);
       check(await ev(`state.es && state.es.url.includes('delta=1')`), 'the app asks for deltas');
       const anim = await ev(`(() => { const e = document.createElement('span'); e.className = 'dot running'; document.body.appendChild(e);

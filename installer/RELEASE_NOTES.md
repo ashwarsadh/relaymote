@@ -1,4 +1,4 @@
-## 0.2.176
+## 0.2.177
 
 - Less battery and data use on the phone. When Relaymote has been in the background for 30 seconds, it stops its live connection to the PC; notifications still arrive, and it reconnects the moment you come back. Read-aloud keeps it open while it plays.
 - The session list now sends only the sessions that changed, instead of the whole list each time (about 36 KB, many times a minute).

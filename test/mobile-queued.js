@@ -47,9 +47,15 @@ const w = H.world('queued');
     { ...base, id: 'ob_composer', session: SID, text: 'sent through the composer', uuid: null, state: 'pending', delivery: 'queued' },
     { ...base, id: 'ob_held', session: SID, text: 'held behind a running turn', uuid: crypto.randomUUID(), state: 'pending' },
   ];
-  fs.writeFileSync(OB, JSON.stringify({ entries: readOb().concat(seeded) }, null, 1));
-  await new Promise(r => setTimeout(r, 1100));   // 10-Nov: the server keeps the outbox in memory and looks at the file's time once a second
-  const held = (await d.req('/api/outbox')).json.pending.find(e => e.id === 'ob_held');
+  // 10-Nov: the server keeps the outbox in memory and looks at the file's time once a second. Its own background save can
+  // land over this hand edit inside that second (the release smoke test failed so, 11-Nov), so write until it is read.
+  let held = null;
+  for (let i = 0; i < 10 && !held; i++) {
+    const kept = readOb().filter(e => !seeded.some(s => s.id === e.id));
+    fs.writeFileSync(OB, JSON.stringify({ entries: kept.concat(seeded) }, null, 1));
+    await new Promise(r => setTimeout(r, 1100));
+    held = ((await d.req('/api/outbox')).json.pending || []).find(e => e.id === 'ob_held') || null;
+  }
   check(!!held && held.held === true, '/api/outbox marks a slip with a handle as held', held);
 
   for (const op of ['send-now', 'cancel']) {

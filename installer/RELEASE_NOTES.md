@@ -1,3 +1,8 @@
+## 0.2.174
+
+- Reply to just the words you mean: long-press to select words in any message, tap **↩ Reply**, and type your answer under that quote. Do it for as many bits as you like; the box shows how many replies are queued, each can be edited or removed with ×, and Send delivers them all together as one message.
+- The queued replies stay put if you switch away from the app or it is closed.
+
 ## 0.2.173
 
 - If Relaymote stops answering for more than about 40 seconds while its process is still running, the tray now restarts it on its own (it waits 10 seconds for an answer each time instead of 3).

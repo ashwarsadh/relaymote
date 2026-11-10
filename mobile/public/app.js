@@ -433,13 +433,52 @@ function quoteBlock(q) {
   const head = 'Replying to ' + (q.mine ? 'my message' : (q.who || 'Claude')) + (q.when ? ' (' + q.when + ')' : '') + ':';
   return [head].concat(t.split('\n')).map(l => (l ? '> ' + l : '>')).join('\n');
 }
+/* Replies to SELECTED WORDS (10-Nov, Ashwar: "on long pressing a text ... option like to reply from there ... that reply
+   gets added to the message which is pending to be sent, and then I can send it in bulk"). The wire is Claude Desktop's
+   own reply format, so a session reads a phone batch exactly as it reads his Desktop ones:
+     <!-- reply 1 -->
+     > the selected words
+     his reply to them
+   one block per selection, all in ONE message, then anything in the box. A whole-message quote sent alongside joins the
+   same numbering. */
+const REPLY_MARK = /^<!-- reply (\d+) -->$/;
+function isBatch(quotes) { return (quotes || []).some(q => q.sel || String(q.note || '').trim()); }
 function composeReply(quotes, text) {
+  if (isBatch(quotes)) {
+    const blocks = quotes.map((q, i) => {
+      const quoted = String(q.text || '').replace(/\r/g, '').trim().split('\n').map(l => (l ? '> ' + l : '>')).join('\n');
+      const note = String(q.note || '').replace(/\r/g, '').trim();
+      return '<!-- reply ' + (i + 1) + ' -->\n' + quoted + (note ? '\n' + note : '');
+    });
+    if (text) blocks.push(text);
+    return blocks.join('\n\n');
+  }
   const blocks = (quotes || []).map(quoteBlock);
   if (text) blocks.push(text);
   return blocks.join('\n\n');
 }
+// A batch back into its parts: each selection with his reply under it. Text after the last block's reply is part of that
+// reply (the format cannot tell them apart, and Desktop does the same).
+function splitBatch(raw) {
+  const lines = String(raw == null ? '' : raw).replace(/\r/g, '').split('\n');
+  let i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;
+  if (i >= lines.length || !REPLY_MARK.test(lines[i].trim())) return null;
+  const quotes = [];
+  while (i < lines.length) {
+    if (!REPLY_MARK.test(lines[i].trim())) { i++; continue; }
+    i++;
+    const got = [], note = [];
+    while (i < lines.length && /^>/.test(lines[i])) got.push(lines[i++].replace(/^> ?/, ''));
+    while (i < lines.length && !REPLY_MARK.test(lines[i].trim())) note.push(lines[i++]);
+    quotes.push({ sel: true, who: '', mine: false, when: '', text: got.join('\n').trim(), note: note.join('\n').trim() });
+  }
+  return { quotes, lead: [], body: '', batch: true };
+}
 // The leading "> " blocks of a message, and what follows them. A pasted "> foo" is a quote too, just with no header.
 function splitQuotes(raw) {
+  const b = splitBatch(raw);
+  if (b) return b;
   const lines = String(raw == null ? '' : raw).replace(/\r/g, '').split('\n');
   let i = 0;
   const lead = [];
@@ -595,6 +634,8 @@ function quoteHtml(q) {
 function userBody(text) {
   const s = splitQuotes(text);
   if (!s.quotes.length) return md(text);
+  // A batch: each selection drawn as a quote, his reply to it right under it.
+  if (s.batch) return s.quotes.map(q => quoteHtml(q) + (q.note ? md(q.note) : '')).join('');
   return (s.lead.length ? md(s.lead.join('\n')) : '') + s.quotes.map(quoteHtml).join('') + (s.body ? md(s.body) : '');
 }
 function messageHtml(m) {
@@ -649,7 +690,8 @@ function messageHtml(m) {
   }
   else if (m.role === 'user') {
     // Only his words count towards "Show more": the quote trims itself.
-    out += clampable(userBody(m.text), splitQuotes(m.text).body, 'msg user' + (m.queued ? ' queued' : ''), m.ts);
+    const sq = splitQuotes(m.text);
+    out += clampable(userBody(m.text), sq.batch ? sq.quotes.map(q => q.note).join('\n') : sq.body, 'msg user' + (m.queued ? ' queued' : ''), m.ts);
     if (m.queued) out += '<div class="queuetag">queued · waiting to be picked up' + waitedNote(Date.now() - (Date.parse(m.ts || '') || Date.now())) + sendNowBtn() + '</div>';
     out += stampHtml(m);
   }
@@ -3068,8 +3110,14 @@ async function send(target) {
 
   const atts = state.attachments.filter(a => !a.native).map(a => a.path);
   const quotes = loadQuotes(state.open);
-  if (!text && !atts.length) {
-    if (quotes.length) { toast('Type your reply first.'); $('input').focus(); }
+  // A batch of replies to selected words carries his words in the chips, so an empty box can still send it.
+  const noted = quotes.some(q => String(q.note || '').trim());
+  if (!text && !atts.length && !noted) {
+    if (quotes.length) {
+      toast('Type your reply first.');
+      const empty = document.querySelector('#quotes .qnote');
+      (empty || $('input')).focus();
+    }
     return;
   }
 
@@ -3118,7 +3166,7 @@ const obNorm = (t) => String(t || '').replace(/\s+/g, ' ').trim();
 // a new reply delivered on sight of the last one; its END is the part that is his.
 function deliveryNeedle(t) {
   const n = String(t || '').replace(/\s+/g, ' ').trim();
-  return n[0] === '>' ? n.slice(-60) : n.slice(0, 60);
+  return n[0] === '>' || n.startsWith('<!-- reply') ? n.slice(-60) : n.slice(0, 60);
 }
 function obSeen(it, messages) {
   const want = deliveryNeedle(it.text);
@@ -5179,10 +5227,83 @@ function renderQuotes() {
   if (!wrap) return;
   const list = state.open ? loadQuotes(state.open) : [];
   wrap.classList.toggle('hidden', !list.length);
-  wrap.innerHTML = list.map((q, i) => '<div class="qchip"><div class="qchip-text"><span class="qwho">Replying to ' + esc(q.mine ? 'yourself' : (q.who || 'Claude')) + '</span>' +
-    '<div class="qchip-line">' + esc(String(q.text || '').replace(/\*\*|`/g, '').replace(/\s+/g, ' ').slice(0, 200)) + '</div></div>' +
+  // A batch (any reply to selected words) shows its count, and every chip its own reply box.
+  const batch = isBatch(list);
+  wrap.innerHTML = (batch && list.length > 1 ? '<div class="qcount">' + list.length + ' replies · sent together</div>' : '') +
+    list.map((q, i) => '<div class="qchip' + (batch ? ' qsel' : '') + '"><div class="qchip-text"><span class="qwho">' + (batch ? (i + 1) + '. ' : '') + 'Replying to ' + esc(q.mine ? 'yourself' : (q.who || 'Claude')) + '</span>' +
+    '<div class="qchip-line">' + esc(String(q.text || '').replace(/\*\*|`/g, '').replace(/\s+/g, ' ').slice(0, 200)) + '</div>' +
+    (batch ? '<textarea class="qnote" rows="1" data-qn="' + i + '" placeholder="Your reply to this…">' + esc(q.note || '') + '</textarea>' : '') + '</div>' +
     '<button class="x" type="button" data-qi="' + i + '" aria-label="Cancel this reply">&times;</button></div>').join('');
+  wrap.querySelectorAll('.qnote').forEach(autosizeNote);
 }
+function autosizeNote(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px'; }
+// His reply under a selection is saved as he types it, so it survives the app going to the background.
+$('quotes').addEventListener('input', (e) => {
+  const t = e.target.closest('.qnote');
+  if (!t || !state.open) return;
+  const list = loadQuotes(state.open);
+  const q = list[Number(t.dataset.qn)];
+  if (!q) return;
+  q.note = t.value;
+  saveQuotes(state.open, list);
+  autosizeNote(t);
+});
+/* Long-press words in a message, then "↩ Reply". The phone's own Copy/Share bar stays where it is (above the selection);
+   this pill sits under it. Tapping it quotes ONLY the selected words, adds a chip with its own reply box, and keeps
+   going: select more words anywhere, reply to each, then send them all as one message. */
+function addSelReply(role, ts, text) {
+  if (!state.open) return;
+  text = String(text || '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
+  if (!text) return;
+  const list = loadQuotes(state.open);
+  let i = list.findIndex(q => q.sel && q.ts === ts && q.text === text);
+  if (i < 0) {
+    const m = replyIndex.get(role + '|' + ts);
+    list.push({ role, ts, text, sel: true, note: '', when: quoteWhen(ts), mine: role === 'user', who: role === 'peer' ? (m ? peerName(m) : 'another session') : role === 'assistant' ? 'Claude' : '' });
+    i = list.length - 1;
+    saveQuotes(state.open, list);
+  }
+  renderQuotes();
+  const box = document.querySelector('#quotes .qnote[data-qn="' + i + '"]');
+  if (box) { box.focus(); box.scrollIntoView({ block: 'nearest' }); }
+}
+(function selectionReply() {
+  const pill = document.createElement('button');
+  pill.id = 'sel-reply'; pill.type = 'button'; pill.className = 'sel-reply hidden'; pill.textContent = '↩ Reply';
+  document.body.appendChild(pill);
+  let pick = null, timer = 0;
+  const rowOf = (n) => { const e = n && (n.nodeType === 1 ? n : n.parentElement); return e && e.closest && e.closest('#log .msg.assistant[data-mts], #log .msg.user[data-mts], #log details.peer[data-mts]'); };
+  const hide = () => { pill.classList.add('hidden'); pick = null; };
+  const look = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return hide();
+    const row = rowOf(sel.anchorNode);
+    if (!row || row !== rowOf(sel.focusNode)) return hide();   // a selection across two messages has no one author
+    const text = sel.toString().trim();
+    if (!text) return hide();
+    const role = row.matches('.peer') ? 'peer' : row.matches('.user') ? 'user' : 'assistant';
+    pick = { role, ts: row.dataset.mts, text };
+    const r = sel.getRangeAt(0).getBoundingClientRect();
+    pill.classList.remove('hidden');
+    const w = pill.offsetWidth || 90, h = pill.offsetHeight || 36;
+    let top = r.bottom + 10;
+    if (top + h > innerHeight - 8) top = Math.max(8, r.top - h - 56);   // under the phone's bar would be off screen
+    pill.style.top = top + 'px';
+    pill.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+  };
+  document.addEventListener('selectionchange', () => { clearTimeout(timer); timer = setTimeout(look, 120); });
+  window.selReplyLook = look;   // tests call it directly
+  $('log').addEventListener('scroll', () => { if (pick) look(); }, { passive: true });
+  // pointerdown would move the selection; keep it until the click has read it.
+  pill.addEventListener('pointerdown', (e) => e.preventDefault());
+  pill.addEventListener('mousedown', (e) => e.preventDefault());
+  pill.addEventListener('click', () => {
+    const p = pick;
+    hide();
+    try { window.getSelection().removeAllRanges(); } catch {}
+    if (p) addSelReply(p.role, p.ts, p.text);
+  });
+})();
 function quoteWhen(ts) {
   const d = new Date(Date.parse(ts || ''));
   if (isNaN(d)) return '';
@@ -5193,7 +5314,7 @@ function replyTo(role, ts, el) {
   if (!state.open) return;
   const m = replyIndex.get(role + '|' + ts);
   let text = m ? String(m.text || '') : '';
-  if (role === 'user' && text) { const p = splitQuotes(text); text = p.body || p.quotes.map(q => q.text).join('\n'); }
+  if (role === 'user' && text) { const p = splitQuotes(text); text = p.body || (p.batch ? p.quotes.map(q => q.note).filter(Boolean).join('\n') : '') || p.quotes.map(q => q.text).join('\n'); }
   if (!text && el) { const c = el.cloneNode(true); c.querySelectorAll('button, .stamp, .tick, .quote, summary').forEach(n => n.remove()); text = (c.innerText || c.textContent || '').trim(); }
   if (!text) return toast('Nothing to quote in that message.');
   const list = loadQuotes(state.open);

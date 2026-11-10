@@ -95,7 +95,8 @@ function needleFor(text) {
   const said = norm(base);
   // A reply opens with the quote, and every reply to one message opens the same, so its START would call a new reply
   // delivered on sight of the last one. Its END is the part that is his (app.js deliveryNeedle).
-  return said[0] === '>' ? said.slice(-60) : said.slice(0, 60);
+  // A reply batch (<!-- reply 1 --> ...) opens the same way every time too.
+  return said[0] === '>' || said.startsWith('<!-- reply') ? said.slice(-60) : said.slice(0, 60);
 }
 
 function add({ id, session, text, delivery, uuid }) {

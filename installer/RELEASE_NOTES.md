@@ -1,3 +1,7 @@
+## 0.2.179
+
+- Re-release of 0.2.178 (its build stopped on a flaky test); no other change.
+
 ## 0.2.178
 
 - Less battery on a weak signal: when the connection to the PC drops, Relaymote now waits longer between retries (2 s, 4 s, 8 s … up to a minute) instead of retrying every 3 seconds, and does not retry at all while it is in the background. It reconnects the moment you open it.

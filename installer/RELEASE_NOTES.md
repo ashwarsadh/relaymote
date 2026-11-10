@@ -1,3 +1,7 @@
+## 0.2.175
+
+- Updates on a slow or patchy connection now finish: a download that stalls picks up where it stopped instead of starting again from zero, and retries on its own. The installer is still checked against the signed hash before it runs.
+
 ## 0.2.174
 
 - Reply to just the words you mean: long-press to select words in any message, tap **↩ Reply**, and type your answer under that quote. Do it for as many bits as you like; the box shows how many replies are queued, each can be edited or removed with ×, and Send delivers them all together as one message.

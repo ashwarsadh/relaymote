@@ -64,7 +64,10 @@ for (let i = 4; i < 20; i++) MSGS.push({ role: i % 2 ? 'assistant' : 'user', ts:
       }
     });
     const cdp = (method, params = {}) => new Promise(r => { const i = ++n; waiting.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
-    const ev = async (expr) => { const r = await cdp('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result && r.result.exceptionDetails) throw new Error(((r.result.exceptionDetails.exception || {}).description || '').slice(0, 300) + ' | in: ' + expr.slice(0, 160)); return r.result.result.value; };
+    // A CDP-level error (no .result: "Execution context was destroyed" while a navigation lands) is retried, not
+    // read as undefined.result (10-Nov flake).
+    const ev = async (expr) => { let r; for (let k = 0; k < 20; k++) { r = await cdp('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r && r.result) break; await H.wait(250); }
+      if (!r || !r.result) throw new Error('CDP evaluate failed: ' + JSON.stringify(r && r.error || r).slice(0, 200) + ' | in: ' + expr.slice(0, 160)); if (r.result && r.result.exceptionDetails) throw new Error(((r.result.exceptionDetails.exception || {}).description || '').slice(0, 300) + ' | in: ' + expr.slice(0, 160)); return r.result.result.value; };
 
     await cdp('Emulation.setDeviceMetricsOverride', { width: 412, height: 860, deviceScaleFactor: 2, mobile: true });
     await cdp('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
@@ -74,7 +77,10 @@ for (let i = 4; i < 20; i++) MSGS.push({ role: i % 2 ? 'assistant' : 'user', ts:
     await cdp('Network.setCookie', { name: 'baton_m', value: encodeURIComponent(d.token), url: `http://127.0.0.1:${d.app}/` });
     await cdp('Page.enable');
     const open = async () => {
-      for (let i = 0; i < 60 && !(await ev(`typeof openChat === 'function' && !!document.getElementById('btn-send')`).catch(() => false)); i++) await H.wait(250);
+      // A loaded machine can take >15 s to boot the page (10-Nov: 2 of 3 runs failed "openChat is not defined");
+      // wait up to 30 s, reload once, then fail with a clear reason instead of a ReferenceError.
+      const ready = async () => { for (let i = 0; i < 120; i++) { if (await ev(`!window.__stale && typeof openChat === 'function' && !!document.getElementById('btn-send')`).catch(() => false)) return true; await H.wait(250); } return false; };
+      if (!(await ready())) { await ev('window.__stale = 1').catch(() => {}); await cdp('Page.reload', {}); if (!(await ready())) throw new Error('the app did not boot within 60 s'); }
       await H.wait(800);
       await ev(`openChat(${JSON.stringify(id)}).catch(() => {})`);
       for (let i = 0; i < 40 && (await ev(`state.open`).catch(() => null)) !== id; i++) await H.wait(250);
@@ -133,6 +139,8 @@ for (let i = 4; i < 20; i++) MSGS.push({ role: i % 2 ? 'assistant' : 'user', ts:
     const shotChips = await cdp('Page.captureScreenshot', { format: 'png' });
 
     // The app closed and reopened (Android kills a backgrounded PWA): the batch and his words are still there.
+    // Mark the old page, so open() cannot mistake it for the reloaded one on a slow machine (10-Nov flake).
+    await ev('window.__stale = 1');
     await cdp('Page.reload', { ignoreCache: false });
     await H.wait(1500);
     await open();

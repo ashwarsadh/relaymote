@@ -96,6 +96,44 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
     check(!f.ok && /not signed/.test(f.error), 'a release without SHA256SUMS.txt.sig is refused', f);
     f = await U.fetchVerified({ ...c, kind: 'source' });
     check(!f.ok && /does not update itself/.test(f.error), 'a source copy never fetches an installer');
+
+    // 10-Nov-2026: a stalled GitHub download restarted from zero each time. It must resume its .part.
+    const big = crypto.randomBytes(300000), bigHash = crypto.createHash('sha256').update(big).digest('hex');
+    const bigSums = bigHash + '  Relaymote-Setup-9.9.9-x64.exe\n', bigSig = crypto.sign(null, Buffer.from(bigSums), privateKey).toString('base64');
+    const ranges = [];
+    const flaky = ({ honourRange = true, drops = 2 } = {}) => {
+      let dropped = 0;
+      https.get = (url, opts, cb) => {
+        const { PassThrough } = require('stream');
+        const res = new PassThrough(); const req = new (require('events'))();
+        req.destroy = (e) => req.emit('error', e);
+        const name = String(url).split('/').pop();
+        const files = { 'SHA256SUMS.txt': bigSums, 'SHA256SUMS.txt.sig': bigSig };
+        if (name !== 'Relaymote-Setup-9.9.9-x64.exe') { res.statusCode = 200; res.headers = {}; process.nextTick(() => { cb(res); res.end(files[name]); }); return req; }
+        const r = opts.headers && opts.headers.Range; ranges.push(r || null);
+        const from = r && honourRange ? Number(/bytes=(\d+)-/.exec(r)[1]) : 0;
+        res.statusCode = from ? 206 : 200; res.headers = {};
+        process.nextTick(() => {
+          cb(res);
+          if (dropped < drops) { dropped++; res.write(big.subarray(from, from + 100000)); setTimeout(() => req.emit('error', new Error('timed out')), 20); }
+          else res.end(big.subarray(from));
+        });
+        return req;
+      };
+    };
+    flaky();
+    f = await U.fetchVerified(c, { key: pub, download: { pauseMs: 5 } });
+    check(f.ok && f.sha256 === bigHash && fs.readFileSync(saved).equals(big), 'a download dropped twice resumes and completes, hash verified', { f, ranges });
+    check(ranges[0] === null && ranges[1] === 'bytes=100000-' && ranges[2] === 'bytes=200000-', 'each retry asks only for the bytes still missing', ranges);
+    fs.unlinkSync(saved); ranges.length = 0;
+    flaky({ honourRange: false, drops: 1 });
+    f = await U.fetchVerified(c, { key: pub, download: { pauseMs: 5 } });
+    check(f.ok && fs.readFileSync(saved).equals(big), 'a server that ignores Range sends the whole file, which replaces the .part', { f, ranges });
+    fs.unlinkSync(saved);
+    flaky({ drops: 99 });
+    f = await U.fetchVerified(c, { key: pub, download: { pauseMs: 5, tries: 3 } }).catch(e => ({ ok: false, error: e.message }));
+    check(!f.ok && /timed out/.test(f.error) && fs.existsSync(saved + '.part'), 'a download that never finishes gives up after its tries and keeps the .part for next time', f);
+    try { fs.unlinkSync(saved + '.part'); } catch {}
   } finally { https.get = realGet; }
 
   // A running task holds the update back.

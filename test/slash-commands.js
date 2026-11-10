@@ -68,7 +68,8 @@ const tick = () => new Promise(r => setTimeout(r, 0));
   w.fns.at = 0; w.input.value = '/'; await w.fns.updateCommandList(); await tick(); await tick();
   check(w.env.calls > before, 'a list older than its time-to-live is fetched again (new skills appear)');
 
-  check(/setTimeout\(\(\) => \{ ensureCommands\(\)/.test(app), 'the list is fetched at load, so the first "/" does not wait');
+  check(/setTimeout\(function pre\(\) \{[^\n]*\n\s*if \(!document\.hidden\) return ensureCommands\(\)/.test(app),
+    'the list is fetched at load (once the page is seen), so the first "/" does not wait');
   check(/addEventListener\('compositionend', onComposerChange\)/.test(app) && /try \{ autosize\(\); \} catch/.test(app),
         'g1719: the list also opens on compositionend, and a failing autosize can no longer stop it');
 

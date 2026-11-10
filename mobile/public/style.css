@@ -169,7 +169,8 @@ body{
 .row.current .row-title{font-weight:600}
 
 .dot{flex:none; width:10px; height:10px; border-radius:50%; margin-top:5px; background:var(--faint)}
-.dot.running{background:var(--run); animation:pulse 1.8s ease-in-out infinite}
+.dot.running{background:var(--run)}
+body.blink .dot.running:not(.stalled){opacity:.4}   /* 11-Nov: a 1 Hz class flip (app.js), not an endless animation */
 
 .dot.partial{background:linear-gradient(90deg,var(--run) 50%,transparent 50%); box-shadow:inset 0 0 0 1.5px var(--run)}
 .dot.running.stalled{animation:none; background:transparent; box-shadow:inset 0 0 0 2px var(--run)}

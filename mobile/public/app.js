@@ -573,7 +573,27 @@ function tickStamps() {
     if (el.textContent !== t) el.textContent = t;
   });
 }
-setInterval(tickStamps, 30000);
+setInterval(() => { if (!document.hidden) tickStamps(); }, 30000);
+
+// 11-Nov (t1610, S24+ batterystats: Chrome 19% of all drain, 310 mAh of radio with the screen OFF, Relaymote its only
+// web app): a hidden page kept the stream open -- a 20 s ping plus a ~36 KB list on every change, ~12 MB an hour, each
+// one waking the radio and re-rendering. Hidden for 30 s, the stream closes; push still alerts; coming back reconnects
+// (resumeNow). Not while read-aloud is playing, which may need the next reply.
+const ttsPlaying = () => { try { return !!(tts.waiting || tts.loading || (tts.audio && !tts.audio.paused) || (tts.mode === 'synth' && window.speechSynthesis && speechSynthesis.speaking)); } catch { return false; } };
+let sleepTimer = 0;
+function sleepStreamSoon() {
+  clearTimeout(sleepTimer);
+  sleepTimer = setTimeout(function sleep() {
+    if (!document.hidden || !state.es) return;
+    if (ttsPlaying()) { sleepTimer = setTimeout(sleep, 30000); return; }
+    state.es.close(); state.es = null; state.esSlept = true;
+  }, state.sleepAfterMs || 30000);
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) sleepStreamSoon(); else clearTimeout(sleepTimer); });
+
+// The running dot used a CSS pulse: an endless animation repaints at the display rate (120 Hz on an S24) for as long
+// as any session runs. A class flipped once a second gives the same blink at 1 Hz, and nothing while hidden.
+setInterval(() => { if (!document.hidden) document.body.classList.toggle('blink'); }, 1000);
 // 17-Oct: after a minimise every stamp read "just now" until the next tick. Re-derive them synchronously,
 // before the first frame back and before any fetch, so the first thing on screen is already right.
 for (const ev of ['visibilitychange', 'pageshow', 'focus', 'resume']) {
@@ -951,7 +971,7 @@ function renderLive() {
   if (el.textContent !== text) el.textContent = text;
   el.hidden = false;
 }
-setInterval(renderLive, 1000);
+setInterval(() => { if (!document.hidden) renderLive(); }, 1000);
 
 const nearBottom = (el) => el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_TOL;
 function setScrollTop(el, v) { el.scrollTop = v; lastProgTop = el.scrollTop; }
@@ -2129,7 +2149,7 @@ async function reloadOpenChat(force, opts = {}) {
 function connectStream(watch) {
   if (state.es) { state.es.close(); state.es = null; }
   const es = new EventSource('/api/stream?client=' + encodeURIComponent(CLIENT_ID) +
-                             (BUILD ? '&build=' + encodeURIComponent(BUILD) : '') +
+                             (BUILD ? '&build=' + encodeURIComponent(BUILD) : '') + '&delta=1' +
                              (watch ? '&watch=' + encodeURIComponent(watch) : '') +
                              // g1940: EventSource sends no headers, so the stream is told who holds this phone here.
                              (() => { try { const who = localStorage.getItem('baton.principal'); return who ? '&as=' + encodeURIComponent(who) : ''; } catch { return ''; } })());
@@ -2138,9 +2158,18 @@ function connectStream(watch) {
   state.esLastEvent = Date.now();
   es.onopen = () => { state.esLastEvent = Date.now(); paintConnDot(); noteConnOk(); obFlush(); };
   es.addEventListener('ping', () => { state.esLastEvent = Date.now(); paintConnDot(); });
+  state.sseRows = null;   // a new stream starts with the full list
   es.addEventListener('sessions', ev => {
     state.esLastEvent = Date.now();
     const d = JSON.parse(ev.data);
+    // 11-Nov: after the first full list the stream sends only the rows that changed, plus the order (was ~36 KB a push).
+    if (d.delta) {
+      if (!state.sseRows) { loadSessions(); return; }
+      for (const r of d.rows || []) state.sseRows.set(r.id, r);
+      d.sessions = (d.order || []).map(id => state.sseRows.get(id)).filter(Boolean);
+      if (d.sessions.length !== (d.order || []).length) { state.sseRows = null; loadSessions(); return; }
+    }
+    state.sseRows = new Map(d.sessions.map(r => [r.id, r]));
     if (state.meta) {
       const row = d.sessions.find(s => s.id === state.meta.id);
       const wasRunning = !!state._tierWasRunning;
@@ -4383,7 +4412,10 @@ $('cmdlist').addEventListener('click', (e) => {
   autosize();
 });
 
-setTimeout(() => { ensureCommands().catch(() => {}); }, 3000);   // the first "/" should not wait on the network
+setTimeout(function pre() {   // a hidden page waits until it is seen (11-Nov: no radio wake for a list nobody reads)
+  if (!document.hidden) return ensureCommands().catch(() => {});
+  document.addEventListener('visibilitychange', function once() { if (!document.hidden) { document.removeEventListener('visibilitychange', once); pre(); } });
+}, 3000);   // the first "/" should not wait on the network
 
 window.__relaymoteT = { nav: performance.timeOrigin };
 const tmark = (k) => { try { window.__relaymoteT[k] = Math.round(performance.now()); } catch {} };

@@ -730,7 +730,17 @@ async function poll() {
           payload = seen.slice(0, 80).map(slimSession);
           byKey.set(k, payload);
         }
-        sseSend(c, 'sessions', { sessions: payload });
+        // 11-Nov (S24 battery, t1610): a client that asks for deltas gets the full list once, then only the rows that
+        // changed and the order -- and nothing at all when its own view did not change.
+        if (!c.delta) { sseSend(c, 'sessions', { sessions: payload }); continue; }
+        const next = new Map(), rows = [];
+        for (const r of payload) { const j = JSON.stringify(r); next.set(r.id, j); if (!c.sent || c.sent.get(r.id) !== j) rows.push(r); }
+        const order = payload.map(r => r.id);
+        const sameOrder = c.sentOrder && c.sentOrder.length === order.length && c.sentOrder.every((id, i) => id === order[i]);
+        const first = !c.sent;
+        c.sent = next; c.sentOrder = order;
+        if (first) sseSend(c, 'sessions', { sessions: payload });
+        else if (rows.length || !sameOrder) sseSend(c, 'sessions', { delta: true, order, rows });
       }
     }
     try {
@@ -2081,7 +2091,7 @@ async function handle(req, res) {
     let watch = url.searchParams.get('watch') || null;
     if (watch && isSubuser(identity) && !identity.sessions.has(watch)) watch = null;
     const c = { res, watch, stamp: null, identity, principal: principalOf(req, url),
-                client: (url.searchParams.get('client') || '').slice(0, 64) || null };
+                client: (url.searchParams.get('client') || '').slice(0, 64) || null, delta: url.searchParams.get('delta') === '1' };
     noteClientBuild(c.client, url.searchParams.get('build'));
     clients.add(c);
     ensurePoll();

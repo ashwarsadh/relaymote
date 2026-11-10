@@ -1,3 +1,9 @@
+## 0.2.176
+
+- Less battery and data use on the phone. When Relaymote has been in the background for 30 seconds, it stops its live connection to the PC; notifications still arrive, and it reconnects the moment you come back. Read-aloud keeps it open while it plays.
+- The session list now sends only the sessions that changed, instead of the whole list each time (about 36 KB, many times a minute).
+- The blinking dot for a running session no longer redraws the screen continuously.
+
 ## 0.2.175
 
 - Updates on a slow or patchy connection now finish: a download that stalls picks up where it stopped instead of starting again from zero, and retries on its own. The installer is still checked against the signed hash before it runs.

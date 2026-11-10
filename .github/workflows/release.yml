@@ -44,7 +44,7 @@ jobs:
           $env:APPDATA = Join-Path $env:RUNNER_TEMP 'appdata'
           $env:CLAUDE_CONFIG_DIR = Join-Path $env:RUNNER_TEMP 'claude-config'
           New-Item -ItemType Directory -Force $env:APPDATA, $env:CLAUDE_CONFIG_DIR | Out-Null
-          npm test
+          node scripts/run-tests.js
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Make sure Inno Setup 6 is available
@@ -124,7 +124,7 @@ jobs:
         run: |
           export APPDATA="$RUNNER_TEMP/appdata" CLAUDE_CONFIG_DIR="$RUNNER_TEMP/claude-config"
           mkdir -p "$APPDATA" "$CLAUDE_CONFIG_DIR"
-          npm test
+          node scripts/run-tests.js
 
       - name: Build Relaymote.app, DMG and portable tarball
         run: ARCH=${{ matrix.arch }} bash installer/macos/build-dmg.sh

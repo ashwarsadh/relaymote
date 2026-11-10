@@ -27,4 +27,4 @@ jobs:
         run: |
           export APPDATA="$RUNNER_TEMP/appdata" CLAUDE_CONFIG_DIR="$RUNNER_TEMP/claude-config"
           mkdir -p "$APPDATA" "$CLAUDE_CONFIG_DIR"
-          npm test
+          node scripts/run-tests.js

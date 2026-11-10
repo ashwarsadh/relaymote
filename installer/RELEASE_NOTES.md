@@ -1,3 +1,7 @@
+## 0.2.180
+
+- Re-release of 0.2.178 (the build now names any test that fails); no other change.
+
 ## 0.2.179
 
 - Re-release of 0.2.178 (its build stopped on a flaky test); no other change.

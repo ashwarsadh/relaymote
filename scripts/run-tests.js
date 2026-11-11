@@ -16,7 +16,7 @@ const tail = (s, n = 40) => String(s).split('\n').filter(l => l.trim()).slice(-n
 
 function run(cmd) {
   const t = Date.now();
-  const r = spawnSync(cmd, { cwd: ROOT, shell: true, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 15 * 60000 });
+  const r = spawnSync(cmd, { cwd: ROOT, shell: true, windowsHide: true, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 15 * 60000 });
   const out = (r.stdout || '') + (r.stderr || '');
   return { ok: r.status === 0, out, ms: Date.now() - t, why: r.error ? r.error.message : 'exit ' + r.status };
 }

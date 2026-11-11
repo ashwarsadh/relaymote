@@ -39,12 +39,13 @@ const jsonls = (dir) => { const out = []; const walk = (d) => { for (const e of 
     for (let i = 0; i < 40 && !targets; i++) { await H.wait(250); try { targets = await (await fetch(`http://127.0.0.1:${dbg}/json`)).json(); } catch {} }
     const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise(r => ws.on('open', r));
-    let n = 0; const waiting = new Map(), errors = [];
+    let n = 0, lastNav = 0; const waiting = new Map(), errors = [];
     const traffic = [];          // { at, kind, what }
     let blockStream = false, streamTries = [];
     ws.on('message', m => {
       const j = JSON.parse(m);
       if (j.id && waiting.has(j.id)) { waiting.get(j.id)(j); waiting.delete(j.id); return; }
+      if (j.method === 'Page.frameNavigated' && !j.params.frame.parentId) lastNav = Date.now();
       if (j.method === 'Runtime.exceptionThrown') errors.push(j.params.exceptionDetails.text + ' ' + ((j.params.exceptionDetails.exception || {}).description || ''));
       if (j.method === 'Network.requestWillBeSent' && /^http/.test(j.params.request.url)) traffic.push({ at: Date.now(), kind: 'req', what: new URL(j.params.request.url).pathname });
       if (j.method === 'Network.eventSourceMessageReceived') traffic.push({ at: Date.now(), kind: 'sse', what: j.params.eventName });
@@ -72,7 +73,9 @@ const jsonls = (dir) => { const out = []; const walk = (d) => { for (const e of 
       Object.defineProperty(Document.prototype, 'visibilityState', { configurable: true, get() { return window.__hid ? 'hidden' : 'visible'; } });
       window.__setHidden = (h) => { window.__hid = h; document.dispatchEvent(new Event('visibilitychange')); if (!h) window.dispatchEvent(new Event('pageshow')); };` });
     await cdp('Page.navigate', { url: `http://127.0.0.1:${d.app}/` });
-    for (let i = 0; i < 160 && !(await ev(`typeof connectStream === 'function' && !!state.es`).catch(() => false)); i++) await H.wait(250);
+    // Headless Edge reloads a fresh profile's page once, sometimes late on a loaded PC (12-Nov: "state is not defined"
+    // twice in a row). Wait for 3 s with no navigation AND a booted app, so the hidden-page override is the live page's.
+    for (let i = 0; i < 240 && !(Date.now() - lastNav > 3000 && await ev(`typeof connectStream === 'function' && !!state.es`).catch(() => false)); i++) await H.wait(250);
     await H.wait(3000);
 
     const count = (from, to) => traffic.filter(t => t.at >= from && t.at < to);

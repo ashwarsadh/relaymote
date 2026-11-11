@@ -134,6 +134,28 @@ const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name
     f = await U.fetchVerified(c, { key: pub, download: { pauseMs: 5, tries: 3 } }).catch(e => ({ ok: false, error: e.message }));
     check(!f.ok && /timed out/.test(f.error) && fs.existsSync(saved + '.part'), 'a download that never finishes gives up after its tries and keeps the .part for next time', f);
     try { fs.unlinkSync(saved + '.part'); } catch {}
+
+    // 11-Nov-2026: the API's 60/h unauthenticated limit ran out (another lane polling it) and the check failed with
+    // HTTP 403 for ~20 min. It now reads the latest tag from the release page's redirect instead.
+    const stubGet = (handler) => { https.get = (url, opts, cb) => {
+      const { PassThrough } = require('stream'); const res = new PassThrough(); const req = new (require('events'))();
+      req.destroy = (e) => req.emit('error', e);
+      Object.assign(res, handler(String(url)));
+      process.nextTick(() => { cb(res); res.end(res.body || ''); });
+      return req;
+    }; };
+    const seen = [];
+    stubGet(u => { seen.push(u); return /api\.github\.com/.test(u) ? { statusCode: 403, headers: {}, body: '{"message":"API rate limit exceeded"}' }
+      : /\/releases\/latest$/.test(u) ? { statusCode: 302, headers: { location: 'https://github.com/x/y/releases/tag/v9.9.9' } } : { statusCode: 404, headers: {} }; });
+    let ck = await U.check();
+    check(ck.ok && ck.latest === '9.9.9' && ck.newer && /API limited/.test(ck.via), 'API rate-limited (403): the latest version comes from the release page redirect', ck);
+    check(/\/releases\/download\/v9\.9\.9\/SHA256SUMS\.txt\.sig$/.test(ck.assets['SHA256SUMS.txt.sig'] || '') && seen.some(u => /github\.com\/.+\/releases\/latest$/.test(u)), 'and the signed checksum files are fetched from that release (signature still required)', ck.assets);
+    stubGet(u => /api\.github\.com/.test(u) ? { statusCode: 500, headers: {} } : { statusCode: 302, headers: { location: 'https://github.com/x/y/releases/tag/v9.9.9' } });
+    ck = await U.check();
+    check(!ck.ok && /HTTP 500/.test(ck.error), 'any other API failure is reported as before (no fallback)', ck);
+    stubGet(u => /api\.github\.com/.test(u) ? { statusCode: 403, headers: {} } : { statusCode: 200, headers: {} });
+    ck = await U.check();
+    check(!ck.ok && /release page: no release redirect/.test(ck.error), 'a release page with no redirect: still an error, with both reasons', ck);
   } finally { https.get = realGet; }
 
   // A running task holds the update back.

@@ -1,4 +1,4 @@
-## 0.2.182
+## 0.2.183
 
 - Updates no longer stall when GitHub limits this PC's requests: Relaymote now reads the newest version from the public release page instead. The installer is still checked against the signed hash before it runs.
 

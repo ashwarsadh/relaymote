@@ -1,3 +1,7 @@
+## 0.2.187
+
+- Automatic sidebar sorting no longer mistakes sidebar headings such as "View all" or "Idle" for group names.
+
 ## 0.2.186
 
 - Automatic sidebar sorting now uses Claude Desktop's own sidebar command instead of clicking through menus: no more flipping the sidebar view, and it works again after Desktop switched to a sidebar that had no groups (missing groups are created when a session needs one). The menu path remains only as a fallback.

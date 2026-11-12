@@ -111,6 +111,20 @@ const deps = (d, extra = {}) => ({ conn: d.conn, pollMs: 10, maxMs: 300, replyMs
   const org = require('../lib/organizer');
   check(org.SYSTEMIC_ERRORS.has('GROUPS_UNKNOWN') && !org.SYSTEMIC_ERRORS.has('NESTED'), 'organizer: GROUPS_UNKNOWN pauses the pass, NESTED does not');
 
+  // 10. 13-Nov live: the first native pass created groups "View all" and "Idle" — sidebar headings scraped under the
+  // State view, taken as group names. A sidebar label is never planned as a group, whatever the index says.
+  const { UI_LABEL } = require('../lib/projects');
+  check(['View all', 'Idle', 'Working', 'Needs input', 'Today', 'Show more'].every(x => UI_LABEL.test(x)) &&
+    !['Email Analyzer', 'Tally Tools', 'Payments', 'Idle Hands Shop'].some(x => UI_LABEL.test(x)), 'sidebar labels are recognised, real group names are not');
+  const old = Date.now() - 3600e3;
+  const ix = { sessions: {
+      s1: { id: 's1', title: 'a', project: 'email analyzer', groupKnown: true, group: null, createdAt: old },
+      s2: { id: 's2', title: 'b', project: 'nirvaan', groupKnown: true, group: null, createdAt: old },
+      s3: { id: 's3', title: 'c', project: 'tally', groupKnown: true, group: null, createdAt: old } },
+    projects: { 'email analyzer': { name: 'email analyzer', group: 'View all' }, nirvaan: { name: 'nirvaan', group: 'Idle' }, tally: { name: 'tally', group: 'Tally Tools' } } };
+  const planned = org.plan(ix, { ...org.DEFAULTS }, {});
+  check(planned.length === 1 && planned[0].group === 'Tally Tools', 'the organizer never plans a move into "View all" or "Idle"', planned.map(p => p.group));
+
   console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.log('FAIL the run finished  ' + (e && e.stack || e)); process.exit(1); });

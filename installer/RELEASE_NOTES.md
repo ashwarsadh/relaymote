@@ -1,3 +1,7 @@
+## 0.2.184
+
+- The automatic sidebar sorting no longer keeps flipping the Claude Desktop sidebar when the sidebar does not respond the way it expects: it pauses for 6 hours instead of retrying every 5 minutes, and the log says why.
+
 ## 0.2.183
 
 - Updates no longer stall when GitHub limits this PC's requests: Relaymote now reads the newest version from the public release page instead. The installer is still checked against the signed hash before it runs.

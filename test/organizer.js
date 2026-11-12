@@ -118,6 +118,29 @@ const owner = require('../lib/owner');
   check(t.skipped === 'time budget' && calls.length - before === 2, 'a pass stops at its time budget', `${calls.length - before} moves, skipped=${t.skipped}`);
   check(Object.keys(JSON.parse(fs.readFileSync(stFile, 'utf8')).attempts).length === 2, 'moves are saved as they happen');
 
+  // 12-Nov-2026: the sidebar's menus stopped matching (VIEW_SWITCH_FAILED x172, NO_MOVE_TO_GROUP x37 in 23 h, no real
+  // move), and every new session was still tried 3 times, each try flipping his sidebar view. Such an error is the
+  // sidebar's, not the session's: one try, then the organizer pauses; nobody is charged.
+  fs.writeFileSync(stFile, '{}');
+  let sys = 0;
+  const broken = async (sid) => { sys++; calls.push({ sid }); return { ok: false, error: 'VIEW_SWITCH_FAILED' }; };
+  t = await organizer.tick({ index: ix, setGroup: broken, isIdle: () => true });
+  let st2 = JSON.parse(fs.readFileSync(stFile, 'utf8'));
+  check(sys === 1 && t.failed.length === 1 && t.failed[0].systemic && /^paused until/.test(t.skipped), 'a sidebar-wide error (VIEW_SWITCH_FAILED): one try, then the pass stops paused', JSON.stringify(t));
+  check(Object.keys(st2.attempts || {}).length === 0 && st2.pauseReason === 'VIEW_SWITCH_FAILED' && Date.parse(st2.pausedUntil) - Date.now() > 5 * 3600000, 'no session is charged for it; paused ~6 h with the reason saved', JSON.stringify(st2));
+  t = await organizer.tick({ index: ix, setGroup: broken, isIdle: () => true });
+  check(sys === 1 && t.paused && t.failed.length === 0, 'while paused: no UI attempt at all, nothing logged as a failure', JSON.stringify(t));
+  st2.pausedUntil = new Date(Date.now() - 1000).toISOString(); fs.writeFileSync(stFile, JSON.stringify(st2));
+  t = await organizer.tick({ index: ix, setGroup: stub([]), isIdle: () => true });
+  check(!t.paused && t.moved.length > 0, 'after the pause it tries again, and moves when the sidebar works', JSON.stringify({ moved: t.moved.length, skipped: t.skipped }));
+  fs.writeFileSync(stFile, '{}');
+  const noMove = async () => ({ ok: false, error: 'NO_MOVE_TO_GROUP' });
+  t = await organizer.tick({ index: ix, setGroup: noMove, isIdle: () => true });
+  check(t.failed.length === 1 && t.failed[0].systemic, 'NO_MOVE_TO_GROUP (the row menu has no Move item) pauses too', JSON.stringify(t.failed));
+  fs.writeFileSync(stFile, '{}');
+  t = await organizer.tick({ index: ix, setGroup: stub([id('Alpha nested work')]), isIdle: () => true });
+  check(!t.paused && !/paused/.test(t.skipped || '') && t.failed.some(f => f.error === 'NO_SUCH_SESSION' && !f.systemic), 'a per-session error (NO_SUCH_SESSION) does not pause the organizer', JSON.stringify(t));
+
   config.set({ modules: { organizer: false } });
   t = await organizer.tick({ index: ix, setGroup: stub([]), isIdle: () => true });
   check(t.skipped === 'module off', 'module toggle switches it off');

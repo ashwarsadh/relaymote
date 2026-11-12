@@ -352,7 +352,8 @@ async function organizerTick() {
     .catch(e => ({ moved: [], failed: [], skipped: 'error: ' + e.message }));
   if (r.moved.length || r.failed.length) {
     orch.log(`organizer: moved ${r.moved.length}, failed ${r.failed.length}` + (r.skipped ? ` (stopped: ${r.skipped})` : '') +
-      ' — ' + r.moved.map(m => `${m.sessionId} -> ${m.group}`).join(', '));
+      ' — ' + r.moved.map(m => `${m.sessionId} -> ${m.group}`).join(', ') +
+      (r.failed.length ? ' failed: ' + [...new Set(r.failed.map(f => f.error))].join(', ') : ''));
   }
 }
 

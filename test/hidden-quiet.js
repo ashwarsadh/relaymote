@@ -68,8 +68,11 @@ const bin = [process.env.CHROME_BIN, 'C:\\Program Files (x86)\\Microsoft\\Edge\\
       const anim = await ev(`(() => { const e = document.createElement('span'); e.className = 'dot running'; document.body.appendChild(e);
         const a = getComputedStyle(e).animationName; e.remove(); return a; })()`);
       check(anim === 'none', 'the running dot has no endless CSS animation', anim);
-      const b0 = await ev(`document.body.classList.contains('blink')`); await H.wait(1100);
-      check(b0 !== (await ev(`document.body.classList.contains('blink')`)), 'it blinks by a class flip once a second');
+      // Sampled for 3.5 s, not once at +1.1 s: a 1 s timer in a background headless tab drifts past 1.1 s (13-Nov:
+      // failed twice on the Windows release runner). About one flip a second = 2 to 5 flips in 3.5 s.
+      let flips = 0, last = await ev(`document.body.classList.contains('blink')`);
+      for (let i = 0; i < 14; i++) { await H.wait(250); const b = await ev(`document.body.classList.contains('blink')`); if (b !== last) { flips++; last = b; } }
+      check(flips >= 2 && flips <= 5, 'it blinks by a class flip once a second', flips + ' flips in 3.5 s');
 
       const hid = await cdp('Runtime.evaluate', { returnByValue: true, expression: `state.sleepAfterMs = 800; Object.defineProperty(Document.prototype, 'hidden', { configurable: true, get: () => true });
         Object.defineProperty(Document.prototype, 'visibilityState', { configurable: true, get: () => 'hidden' });

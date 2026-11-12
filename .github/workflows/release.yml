@@ -107,7 +107,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14        # Apple Silicon
+          - runner: macos-15        # Apple Silicon (macos-14 retired: "configuration macos-14-arm64-us-default is not supported", 13-Nov-2026)
             arch: arm64
           - runner: macos-15-intel  # Intel. build-dmg.sh can also build x64 on an arm64 runner (ARCH=x64)
             arch: x64

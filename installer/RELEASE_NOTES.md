@@ -1,3 +1,7 @@
+## 0.2.185
+
+- Re-release of 0.2.184 (the build failed on a retired Mac build machine and a timing-sensitive test); no further change to the app.
+
 ## 0.2.184
 
 - The automatic sidebar sorting no longer keeps flipping the Claude Desktop sidebar when the sidebar does not respond the way it expects: it pauses for 6 hours instead of retrying every 5 minutes, and the log says why.

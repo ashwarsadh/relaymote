@@ -1,3 +1,7 @@
+## 0.2.186
+
+- Automatic sidebar sorting now uses Claude Desktop's own sidebar command instead of clicking through menus: no more flipping the sidebar view, and it works again after Desktop switched to a sidebar that had no groups (missing groups are created when a session needs one). The menu path remains only as a fallback.
+
 ## 0.2.185
 
 - Re-release of 0.2.184 (the build failed on a retired Mac build machine and a timing-sensitive test); no further change to the app.

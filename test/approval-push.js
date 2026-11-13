@@ -116,6 +116,24 @@ for (const [t, risky] of [
     check(w('b', [tu('1', 'Bash'), tr('1'), tu('2', 'AskUserQuestion')]) === null, 'a pending AskUserQuestion is not');
     check(w('c', [tu('1', 'Bash'), tr('1')]) === null, 'a transcript whose calls all have results is not');
     check(pendingApproval(path.join(tmp, 'missing')) === null, 'no transcript -> not an approval (nothing is opened)');
+
+    // 13-Nov (STATE "Known limit (2)"): a second card while the session is STILL awaiting alerts again.
+    const { askTracker } = require('../mobile/permission');
+    const f = path.join(tmp, 'two');
+    fs.writeFileSync(f, [tu('1', 'mcp__computer-use__request_access')].join('\n') + '\n');
+    const p1 = pendingApproval(f, { withId: true });
+    check(p1 && p1.id === '1' && p1.name === 'mcp__computer-use__request_access', 'withId: the waiting call and its id');
+    const t = askTracker(); const read = () => pendingApproval(f, { withId: true });
+    check(t.changed('s', 'stamp1', read) === false, 'first sight of an awaiting session: no extra alert (its own alert already went)');
+    check(t.changed('s', 'stamp1', () => { throw new Error('read again'); }) === false, 'transcript unchanged: not even read again');
+    fs.writeFileSync(f, [tu('1', 'mcp__computer-use__request_access'), tr('1'), tu('2', 'mcp__computer-use__request_access')].join('\n') + '\n');
+    check(t.changed('s', 'stamp2', read) === true, 'still awaiting, now on a NEW call (a second card): alert again');
+    check(t.changed('s', 'stamp3', read) === false, 'the same card, transcript touched again: no repeat alert');
+    fs.writeFileSync(f, [tu('1', 'Bash'), tr('1'), tu('3', 'AskUserQuestion')].join('\n') + '\n');
+    check(t.changed('s', 'stamp4', read) === false, 'a question (not an approval) does not count as a new card');
+    t.forget('s'); check(t.size() === 0, 'forgotten once the session stops awaiting');
+    const ni = idx.slice(idx.indexOf('async function notifyAttention'));
+    check(/if \(attention\.get\(s\.id\) === st\) \{[\s\S]{0,200}st === 'awaiting' && newAsk\(s\)/.test(ni), 'notifyAttention lets a new ask through while the state stays awaiting');
   }
   check(/if \(st === 'awaiting'\) \{[\s\S]{0,200}approvalEvent\(s, evt\)/.test(idx), 'notifyAttention enriches every awaiting push');
   check(!/answerPermission\(/.test(fnSrc), 'approvalEvent never answers anything itself');

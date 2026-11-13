@@ -4,6 +4,12 @@
 // in-Desktop script fails this test rather than his sidebar. Never talks to Claude Desktop.
 'use strict';
 const vm = require('vm');
+const fs = require('fs'), os = require('os'), path = require('path');
+// A throwaway RelayMote home and AppData: the scope file and the Desktop config below are fakes, never his.
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-sidebar-'));
+process.env.RELAYMOTE_HOME = path.join(TMP, 'relaymote');
+process.env.APPDATA = path.join(TMP, 'appdata');
+delete process.env.RELAYMOTE_STATE_DIR;
 const N = require('../lib/sidebar-native');
 
 let failed = 0;
@@ -125,6 +131,31 @@ const deps = (d, extra = {}) => ({ conn: d.conn, pollMs: 10, maxMs: 300, replyMs
   const planned = org.plan(ix, { ...org.DEFAULTS }, {});
   check(planned.length === 1 && planned[0].group === 'Tally Tools', 'the organizer never plans a move into "View all" or "Idle"', planned.map(p => p.group));
 
+  // 11. 13-Nov account switch: two group scopes in claude_desktop_config.json, the live one nearly empty.
+  const D = require('../lib/desktop'), config = require('../lib/config');
+  check(config.STATE.startsWith(TMP), 'the test writes only under its temp home', config.STATE);
+  const OLD = 'acct-old/org-old', LIVE = 'acct-new/org-new';
+  fs.mkdirSync(path.join(process.env.APPDATA, 'Claude'), { recursive: true });
+  fs.writeFileSync(path.join(process.env.APPDATA, 'Claude', 'claude_desktop_config.json'), JSON.stringify({ preferences: { epitaxyPrefs: { 'dframe-group-scopes': {
+    [OLD]: { groups: [{ id: 'cg-t', name: 'Tally Tools' }, { id: 'cg-e', name: 'Email Analyzer' }], assignments: { 'code:local_a': 'cg-t', 'code:local_b': 'cg-e' } },
+    [LIVE]: { groups: [{ id: 'cg-n', name: 'Email Analyzer' }], assignments: { 'code:local_c': 'cg-n' } } } } } }));
+  let c = D.readGroupConfig();
+  check(!c.scoped && c.assign.size === 3, 'no live scope known yet: every scope counts, as before', [c.scoped, c.assign.size]);
+  d = fakeDesktop();
+  d.m.currentAccountId = 'acct-new'; d.m.currentOrgId = 'org-new';
+  await N.state(null, deps(d));
+  check(JSON.parse(fs.readFileSync(D.SIDEBAR_SCOPE_FILE(), 'utf8')).scope === LIVE, 'the live scope is learnt from Desktop and remembered');
+  c = D.readGroupConfig();
+  check(c.scoped && c.assign.size === 1 && c.assign.get('local_c') === 'cg-n' && !c.assign.has('local_a'), 'with it, only the live scope is the sidebar: local_a is loose there',
+    [...c.assign]);
+  check(c.prior.get('local_a') === 'Tally Tools' && c.prior.get('local_b') === 'Email Analyzer', "the old scope's filing is kept as each session's prior group", [...c.prior]);
+  const ix2 = { sessions: {
+      local_a: { id: 'local_a', title: 'a', project: 'tally', groupKnown: true, group: null, priorGroup: 'Tally Tools', createdAt: old } },
+    projects: { tally: { name: 'tally', group: 'tally' } } };
+  const p2 = org.plan(ix2, { ...org.DEFAULTS }, {});
+  check(p2.length === 1 && p2[0].group === 'Tally Tools', 'a loose session goes back to the group he filed it in, not the folder name', p2.map(p => p.group));
+
+  try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
   console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.log('FAIL the run finished  ' + (e && e.stack || e)); process.exit(1); });

@@ -207,7 +207,7 @@ async function peekPermission() {
 // look for an Allow card. Only a session whose transcript ENDS on a tool call still waiting for its result can be
 // held by an approval; a question, a plan or a plain "blocked" turn never is, so those are never opened.
 const NOT_APPROVAL = /^(AskUserQuestion|ExitPlanMode)$/;
-function pendingApproval(file, { maxBytes = 256 * 1024 } = {}) {
+function pendingApproval(file, { maxBytes = 256 * 1024, withId = false } = {}) {
   const fs = require('fs');
   let text = '';
   try {
@@ -221,12 +221,32 @@ function pendingApproval(file, { maxBytes = 256 * 1024 } = {}) {
     let d; try { d = JSON.parse(ln); } catch { continue; }
     const content = d.message && Array.isArray(d.message.content) ? d.message.content : [];
     for (const c of content) {
-      if (c && c.type === 'tool_use') open.set(c.id, String(c.name || ''));
+      if (c && c.type === 'tool_use') { open.delete(c.id); open.set(c.id, String(c.name || '')); }
       else if (c && c.type === 'tool_result') open.delete(c.tool_use_id);
     }
   }
-  const names = [...open.values()].filter(n => !NOT_APPROVAL.test(n));
-  return names.length ? names[names.length - 1] : null;
+  const waiting = [...open.entries()].filter(([, n]) => !NOT_APPROVAL.test(n));
+  if (!waiting.length) return null;
+  const [id, name] = waiting[waiting.length - 1];
+  return withId ? { id, name } : name;
+}
+
+/** 13-Nov-2026 (STATE "Known limit (2)", 22-Oct): a second approval card while a session is STILL awaiting from the
+ *  first got no push, because the attention state never changed. This tracks, per awaiting session, the tool call it
+ *  waits on; read again only when its transcript changed. changed() is true when it now waits on a different one. */
+function askTracker() {
+  const m = new Map();
+  return {
+    changed(id, stamp, read) {
+      const prev = m.get(id);
+      if (prev && prev.stamp === stamp) return false;
+      let ask = null; try { const r = read(); ask = r && (r.id || r); } catch {}
+      m.set(id, { stamp, ask });
+      return !!(prev && ask && ask !== prev.ask);
+    },
+    forget(id) { m.delete(id); },
+    size() { return m.size; },
+  };
 }
 
 // Ashwar's standing rule: credentials, money, deletion and security/system settings are always his own tap with
@@ -237,4 +257,4 @@ function approvalRisk(text) {
   return m ? m[0].toLowerCase() : '';
 }
 
-module.exports = { readPermission, answerPermission, peekPermission, approvalRisk, pendingApproval, _READ_JS: READ_JS };
+module.exports = { readPermission, answerPermission, peekPermission, approvalRisk, pendingApproval, askTracker, _READ_JS: READ_JS };

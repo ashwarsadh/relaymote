@@ -1,3 +1,8 @@
+## 0.2.188
+
+- Sessions filed in a group under your previous Claude account are put back in that group in the current sidebar.
+- A second approval request in a session that is already waiting now sends its own phone alert.
+
 ## 0.2.187
 
 - Automatic sidebar sorting no longer mistakes sidebar headings such as "View all" or "Idle" for group names.

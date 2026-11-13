@@ -32,7 +32,7 @@ const pair = require('../lib/pair');
 const accountScope = require('../lib/account-scope');
 const { readUsage } = require('./usage');
 const board = require('./board');
-const { readPermission, answerPermission, peekPermission, approvalRisk, pendingApproval } = require('./permission');
+const { readPermission, answerPermission, peekPermission, approvalRisk, pendingApproval, askTracker } = require('./permission');
 const { pressDialogButton } = require('./dialog');
 const accounts = require('./accounts');
 const subusers = require('./subusers');
@@ -502,6 +502,8 @@ function listKey(list) {
 
 const attention = new Map();
 let pushWarmed = false;
+const asks = askTracker();
+const newAsk = (s) => asks.changed(s.id, String(sessions.transcriptStamp(s) || ''), () => pendingApproval(sessions.transcriptPath(s), { withId: true }));
 
 const wasRunning = new Map();
 const obStamps = new Map();
@@ -596,17 +598,23 @@ async function notifyAttention(all) {
   const flagged = all.map(s => [s, attentionState(s)]).filter(([, st]) => st);
   const ids = new Set(flagged.map(([s]) => s.id));
   for (const id of [...attention.keys()]) if (!ids.has(id)) attention.delete(id);
+  for (const [s, st] of flagged) if (st !== 'awaiting') asks.forget(s.id);
+  for (const s of all) if (!ids.has(s.id)) asks.forget(s.id);
 
   if (!pushWarmed) {
     pushWarmed = true;
-    for (const [s, st] of flagged) attention.set(s.id, st);
+    for (const [s, st] of flagged) { attention.set(s.id, st); if (st === 'awaiting') newAsk(s); }
     for (const s of all) wasRunning.set(s.id, !!s.running);
     return;
   }
 
   const ncfg = config.get().notifications || {};
   for (const [s, st] of flagged) {
-    if (attention.get(s.id) === st) continue;
+    if (attention.get(s.id) === st) {
+      // Still awaiting, but on a NEW tool call (a second approval card): that is a new ask, so it alerts again.
+      if (!(st === 'awaiting' && newAsk(s))) continue;
+      log(`notify: "${String(s.title || s.id).slice(0, 48)}" still awaiting, now on a new ask`);
+    } else if (st === 'awaiting') newAsk(s);
     attention.set(s.id, st);
     if (ncfg.enabled === false) continue;
     if (st === 'awaiting' && ncfg.awaiting === false) continue;

@@ -6,10 +6,10 @@
 
 > **Unofficial; not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.**
 
-<p align="center"><b>Your Claude Code sessions, in your pocket.</b><br>
-The Code tab of Claude Desktop on your phone and in any browser — every session, live, exactly as it is on your
-computer. Plus auto-resume, one app across several Claude accounts, automatic project organisation, and a
-conductor for running many sessions at once.</p>
+<p align="center"><b>The control room for people who run many Claude Code sessions.</b><br>
+Every Claude Desktop Code-tab session on your phone and in any browser, live and exactly as it is on your
+computer. Plus a local Conductor that routes your requests to the right project, a Board of everything
+waiting on you, auto-resume, and one sidebar across several Claude accounts.</p>
 
 <p align="center">
   <a href="https://github.com/ashwarsadh/relaymote/releases/latest"><b>⬇ Download</b></a> ·
@@ -29,6 +29,17 @@ conductor for running many sessions at once.</p>
 
 ## What makes it different
 
+| | Claude's Remote Control | Agent View | CLI account switchers | Relaymote |
+|---|---|---|---|---|
+| Every Desktop Code-tab session on the phone, nothing to switch on per session | one session per switch-on (can start new ones from the phone) | — | — | **yes** |
+| Routes a request to the project or session that owns it | — | — | — | **local Conductor + a master per project** |
+| One screen of what is waiting on you (including buried questions) | — | session states | — | **the Board** |
+| Goals that close only on your check | — | — | — | **goal chaser** |
+| Several Claude accounts | — | — | separate config folder per account | **Desktop sidebar (groups, archive, routines) kept the same across accounts** |
+| Runs where | the Claude app + cloud relay | the Claude app | your terminal | **your PC; no Relaymote cloud** |
+
+<sub>As observed in November 2026. Remote Control and Agent View are Anthropic features and may change.</sub>
+
 ### 1. It mirrors your desktop — it does not start a copy
 
 Relaymote shows **the sessions Claude Desktop already has**: the same list, the same groups, the same
@@ -46,20 +57,7 @@ computer; nothing is forked, and there is nothing to switch on per session.
 
 <sub>Comparison as observed in September 2026. Remote Control is Anthropic's feature and may change.</sub>
 
-### 2. One app across all your Claude accounts
-
-If you use Claude Desktop with more than one account or organisation (work and personal, or two
-subscriptions), each keeps its own sidebar: sessions, archive, groups and routines. Switch accounts and the
-app looks different. **Relaymote keeps them in sync**, so switching accounts shows the same app. You preview
-every change before anything is written. See [Accounts](#accounts).
-
-### 3. It organises your data for you
-
-Relaymote reads every session and knows which **project** (folder) it belongs to. The Organizer puts each new
-session into its project's sidebar group automatically, and keeps a live **index of all your projects** —
-their sessions, groups and who coordinates them. Your sidebar stays tidy without you dragging anything.
-
-### 4. A conductor, a master per project, and workers
+### 2. A conductor, a master per project, and workers
 
 - **Workers** are ordinary sessions doing one task.
 - A **master** coordinates *one project*: it spawns workers with the right model and effort, tracks them,
@@ -79,6 +77,19 @@ their sessions, groups and who coordinates them. Your sidebar stays tidy without
 
 You create them by talking to your sessions: *"you are the conductor"*, *"you are the master for this
 project"*. See [The conductor and masters](#the-conductor-and-masters).
+
+### 3. One app across all your Claude accounts
+
+If you use Claude Desktop with more than one account or organisation (work and personal, or two
+subscriptions), each keeps its own sidebar: sessions, archive, groups and routines. Switch accounts and the
+app looks different. **Relaymote keeps them in sync**, so switching accounts shows the same app. You preview
+every change before anything is written. See [Accounts](#accounts).
+
+### 4. It organises your data for you
+
+Relaymote reads every session and knows which **project** (folder) it belongs to. The Organizer puts each new
+session into its project's sidebar group automatically, and keeps a live **index of all your projects** —
+their sessions, groups and who coordinates them. Your sidebar stays tidy without you dragging anything.
 
 ### 5. Nothing stalls
 

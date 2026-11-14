@@ -1769,7 +1769,7 @@ async function handle(req, res) {
   }
 
   if (p === '/api/accounts') {
-    try { return json(res, 200, { ok: true, ...(await accounts.readAccounts()) }); }
+    try { return json(res, 200, { ok: true, ...(await accounts.readAccounts({ offThread: true })) }); }
     catch (e) { return json(res, 500, { ok: false, error: 'accounts-failed', detail: e.message }); }
   }
   if (p.startsWith('/api/accounts/') && req.method === 'POST') {

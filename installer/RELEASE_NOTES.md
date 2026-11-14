@@ -1,3 +1,7 @@
+## 0.2.193
+
+- Opening the Accounts page no longer pauses Relaymote while it counts every session in every account.
+
 ## 0.2.192
 
 - Fewer pauses while Relaymote is busy: a chat no longer re-reads its whole recent history to look for open questions and suggested tasks, the half-hourly account sync runs in the background, the Desktop refresh lists only project folders that changed, and the daemon no longer writes its log to a hidden console window.

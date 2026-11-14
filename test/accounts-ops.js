@@ -156,6 +156,14 @@ const { check } = fx;
   check(off.applied && off.applied.count >= 1 && off.desktopRunning === false, 'and hands back what autoTick logs (applied count, Desktop state)', JSON.stringify(off));
   const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   check(src.includes("account-sync').autoTick({ offThread: true })"), 'the server interval asks for the worker lane');
+  // The Accounts page's read (a dry run over every record) is answered from the 'fast' lane, with the same counts.
+  await offThread.run('fast', 'test.presence', { state: 'absent' });
+  rec(B, 41, NOW - D);
+  const pick = (st) => JSON.stringify({ dry: st.dryRun, scopes: st.scopes.map(s => [s.key, s.records, s.archived, s.changes, s.pending]), totals: st.totals });
+  const inl = await api.readAccounts(), wk = await api.readAccounts({ offThread: true });
+  check(pick(wk) === pick(inl) && wk.dryRun === true && !has(A, 41), 'the Accounts page read from the worker equals the inline read and writes nothing', pick(wk) + ' vs ' + pick(inl));
+  const idx = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
+  check(idx.includes('accounts.readAccounts({ offThread: true })'), 'GET /api/accounts asks for the worker lane');
   config.set({ accounts: { autoSync: false } });
 
   // ---------------------------------------------------------------- account-switch transfer

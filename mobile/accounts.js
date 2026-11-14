@@ -18,8 +18,11 @@ function runOpts(body) {
   return o;
 }
 
-async function readAccounts() {
-  const st = await sync.status();
+// 15-Nov: status() reads and stats every session record of every account. On the main thread it held the loop 2-11 s
+// each time the Accounts page opened (13-Nov 00:40 IST: GET /api/accounts past its 20 s deadline). The server reads it
+// in the 'fast' worker lane; a dry run, it writes nothing.
+async function readAccounts(opts = {}) {
+  const st = opts.offThread ? await require('../lib/off-thread').run('fast', 'accounts.status') : await sync.status();
   let hook = null;
   try { hook = await launch.hookStatus(); } catch {}
   return {

@@ -5374,7 +5374,7 @@ function renderQuotes() {
   wrap.innerHTML = (batch && list.length > 1 ? '<div class="qcount">' + list.length + ' replies · sent together</div>' : '') +
     list.map((q, i) => '<div class="qchip' + (batch ? ' qsel' : '') + '"><div class="qchip-text"><span class="qwho">' + (batch ? (i + 1) + '. ' : '') + 'Replying to ' + esc(q.mine ? 'yourself' : (q.who || 'Claude')) + '</span>' +
     '<div class="qchip-line">' + esc(String(q.text || '').replace(/\*\*|`/g, '').replace(/\s+/g, ' ').slice(0, 200)) + '</div>' +
-    (batch ? '<textarea class="qnote" rows="1" data-qn="' + i + '" placeholder="Your reply to this…">' + esc(q.note || '') + '</textarea>' : '') + '</div>' +
+    (batch ? '<textarea class="qnote" rows="1" enterkeyhint="done" data-qn="' + i + '" placeholder="Your reply to this…">' + esc(q.note || '') + '</textarea>' : '') + '</div>' +
     '<button class="x" type="button" data-qi="' + i + '" aria-label="Cancel this reply">&times;</button></div>').join('');
   wrap.querySelectorAll('.qnote').forEach(autosizeNote);
 }
@@ -5389,6 +5389,34 @@ $('quotes').addEventListener('input', (e) => {
   q.note = t.value;
   saveQuotes(state.open, list);
   autosizeNote(t);
+});
+/* Enter in a reply's own small box queues it (14-Nov, Ashwar: "pressing Enter there should take this message to the
+   bottom main message bar, like a queue. Right now it gets queued, but when I click outside ... then it gets queued in
+   the message box. Same behavior when I press Enter in the small reply box, or the reply I do by swiping right"). So
+   Enter does what a tap outside does: the box closes and the reply waits as its chip above the main bar, to go with
+   the next send. Shift+Enter is a new line. The main box is untouched: there Enter is a new line and Send sends.
+   A phone keyboard often sends no Enter keydown at all, only a line break as input, so both are caught. */
+let qnoteShift = false;
+function queueNote(t) {
+  const v = t.value.replace(/\s+$/, '');
+  if (v !== t.value) { t.value = v; t.dispatchEvent(new Event('input', { bubbles: true })); }
+  t.blur();
+}
+$('quotes').addEventListener('keydown', (e) => {
+  const t = e.target.closest && e.target.closest('.qnote');
+  if (!t || e.key !== 'Enter' || e.isComposing) return;
+  if (e.shiftKey) { qnoteShift = true; return; }
+  e.preventDefault();
+  queueNote(t);
+});
+$('quotes').addEventListener('beforeinput', (e) => {
+  const t = e.target.closest && e.target.closest('.qnote');
+  if (!t) return;
+  const br = e.inputType === 'insertLineBreak' || e.inputType === 'insertParagraph' || (e.inputType === 'insertText' && e.data === '\n');
+  if (!br) return;
+  if (qnoteShift) { qnoteShift = false; return; }
+  e.preventDefault();
+  queueNote(t);
 });
 /* Long-press words in a message, then "↩ Reply". The phone's own Copy/Share bar stays where it is (above the selection);
    this pill sits under it. Tapping it quotes ONLY the selected words, adds a chip with its own reply box, and keeps

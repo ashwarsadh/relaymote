@@ -1,3 +1,7 @@
+## 0.2.191
+
+- Enter in the small reply box (a reply to selected words, or a swipe-right reply) now queues that reply above the message bar, the same as tapping outside it. Shift+Enter adds a new line. The main message box is unchanged.
+
 ## 0.2.190
 
 - Reading older messages in a chat, new replies no longer pull you down to the end. A "↓ N new" button counts them; tap it to go down.

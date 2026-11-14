@@ -194,6 +194,57 @@ for (let i = 4; i < 20; i++) MSGS.push({ role: i % 2 ? 'assistant' : 'user', ts:
     check(back.length === 2 && back[1] === 'Send it to Ajay for his tick.', 'Edit on a waiting batch: back on chips with his replies', back);
     check((await ev(`deliveryNeedle(${JSON.stringify(wire)})`)).endsWith('his tick.'), 'its delivery needle is his words, not the shared opening');
 
+    // 14-Nov, Ashwar: "pressing Enter there [the small reply box] should take this message to the bottom main message bar,
+    // like a queue" -- what a tap outside the box already did. Same for a reply made by swiping right. The MAIN box is
+    // unchanged: there Enter stays a new line and Send sends, "as it was sending earlier".
+    await ev(`saveQuotes(state.open, []); renderQuotes(); obItems.length = 0; document.getElementById('input').value = ''`);
+    const sentBefore = sends.length;
+    const key = async (shift) => {
+      const base = { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, modifiers: shift ? 8 : 0 };
+      await cdp('Input.dispatchKeyEvent', { type: 'keyDown', text: '\r', unmodifiedText: '\r', ...base });
+      await cdp('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+      await H.wait(150);
+    };
+    const noteState = (i) => ev(`(() => { const t = document.querySelector('#quotes .qnote[data-qn="${i}"]'); const q = loadQuotes(state.open)[${i}];
+      return { value: t && t.value, focused: document.activeElement === t, saved: q && q.note, chips: document.querySelectorAll('#quotes .qchip').length }; })()`);
+    await select(T(1), 'invoice goes out tomorrow'); await pillUp();
+    await ev(`document.getElementById('sel-reply').click()`); await H.wait(200);
+    check(await ev(`document.activeElement.classList.contains('qnote') && document.activeElement.getAttribute('enterkeyhint') === 'done'`), 'the small reply box has the cursor, and the phone keyboard shows Done');
+    await cdp('Input.insertText', { text: 'Which address?' });
+    await key(false);
+    let s1 = await noteState(0);
+    check(s1.value === 'Which address?' && !s1.focused && s1.saved === 'Which address?' && s1.chips === 1,
+      'Enter in the small reply box: no new line, the box closes, the reply waits as its chip above the main bar', s1);
+    check(sends.length === sentBefore, 'and nothing is sent');
+    await ev(`document.querySelector('#quotes .qnote[data-qn="0"]').focus()`);
+    await key(true);
+    await cdp('Input.insertText', { text: 'Pin code too.' });
+    s1 = await noteState(0);
+    check(s1.value === 'Which address?\nPin code too.' && s1.focused, 'Shift+Enter there is a new line', s1);
+    // A phone keyboard often sends the line break as input with no Enter keydown.
+    await cdp('Input.insertText', { text: '\n' });
+    await H.wait(150);
+    s1 = await noteState(0);
+    check(s1.value === 'Which address?\nPin code too.' && !s1.focused, 'a phone keyboard\'s Enter (a line break, no key event) queues it too', s1);
+    // A reply made by swiping right joins the batch with its own small box; Enter there does the same.
+    await ev(`replyTo('assistant', ${JSON.stringify(T(3))})`); await H.wait(200);
+    const iSw = (await ev(`document.querySelectorAll('#quotes .qnote').length`)) - 1;
+    await ev(`document.querySelector('#quotes .qnote[data-qn="${iSw}"]').focus()`);
+    await cdp('Input.insertText', { text: 'Ask Ajay.' });
+    await key(false);
+    const s2 = await noteState(iSw);
+    check(iSw === 1 && s2.value === 'Ask Ajay.' && !s2.focused && s2.chips === 2, 'the swipe-right reply\'s box: Enter queues it the same way', s2);
+    check(sends.length === sentBefore, 'still nothing sent');
+    // The main box: Enter is still a new line; Send sends everything queued.
+    await ev(`document.getElementById('input').focus()`);
+    await cdp('Input.insertText', { text: 'Thanks.' });
+    await key(false);
+    check((await ev(`document.getElementById('input').value`)) === 'Thanks.\n' && sends.length === sentBefore, 'Enter in the main box is unchanged (a new line; nothing sent)');
+    await ev(`send()`);
+    for (let i = 0; i < 30 && sends.length === sentBefore; i++) await H.wait(100);
+    const q2 = sends[sentBefore] || '';
+    check(/^<!-- reply 1 -->\n> invoice goes out tomorrow\nWhich address\?\nPin code too\.\n\n<!-- reply 2 -->\n> [^\n]*GST return[\s\S]*\nAsk Ajay\.\n\nThanks\.$/.test(q2), 'Send sends the queued replies and the box as ONE message', q2);
+
     const real = errors.filter(e => !/Failed to fetch/.test(e));
     check(real.length === 0, 'no page errors', real.slice(0, 3));
     const out = process.env.REPLY_SELECT_SHOTS;

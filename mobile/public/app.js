@@ -851,7 +851,7 @@ function blocks(messages) {
    reserves it. */
 const mediaDims = new Map();
 function learnMedia(e) {
-  const m = e.target, src = m.getAttribute && m.getAttribute('src');
+  const m = e.target, src = m.getAttribute && (m.getAttribute('data-msrc') || m.getAttribute('src'));
   const w = m.videoWidth || m.naturalWidth, h = m.videoHeight || m.naturalHeight;
   if (!src || !w || !h || mediaDims.has(src)) return;
   mediaDims.set(src, { w, h });
@@ -859,16 +859,33 @@ function learnMedia(e) {
 }
 /* 10-Nov, Ashwar: an audio or video played inside a chat "plays for a few seconds and after that it stops". Every
    render rewrites the log, which destroyed the playing <audio>/<video> with it. A player that is playing or part-played
-   is carried into the new log in place of its fresh copy (same tag and src). Put back in the same task, it never pauses. */
+   is carried into the new log in place of its fresh copy (same tag and src). Put back in the same task, it never pauses.
+   14-Nov (g2670, "V7 not playing relaymote"): carrying only the PLAYING ones was not enough. Every render built a new
+   <audio> for every sent file, and each one with a src claims one of the page's media players; the old ones are freed
+   only when garbage-collected. Android Chrome allows 40. A chat with his 14 takes plus test clips, rebuilt every
+   2.5 s while the session worked, hit that cap, and the NEWEST player was refused ("too many WebMediaPlayers": no
+   supported sources) while the older ones still played. So the markup carries the address as data-msrc, never src;
+   EVERY existing player is moved into the new log, and only a file that has no player yet gets its src. */
 function keepMedia(log, write) {
-  const live = [...log.querySelectorAll('audio, video')].filter(m => !m.paused || m.currentTime > 0);
-  write();
-  if (!live.length) return;
-  const fresh = [...log.querySelectorAll('audio, video')];
-  for (const old of live) {
-    const i = fresh.findIndex(n => n.tagName === old.tagName && n.getAttribute('src') === old.getAttribute('src'));
-    if (i >= 0) { fresh[i].replaceWith(old); fresh.splice(i, 1); }
+  const pool = new Map();
+  for (const m of log.querySelectorAll('audio[data-msrc], video[data-msrc]')) {
+    const k = m.tagName + ' ' + m.getAttribute('data-msrc');
+    (pool.get(k) || pool.set(k, []).get(k)).push(m);
   }
+  write();
+  for (const n of log.querySelectorAll('audio[data-msrc], video[data-msrc]')) {
+    const list = pool.get(n.tagName + ' ' + n.getAttribute('data-msrc'));
+    if (list && list.length) { const old = list.shift(); if (n.style.cssText && !old.style.cssText) old.style.cssText = n.style.cssText; n.replaceWith(old); }
+    else n.src = n.getAttribute('data-msrc');
+  }
+  for (const list of pool.values()) list.forEach(releaseMedia);   // files no longer in the log
+}
+// A player dropped from the page holds its media player until garbage collection; this frees it now.
+function releaseMedia(m) { try { if (!m.paused) m.pause(); m.removeAttribute('src'); m.load(); } catch {} }
+function clearLog(html) {
+  const log = $('log');
+  log.querySelectorAll('audio, video').forEach(releaseMedia);
+  log.innerHTML = html;
 }
 function sentFileHtml(t) {
   const sid = state.open || '';
@@ -881,9 +898,10 @@ function sentFileHtml(t) {
     const url = '/api/sent-file?session=' + encodeURIComponent(sid) + '&path=' + encodeURIComponent(f) + (t.id ? '&v=' + encodeURIComponent(t.id) : '');
     const e = ((name.match(/\.([a-z0-9]+)$/i) || [])[1] || '').toLowerCase();
     out += '<div class="sf">';
-    if (/^(wav|mp3|ogg|oga|opus|m4a|aac|flac)$/.test(e)) out += `<audio controls preload="metadata" src="${esc(url)}"></audio>`;
+    // data-msrc, not src: keepMedia gives the player its src once, so a re-render never creates another (g2670).
+    if (/^(wav|mp3|ogg|oga|opus|m4a|aac|flac)$/.test(e)) out += `<audio controls preload="metadata" data-msrc="${esc(url)}"></audio>`;
     const d = mediaDims.get(url);
-    if (/^(mp4|webm|mov)$/.test(e)) out += `<video controls playsinline preload="metadata"${d ? ` style="aspect-ratio:${d.w} / ${d.h}"` : ''} src="${esc(url)}"></video>`;
+    if (/^(mp4|webm|mov)$/.test(e)) out += `<video controls playsinline preload="metadata"${d ? ` style="aspect-ratio:${d.w} / ${d.h}"` : ''} data-msrc="${esc(url)}"></video>`;
     const view = ` data-sent="${esc(url)}" data-p="${esc(f)}"`;
     if (/^(png|jpe?g|gif|webp|svg)$/.test(e)) out += `<a href="${esc(url)}"${view} target="_blank" rel="noopener"><img loading="lazy" alt="${esc(name)}"${d ? ` width="${d.w}" height="${d.h}"` : ''} src="${esc(url)}"></a>`;
     // Every sent file opens in Relaymote's own viewer, with Download and Share (19-Oct: a PDF opened in a
@@ -2046,7 +2064,7 @@ async function openChatInner(id) {
   htmlCache.clear(); replyIndex.clear(); lastSig = '';
   logAtBottom = true; logNew = 0; seenMsgIds = new Set(); seenReplyTs = ''; scrollToBottomNext = true;
   $('pick-hint') && $('pick-hint').remove();
-  $('log').innerHTML = '<div class="empty">Loading…</div>';
+  clearLog('<div class="empty">Loading…</div>');
 
   clearTimeout(state.markReadTimer);
   const row = (state.sessions || []).find(x => x.id === id);
@@ -2118,8 +2136,8 @@ async function openChatInner(id) {
   } catch (e) {
     toast('Open failed: ' + e.message, true);
     if (state.open === id) {
-      $('log').innerHTML = '<div class="empty">Could not load this conversation (' + esc(e.message) + ').<br>' +
-        '<button class="linkish" id="btn-retry-open">Tap to retry</button></div>';
+      clearLog('<div class="empty">Could not load this conversation (' + esc(e.message) + ').<br>' +
+        '<button class="linkish" id="btn-retry-open">Tap to retry</button></div>');
       const b2 = $('btn-retry-open'); if (b2) b2.onclick = () => openChat(id);
     }
   }

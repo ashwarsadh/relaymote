@@ -1,3 +1,7 @@
+## 0.2.189
+
+- A newly sent audio or video now plays in a chat that already holds many of them. Before, the phone ran out of media players and the newest one would not play.
+
 ## 0.2.188
 
 - Sessions filed in a group under your previous Claude account are put back in that group in the current sidebar.

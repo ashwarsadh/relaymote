@@ -46,7 +46,9 @@ if exist "%LOG%" for %%A in ("%LOG%") do if %%~zA GTR %MAX% (
 )
 
 echo [%DATE% %TIME%] --- launching %ENTRY% --->> "%LOG%"
-"%NODE%" "%ENTRY%" 2>> "%LOG%"
+rem 15-Nov: stdout goes to NUL. Left on the hidden console the tray and the autostart task give this window, every
+rem log line was a synchronous console write: one took 8.6 s (14-Nov 16:02Z stall, consoleCall). relaymote.log keeps them.
+"%NODE%" "%ENTRY%" 1>nul 2>> "%LOG%"
 set "RC=%ERRORLEVEL%"
 echo [%DATE% %TIME%] --- daemon exited with code %RC% --->> "%LOG%"
 if not exist "%STATE%\follow-sleep.json" exit /b %RC%

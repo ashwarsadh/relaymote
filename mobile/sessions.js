@@ -876,66 +876,112 @@ function scanBackground(text, launched, finished, agents = new Map()) {
   /x/.exec('x'); // RegExp.input/lastMatch would otherwise keep this chunk alive until the next match anywhere
 }
 
-function pendingChips(sess, allSessions, { maxBytes = 2 * 1024 * 1024 } = {}) {
-  const file = transcriptPath(sess);
-  if (!file) return [];
-  let win;
-  try { win = readWindow(file, maxBytes, null); } catch { return []; }
+/* 15-Nov: pendingChips and pendingQuestion are read incrementally. Each used to read the newest 2 MB of the transcript and
+   JSON.parse every line, on every change of the watched session (every 2.5 s while it works) and on every /api/chips and
+   session open: 49 + 15 logged loop stalls in 3 days (readWindow up to 13 s, pendingChips 231 s in the 08:39Z stall).
+   Now the first look reads that same 2 MB window once; later looks read only the bytes appended since, and only lines that
+   can matter are parsed (an AskUserQuestion call, a tool_result, a spawn_task/dismiss_task call). Same answers: what lies
+   before the newest maxBytes still drops out of the window. */
+const tailScans = new Map();   // kind|file -> { end, partial, pos, st }
+const tailStats = { bytesRead: 0, parsed: 0 };
+function scanTail(file, kind, maxBytes, init, feed) {
+  const key = kind + '|' + file;
+  const fd = fs.openSync(file, 'r');
+  try {
+    const size = fs.fstatSync(fd).size;
+    let c = tailScans.get(key);
+    // Shrunk (rewritten) or so far behind that the window has moved past it: start again from the window.
+    if (!c || size < c.end || c.maxBytes !== maxBytes || size - c.end > maxBytes) {
+      const start = Math.max(0, size - maxBytes);
+      c = { end: start, pos: start, partial: '', skipFirst: start > 0, maxBytes, st: init() };
+      tailScans.delete(key);
+      if (tailScans.size >= 200) tailScans.delete(tailScans.keys().next().value);
+      tailScans.set(key, c);
+    }
+    if (size > c.end) {
+      const buf = Buffer.allocUnsafe(size - c.end);
+      const n = fs.readSync(fd, buf, 0, buf.length, c.end);
+      tailStats.bytesRead += n;
+      c.end += n;
+      const lines = (c.partial + buf.toString('utf8', 0, n)).split('\n');
+      c.partial = lines.pop();                // a line still being written is finished next time
+      for (const line of lines) {
+        const at = c.pos;
+        c.pos += Buffer.byteLength(line) + 1;
+        if (c.skipFirst) { c.skipFirst = false; continue; }   // the window starts mid-line
+        feed(c.st, line, at);
+      }
+    }
+    return { st: c.st, from: Math.max(0, size - maxBytes) };
+  } finally { fs.closeSync(fd); }
+}
+const parseRow = (t) => { tailStats.parsed++; try { return JSON.parse(t); } catch { return null; } };
+const normTitle = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-  const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const started = new Set((allSessions || []).map(x => norm(x.title)).filter(Boolean));
-
-  const seen = new Map();
-  for (const line of win.text.split('\n')) {
-    const t = line.trim();
-    if (!t) continue;
-    let row;
-    try { row = JSON.parse(t); } catch { continue; }
-    const content = row.message && row.message.content;
-    if (!Array.isArray(content)) continue;
+function chipsInFile(file, { maxBytes = 2 * 1024 * 1024 } = {}) {
+  const { st, from } = scanTail(file, 'chips', maxBytes, () => new Map(), (seen, line, at) => {
+    if (!line.includes('spawn_task') && !line.includes('dismiss_task')) return;
+    const row = parseRow(line.trim());
+    const content = row && row.message && row.message.content;
+    if (!Array.isArray(content)) return;
     for (const b of content) {
       if (!b || b.type !== 'tool_use') continue;
       const nm = String(b.name || '');
       if (/dismiss_task$/i.test(nm)) {
         const dt = String((b.input || {}).title || '').trim();
-        if (dt) seen.delete(norm(dt));
+        if (dt) seen.delete(normTitle(dt));
         continue;
       }
       if (!/spawn_task$/i.test(nm)) continue;
       const title = String((b.input || {}).title || '').trim();
       if (!title) continue;
-      seen.set(norm(title), { title, ts: row.timestamp || null });
+      const k = normTitle(title);
+      seen.set(k, { title, ts: row.timestamp || null, at });
     }
+  });
+  return [...st.entries()].filter(([, v]) => v.at >= from).map(([k, v]) => ({ k, title: v.title, ts: v.ts }));
+}
+
+function pendingChips(sess, allSessions, { maxBytes = 2 * 1024 * 1024 } = {}) {
+  const file = transcriptPath(sess);
+  if (!file) return [];
+  let list;
+  try { list = chipsInFile(file, { maxBytes }); } catch { return []; }
+  const started = new Set((allSessions || []).map(x => normTitle(x.title)).filter(Boolean));
+  return list.filter(x => !started.has(x.k)).map(({ title, ts }) => ({ title, ts }));
+}
+
+const TOOL_RESULT_ID = /"tool_use_id":\s*"([^"]+)"/g;
+function questionInFile(file, { maxBytes = 2 * 1024 * 1024 } = {}) {
+  const { st, from } = scanTail(file, 'question', maxBytes, () => new Map(), (asks, line, at) => {
+    if (asks.size && line.includes('"tool_result"')) {
+      let m;
+      TOOL_RESULT_ID.lastIndex = 0;
+      while ((m = TOOL_RESULT_ID.exec(line))) asks.delete(m[1]);
+    }
+    if (!line.includes('AskUserQuestion')) return;
+    const row = parseRow(line.trim());
+    const content = row && row.message && row.message.content;
+    if (!Array.isArray(content)) return;
+    for (const b of content) {
+      if (!b || typeof b !== 'object') continue;
+      if (b.type === 'tool_use' && b.name === 'AskUserQuestion' && b.id) { asks.delete(b.id); asks.set(b.id, { input: b.input || {}, at }); }
+      if (b.type === 'tool_result' && b.tool_use_id) asks.delete(b.tool_use_id);
+    }
+  });
+  let out = null;
+  for (const [id, { input, at }] of st) {
+    if (at < from) continue;
+    const qs = Array.isArray(input.questions) ? input.questions : [];
+    if (qs.length) out = { id, questions: qs };
   }
-  return [...seen.entries()].filter(([k]) => !started.has(k)).map(([, v]) => v);
+  return out;
 }
 
 function pendingQuestion(sess, { maxBytes = 2 * 1024 * 1024 } = {}) {
   const file = transcriptPath(sess);
   if (!file) return null;
-  let win;
-  try { win = readWindow(file, maxBytes, null); } catch { return null; }
-  const asks = new Map(), answered = new Set();
-  for (const line of win.text.split('\n')) {
-    const t = line.trim();
-    if (!t) continue;
-    let row;
-    try { row = JSON.parse(t); } catch { continue; }
-    const content = row.message && row.message.content;
-    if (!Array.isArray(content)) continue;
-    for (const b of content) {
-      if (!b || typeof b !== 'object') continue;
-      if (b.type === 'tool_use' && b.name === 'AskUserQuestion' && b.id) asks.set(b.id, b.input || {});
-      if (b.type === 'tool_result' && b.tool_use_id) answered.add(b.tool_use_id);
-    }
-  }
-  let out = null;
-  for (const [id, input] of asks) {
-    if (answered.has(id)) continue;
-    const qs = Array.isArray(input.questions) ? input.questions : [];
-    if (qs.length) out = { id, questions: qs };
-  }
-  return out;
+  try { return questionInFile(file, { maxBytes }); } catch { return null; }
 }
 
 function transcriptStamp(sess) {
@@ -1067,7 +1113,7 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
 }
 
 module.exports = { unwrapForTest: unwrap, flattenForTest: flatten, byTypedTimeForTest: byTypedTime,
-  refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, backgroundTasksSoon, backgroundFromFile, backgroundTasks, refreshLiveJobs, liveJobs, noteLive, transcriptStamp, transcriptPath, slugFor,
+  refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, chipsInFile, questionInFile, tailStats, backgroundTasksSoon, backgroundFromFile, backgroundTasks, refreshLiveJobs, liveJobs, noteLive, transcriptStamp, transcriptPath, slugFor,
   searchTranscripts, searchSession, ackDot, ackVersion,
   STORE, PROJECTS,
 };

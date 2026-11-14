@@ -437,6 +437,13 @@ else {
   check(/launching/.test(log) && /dying words on stderr/.test(log) && /exited with code 3/.test(log), 'launch line, stderr and the exit line are all kept', log);
   check(!/stdout is not captured/.test(log), 'stdout is not duplicated into the capture');
   check(fs.statSync(launch.logFile() + '.1').size === 300, 'an over-size capture is rotated to .1 before node starts');
+  if (process.platform === 'win32') {
+    // 15-Nov: the daemon's stdout goes to NUL, not to the hidden console the tray gives the wrapper (a console write held
+    // the loop 8.6 s on 14-Nov). relaymote.log already has every line.
+    const w0 = launch.wrapper();
+    const out = spawnSync(w0.cmd, w0.args, { env: { ...process.env, RELAYMOTE_DAEMON_ENTRY: entry, RELAYMOTE_NODE: process.execPath }, windowsHide: true, encoding: 'utf8' });
+    check(out.status === 3 && !/stdout is not captured/.test(out.stdout || ''), 'the daemon\'s stdout never reaches the wrapper\'s console', out.stdout);
+  }
   launch.markStopped('test');
   const before = fs.readFileSync(launch.logFile(), 'utf8');
   const w = launch.wrapper();

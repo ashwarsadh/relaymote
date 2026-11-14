@@ -105,9 +105,10 @@ async function refreshDesktop() {
     refreshStage = 'claudeAgents';
     const agents = await claudeAgents();
     const cwdMap = desktop.buildCwdMap(agents);
+    const cwdCache = desktop.loadCwdCache();
     const merged = desktop.mergeSessions(
       sidebar.sessions.map(s => {
-        const c = desktop.lookupCwd(cwdMap, s.id);
+        const c = desktop.lookupCwd(cwdMap, s.id, cwdCache);
         return {
           sessionId: s.id, title: s.title, cwd: c.cwd || null, projectSlug: c.slug || null,
           isArchived: s.archived, isRunning: s.running, lastActivityAt: null,
@@ -116,7 +117,7 @@ async function refreshDesktop() {
       sidebar
     );
     for (const m of merged) {
-      const c = desktop.lookupCwd(cwdMap, m.sessionId);
+      const c = desktop.lookupCwd(cwdMap, m.sessionId, cwdCache);
       if (!m.cwd && c.cwd) m.cwd = c.cwd;
       m.projectSlug = c.slug || null;
     }
@@ -771,7 +772,7 @@ async function evictWedgedHolder(reason) {
     setTimeout(versionTick, 90000);
     setInterval(versionTick, 5 * 60000);
     setInterval(() => { follow.tick().catch(e => orch.log('follow Claude: ' + e.message)); }, 5000);
-    setInterval(() => { if (config.mod('accounts')) require('./lib/account-sync').autoTick().then(r => { if (r && (r.applied || r.error)) orch.log('accounts auto-sync: ' + (r.error || r.applied + ' change(s) written')); }).catch(e => orch.log('accounts auto-sync: ' + e.message)); }, 15000);
+    setInterval(() => { if (config.mod('accounts')) require('./lib/account-sync').autoTick({ offThread: true }).then(r => { if (r && (r.applied || r.error)) orch.log('accounts auto-sync: ' + (r.error || r.applied + ' change(s) written')); }).catch(e => orch.log('accounts auto-sync: ' + e.message)); }, 15000);
     // Boot window: Desktop not running yet when Relaymote starts -> the pass that waits for a closed Desktop runs now.
     if (config.mod('accounts')) require('./lib/account-sync').bootPass().then(r => { if (r && (r.applied || r.error)) orch.log('accounts boot pass: ' + (r.error || (r.applied.count || 0) + ' change(s) written')); }).catch(e => orch.log('accounts boot pass: ' + e.message));
     setTimeout(() => serialise(resumeTick), 20000);

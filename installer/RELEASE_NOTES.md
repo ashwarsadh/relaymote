@@ -1,3 +1,7 @@
+## 0.2.192
+
+- Fewer pauses while Relaymote is busy: a chat no longer re-reads its whole recent history to look for open questions and suggested tasks, the half-hourly account sync runs in the background, the Desktop refresh lists only project folders that changed, and the daemon no longer writes its log to a hidden console window.
+
 ## 0.2.191
 
 - Enter in the small reply box (a reply to selected words, or a swipe-right reply) now queues that reply above the message bar, the same as tapping outside it. Shift+Enter adds a new line. The main message box is unchanged.

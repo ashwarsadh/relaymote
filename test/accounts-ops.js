@@ -8,6 +8,7 @@
 //   * close-sync-reopen: nothing is closed without the confirm token; Store (MSIX) reopen fallback;
 //   * the Advanced API actions.
 'use strict';
+process.env.RELAYMOTE_OFF_THREAD_TEST = '1';   // lets the worker lane fake Desktop's presence (test.presence)
 const fx = require('./accounts-fixture');
 const fs = require('fs');
 const path = require('path');
@@ -143,6 +144,18 @@ const { check } = fx;
   r = await sync.autoTick();
   check(r && r.trigger === 'desktop-exit' && has(A, 6), 'Desktop exits: a pass runs at once (not waiting for the interval)', JSON.stringify(r));
   check(sync.autoStatus().watchingPid === null, 'nothing left to watch');
+
+  // 15-Nov: the server's interval runs the pass in the 'slow' worker lane (it stats every record; on the main thread it was
+  // the largest stall in the log). Same sandbox, same writes, answered from another thread.
+  console.log('-- the interval pass runs off the main thread');
+  rec(B, 40, NOW - D);
+  const offThread = require('../lib/off-thread');
+  await offThread.run('slow', 'test.presence', { state: 'absent' });   // the write lock re-checks Desktop inside the worker
+  const off = await offThread.run('slow', 'accounts.run', { apply: true, auto: true, trigger: 'interval', presence: 'absent' });
+  check(off && off.thread > 0 && off.ok !== false && has(A, 40), 'the worker pass writes the same change, from a worker thread', JSON.stringify(off));
+  check(off.applied && off.applied.count >= 1 && off.desktopRunning === false, 'and hands back what autoTick logs (applied count, Desktop state)', JSON.stringify(off));
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  check(src.includes("account-sync').autoTick({ offThread: true })"), 'the server interval asks for the worker lane');
   config.set({ accounts: { autoSync: false } });
 
   // ---------------------------------------------------------------- account-switch transfer

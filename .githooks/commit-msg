@@ -1,0 +1,10 @@
+#!/bin/sh
+# No Claude/Anthropic co-author on this repo's commits (Ashwar, 23-Sep-2026: "it looks in GitHub post that we are
+# collaborating with Cloud here as it shows Cloud also along with my name"). Sessions add the trailer by default;
+# 0.2.184-0.2.191 went out with it on 14-Nov. This hook refuses the commit instead of trusting each session to know.
+if grep -iqE '^[[:space:]]*co-authored-by:.*(claude|anthropic)|@anthropic\.com' "$1"; then
+  echo "commit-msg: refused -- a Claude/Anthropic co-author or @anthropic.com address is in the message." >&2
+  echo "This repo never carries one (Ashwar, 23-Sep). Remove the trailer and commit again." >&2
+  exit 1
+fi
+exit 0

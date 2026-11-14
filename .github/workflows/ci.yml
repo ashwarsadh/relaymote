@@ -20,6 +20,16 @@ jobs:
           node-version: 22
       - name: leak check (public repo)
         run: node scripts/leak-check.js
+      # Ashwar, 23-Sep: no Claude/Anthropic co-author on this repo's commits. .githooks/commit-msg refuses one locally; a
+      # clone without the hook (a cloud session) is caught here. History before 069fe7b is left as published (14-Nov).
+      - name: no Claude co-author trailer
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          git fetch -q --unshallow 2>/dev/null || true
+          if git log --format=%B 069fe7b..HEAD | grep -iqE '^[[:space:]]*co-authored-by:.*(claude|anthropic)|@anthropic\.com'; then
+            echo "A commit since 069fe7b carries a Claude/Anthropic co-author trailer (Ashwar's 23-Sep rule)."; exit 1
+          fi
       - run: npm ci --omit=dev
       # Headless: no Claude Desktop, and empty Claude data folders so nothing real is read.
       - name: npm test

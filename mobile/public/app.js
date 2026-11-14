@@ -134,6 +134,7 @@ let logAtBottom = true;
 let logNew = 0;
 let scrollToBottomNext = false;
 let lastProgTop = -1;
+let fingerDown = false, handAt = 0, prevLogTop = 0;   // his finger on the log: see byHand()
 let seenMsgIds = new Set();
 let seenReplyTs = '';
 
@@ -144,7 +145,7 @@ function syncViewport() {
   // column must be h / z CSS px to still fill the screen (see display-ui.js).
   const z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--z')) || 1;
   document.documentElement.style.setProperty('--app-h', (h / z) + 'px');
-  const log = logAtBottom ? document.getElementById('log') : null;
+  const log = logAtBottom && !(fingerDown && Date.now() - handAt < 3000) ? document.getElementById('log') : null;
   if (log) requestAnimationFrame(() => setScrollTop(log, log.scrollHeight));
 }
 if (window.visualViewport) {
@@ -648,7 +649,8 @@ setInterval(() => {
 // His bubble: the quotes he replied to, each trimmed until tapped, then his words.
 function quoteHtml(q) {
   const who = q.mine ? 'You' : q.who;
-  return `<div class="quote" data-qk="${hash(q.text)}">` + (who ? `<span class="qwho">${esc(who)}${q.when ? ' · ' + esc(q.when) : ''}</span>` : '') +
+  const role = q.mine ? 'user' : q.who === 'Claude' ? 'assistant' : '';
+  return `<div class="quote" data-qk="${hash(q.text)}" data-qt="${esc(String(q.text || '').slice(0, 240))}"${role ? ` data-qr="${role}"` : ''}>` + (who ? `<span class="qwho">${esc(who)}${q.when ? ' · ' + esc(q.when) : ''}</span>` : '') +
          `<div class="qtext">${md(q.text)}</div></div>`;
 }
 function userBody(text) {
@@ -992,7 +994,15 @@ function renderLive() {
 setInterval(() => { if (!document.hidden) renderLive(); }, 1000);
 
 const nearBottom = (el) => el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_TOL;
-function setScrollTop(el, v) { el.scrollTop = v; lastProgTop = el.scrollTop; }
+function setScrollTop(el, v) { el.scrollTop = v; lastProgTop = el.scrollTop; if (el.id === 'log') prevLogTop = el.scrollTop; }
+/* His finger on the log (14-Nov, Ashwar: "as soon as some messages were arriving, it was scrolling down again and again
+   automatically"). "At the end" was a distance: within 60 px of the bottom. A slow drag up spends a second or more inside
+   those 60 px, and every reply or resize in that time snapped him back, so with a working session he could never leave.
+   Now ANY move up made by hand leaves the end at once, and nothing scrolls the log for him while his finger is on it. */
+// The log is rebuilt under his finger when a reply lands, and a touch whose target left the page never reaches the log
+// again: its touchend is lost. So the finger counts as down only while touches or his scrolling keep arriving.
+const fingerOn = () => fingerDown && Date.now() - handAt < 3000;
+const byHand = () => fingerOn() || Date.now() - handAt < 1500;
 // A working group is identified by its data-key alone: its summary ("Working · 42 steps · Read file")
 // changes with every step, so a key built from the text stopped matching mid-turn.
 const anchorKey = (el) => el.dataset.key ? 'k:' + el.dataset.key : el.className + '|' + (el.textContent || '').slice(0, 80);
@@ -1058,19 +1068,32 @@ function reconcileQueued(msgs) {
 function applyTail(tail, startByte, hasMore) {
   const cur = state.messages || [];
   const page = () => { if (startByte !== undefined && startByte !== null) { state.oldestByte = startByte; state.hasMore = !!hasMore; } };
-  if (!cur.length || !tail.length || scrollToBottomNext || logAtBottom) { page(); return tail; }
+  if (!cur.length || !tail.length || scrollToBottomNext || (logAtBottom && !fingerOn())) { page(); return tail; }
   const id = (m) => m.role + ':' + (m.ts || '');
-  const t0 = id(tail[0]);
-  for (let j = 0; j < cur.length; j++) {
-    if (id(cur[j]) !== t0) continue;
-    let same = true;
-    for (let k = 1; k < 4 && j + k < cur.length && k < tail.length; k++) if (id(cur[j + k]) !== id(tail[k])) { same = false; break; }
-    // Older pages stay, so oldestByte / hasMore still describe the top of what is loaded.
-    // A queued placeholder is only true in the LATEST window: one kept in the older prefix outlived its
-    // delivery (29-Sep: 'queued · waiting' sat above the delivered copy for an hour). Drop them there.
-    if (same) return cur.slice(0, j).filter(m => m.queued === undefined).concat(tail);
+  /* Where the tail joins what is loaded: the first place a run of rows (up to 4) lines up, starting from ANY of the
+     tail's first rows, not only its first. 14-Nov (Ashwar, reading older messages in the Conductor: "it was scrolling
+     down again and again"): a message typed during a busy turn is written late, stamped with when it was typed, and the
+     server moves it to where that time falls -- the top of every tail while it is in the window. Matched on that row
+     alone, no tail ever lined up, each reply replaced the whole list, his older pages went and the view fell to the end. */
+  const curAt = new Map();
+  cur.forEach((m, i) => { const k = id(m); if (!curAt.has(k)) curAt.set(k, []); curAt.get(k).push(i); });
+  for (let s = 0; s < Math.min(tail.length, 12); s++) {
+    for (const j of curAt.get(id(tail[s])) || []) {
+      let same = true;
+      for (let k = 1; k < 4 && j + k < cur.length && s + k < tail.length; k++) if (id(cur[j + k]) !== id(tail[s + k])) { same = false; break; }
+      if (!same) continue;
+      // Older pages stay, so oldestByte / hasMore still describe the top of what is loaded. A row the tail also holds
+      // above the join (the one moved to its top) is drawn once, where the tail puts it.
+      // A queued placeholder is only true in the LATEST window: one kept in the older prefix outlived its
+      // delivery (29-Sep: 'queued · waiting' sat above the delivered copy for an hour). Drop them there.
+      const above = new Set(tail.slice(0, s).map(id));
+      return cur.slice(0, j).filter(m => m.queued === undefined && !above.has(id(m))).concat(tail);
+    }
   }
-  page(); return tail;    // no overlap: more arrived than one window holds; the tail is the truth
+  // No overlap: more arrived than one window holds. He is reading above, so what he reads stays and the new rows go
+  // below it; the next render at the end (the pill, or scrolling down) takes the tail alone again.
+  const have = new Set(cur.map(id));
+  return cur.filter(m => m.queued === undefined).concat(tail.filter(m => !have.has(id(m))));
 }
 function renderJump() {
   const b = $('jump'); if (!b) return;
@@ -1085,6 +1108,8 @@ function jumpToBottom() {
   logAtBottom = true; logNew = 0;
   setScrollTop(log, log.scrollHeight);
   renderJump();
+  // What was kept while he read above may hold a gap (more arrived than one window); at the end the tail alone is right.
+  reloadOpenChat();
 }
 
 // g1783: "delivered" only when the session actually took it; a message Desktop dropped says so.
@@ -1115,7 +1140,7 @@ function renderLog(messages, force) {
   // A reload that resumes this chat puts back the row he was reading (savePlace), once, on its first render.
   const back = state.restorePlace && state.restorePlace.id === state.open ? state.restorePlace.anchor : null;
   state.restorePlace = null;
-  const stick = !back && (scrollToBottomNext || logAtBottom);
+  const stick = !back && (scrollToBottomNext || (logAtBottom && !fingerOn()));
   scrollToBottomNext = false;
   const anchor = back || (stick ? null : readingAnchor(log));
   const keepTop = log.scrollTop;
@@ -1327,13 +1352,21 @@ function renderLog(messages, force) {
 }
 
 $('log').addEventListener('scroll', () => {
-  if ($('log').scrollTop === lastProgTop) return;
+  const log = $('log'), top = log.scrollTop, up = top < prevLogTop - 1;
+  prevLogTop = top;
+  if (top === lastProgTop) return;
+  if (fingerDown) handAt = Date.now();
   const was = logAtBottom;
-  logAtBottom = nearBottom($('log'));
+  logAtBottom = up && byHand() ? false : nearBottom(log);
   if (logAtBottom) logNew = 0;
   if (was !== logAtBottom || logAtBottom) renderJump();
 }, { passive: true });
 if ($('jump')) $('jump').addEventListener('click', jumpToBottom);
+$('log').addEventListener('touchstart', () => { fingerDown = true; handAt = Date.now(); }, { passive: true, capture: true });
+$('log').addEventListener('touchmove', () => { handAt = Date.now(); }, { passive: true, capture: true });
+for (const t of ['touchend', 'touchcancel']) $('log').addEventListener(t, (e) => { if (!e.touches || !e.touches.length) { fingerDown = false; handAt = Date.now(); } }, { passive: true, capture: true });
+$('log').addEventListener('wheel', () => { handAt = Date.now(); }, { passive: true });
+document.addEventListener('keydown', (e) => { if (/^(PageUp|PageDown|ArrowUp|ArrowDown|Home|End)$/.test(e.key)) handAt = Date.now(); });
 
 /* Hold the view still (g780). renderLog places the view once, but the page keeps changing size AFTER
    it: a code block or image lays out, the composer or a bar above the log grows or goes, a clamp or a
@@ -1353,7 +1386,7 @@ function holdView() {
     if (heldAnchor) restoreAnchor(log, heldAnchor, true);
     logAtBottom = nearBottom(log);
   } else if (logAtBottom) {
-    if (log.scrollHeight - log.clientHeight - log.scrollTop > 1) setScrollTop(log, log.scrollHeight);
+    if (!fingerOn() && log.scrollHeight - log.clientHeight - log.scrollTop > 1) setScrollTop(log, log.scrollHeight);
   } else if (heldAnchor) {
     restoreAnchor(log, heldAnchor, true);
     heldAnchor = readingAnchor(log);   // re-based: the next change is measured from where he now is
@@ -5237,6 +5270,9 @@ async function landAtHit(hit, needle) {
   const rows = rowsWithTimes().filter(r => r.ts && String(r.ts) <= String(hit.ts));
   const row = rows.length ? rows[rows.length - 1].el : null;
   if (!row) return false;
+  return landOnRow(row, needle || hit.snippet);
+}
+function landOnRow(row, needle) {
   const body = row.querySelector('[data-ck].clamp');
   if (body) {
     body.classList.remove('clamp'); state.expanded.add(body.dataset.ck); state.closedClamps.delete(body.dataset.ck);
@@ -5244,7 +5280,7 @@ async function landAtHit(hit, needle) {
   }
   if (row.matches('details') && !row.open) row.open = true;
   const log = $('log');
-  const at = landTarget(row, needle || hit.snippet);
+  const at = landTarget(row, needle);
   const y = at.getBoundingClientRect().top - log.getBoundingClientRect().top + log.scrollTop - log.clientHeight / 4;
   logAtBottom = false;
   setScrollTop(log, Math.max(0, Math.min(y, log.scrollHeight - log.clientHeight)));
@@ -5280,6 +5316,44 @@ async function landAtAnchor(sid, { uuid = '', text = '', raised = '' } = {}) {
   return false;
 }
 window.landAtAnchor = landAtAnchor;
+
+/* Tap a quote, go to what it quotes (14-Nov, Ashwar: "if I click on the quote, it would be possible to take to the message
+   from where we quoted?"). The original is looked for among the rows on screen first, newest one older than the reply;
+   failing that the desktop searches the whole transcript (the g784 search) and older history is paged in until it is
+   loaded, as a board card's landing does. The tap also opens the quote in full, as it did before. */
+async function goToQuote(q) {
+  const text = String(q.dataset.qt || '').trim();
+  const role = q.dataset.qr || '';
+  const from = q.closest('.msg, details.peer');
+  const fromTs = from && from.dataset.mts ? String(from.dataset.mts) : '';
+  const want = landNorm(text).slice(0, 80);
+  const open = () => {};   // the tap already opened it
+  if (want.length < 4) return open();
+  const sel = role === 'user' ? '.msg.user' : role === 'assistant' ? '.msg.assistant' : '.msg.user, .msg.assistant, details.peer';
+  const local = () => {
+    let best = null;
+    for (const el of $('log').querySelectorAll(sel)) {
+      if (el === from || (fromTs && el.dataset.mts && String(el.dataset.mts) >= fromTs)) continue;
+      const c = el.cloneNode(true); c.querySelectorAll('.quote, button, .stamp').forEach(n => n.remove());
+      if (landNorm(c.textContent).includes(want)) best = el;
+    }
+    return best;
+  };
+  const row = local();
+  if (row) return landOnRow(row, text) || open();
+  if (!state.open) return open();
+  // A phrase the raw transcript line holds as typed: the first line, no quote marks or backslashes (JSON escapes those).
+  const first = (text.split('\n').find(l => l.trim()) || '').trim().split(/["\\]/)[0];
+  const phrase = first.length > 60 ? first.slice(0, 60).replace(/\s+\S*$/, '') : first;
+  if (phrase.length < 4) return open();
+  try {
+    const r = await api(`/api/session-search?id=${encodeURIComponent(state.open)}&q=${encodeURIComponent(phrase)}`);
+    const hits = (r.hits || []).filter(h => (!role || h.role === role) && (!fromTs || !h.ts || String(h.ts) < fromTs));
+    if (hits.length && await landAtHit(hits[hits.length - 1], text)) return;
+    toast('The quoted message is not in this session any more.');
+  } catch (e) { toast('Could not find the quoted message: ' + e.message, true); }
+  open();
+}
 
 // The reply chips above the box, one per message he is answering. Kept per session, like the draft.
 function quotesKey(id) { return 'baton.quotes.' + id; }
@@ -5405,8 +5479,10 @@ $('log').addEventListener('click', (e) => {
   if (r) { e.stopPropagation(); return replyTo(r.dataset.role, r.dataset.ts); }
   const q = e.target.closest('.quote');
   if (q && !e.target.closest('a')) {
+    // The quote opens in full (or closes) as before, and the view goes to the message it quotes.
     q.classList.toggle('open');
     if (q.classList.contains('open')) openQuotes.add(q.dataset.qk); else openQuotes.delete(q.dataset.qk);
+    goToQuote(q);
   }
 });
 /* Swipe a message right to reply. The bubbles are touch-action:pan-y, so the browser keeps every vertical scroll and

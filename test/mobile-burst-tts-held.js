@@ -59,7 +59,7 @@ check(/m\.role !== 'assistant' \|\| !\(m\.text \|\| m\.ask\)/.test(app) && /!sti
   'only assistant text newer than the last seen counts (steps, Working rows and older history never do)');
 check(/new ResizeObserver\(holdView\)/.test(app) && /logRO\.observe\(log\);\s*for \(const el of log\.children\) logRO\.observe\(el\);/.test(app),
   'every layout change after a render is answered: the log box and each row are observed');
-check(/else if \(logAtBottom\) \{\s*if \(log\.scrollHeight - log\.clientHeight - log\.scrollTop > 1\) setScrollTop\(log, log\.scrollHeight\);/.test(app),
+check(/else if \(logAtBottom\) \{\s*if \((?:!fingerOn\(\) && )?log\.scrollHeight - log\.clientHeight - log\.scrollTop > 1\) setScrollTop\(log, log\.scrollHeight\);/.test(app),
   'at the bottom, late growth keeps him at the bottom (it used to leave the newest text below the edge)');
 check(/restoreAnchor\(log, heldAnchor, true\)/.test(app) && /screen: r\.top/.test(app), 'higher up, what he is reading keeps its place ON SCREEN, even when a bar appears above the log');
 check(/if \(typeof observeLog === 'function'\) observeLog\(\);/.test(app), 'each render re-observes the new rows');

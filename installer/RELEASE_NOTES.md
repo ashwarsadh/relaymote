@@ -1,3 +1,8 @@
+## 0.2.190
+
+- Reading older messages in a chat, new replies no longer pull you down to the end. A "↓ N new" button counts them; tap it to go down.
+- Tapping a quote in your message goes to the original message and highlights it, loading older history if needed.
+
 ## 0.2.189
 
 - A newly sent audio or video now plays in a chat that already holds many of them. Before, the phone ran out of media players and the newest one would not play.

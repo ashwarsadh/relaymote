@@ -14,7 +14,7 @@ const src = app.slice(a, app.indexOf('\nfunction ', a + 20));
 assert.ok(a > 0 && src.length > 300, 'applyTail not found');
 
 function load({ messages, atBottom = false, toBottom = false, oldestByte = 100, hasMore = true }) {
-  const ctx = { state: { messages, oldestByte, hasMore }, logAtBottom: atBottom, scrollToBottomNext: toBottom };
+  const ctx = { state: { messages, oldestByte, hasMore }, logAtBottom: atBottom, scrollToBottomNext: toBottom, fingerOn: () => false };
   vm.createContext(ctx);
   vm.runInContext(src + '\n;globalThis.__f = applyTail;', ctx);
   return ctx;
@@ -49,12 +49,22 @@ const ok = (c, name) => { assert.ok(c, name); n++; console.log('ok ' + name); };
   const s = load({ messages: range(0, 30), toBottom: true });
   ok(ids(s.__f(range(10, 31), 7, true)) === ids(range(10, 31)), 'after an own send: the tail alone');
 }
-{ // no overlap: more arrived than one window holds
+{ // no overlap while he reads above (14-Nov): what he reads stays, the new rows go below it, paging still describes the top
   const c = load({ messages: range(0, 5) });
-  ok(ids(c.__f(range(20, 25), 9, true)) === ids(range(20, 25)) && c.state.oldestByte === 9, 'no overlap: the tail is the truth, paging reset');
-  const o = load({ messages: range(0, 5) });
-  o.__f(range(20, 25), undefined, undefined);
-  ok(o.state.oldestByte === 100, 'an old server without startByte leaves paging alone');
+  ok(ids(c.__f(range(20, 25), 9, true)) === ids(range(0, 5).concat(range(20, 25))) && c.state.oldestByte === 100, 'no overlap, reading above: nothing he loaded is dropped');
+  const b = load({ messages: range(0, 5), atBottom: true });
+  ok(ids(b.__f(range(20, 25), 9, true)) === ids(range(20, 25)) && b.state.oldestByte === 9, 'no overlap at the bottom: the tail is the truth, paging reset');
+}
+{ // 14-Nov, the Conductor: a message typed during a busy turn is written late and the server moves it to the TOP of every
+  // tail (its typed time is older than the tail's first row). Matching on tail[0] alone never lined up, so every reply
+  // replaced the list and he fell to the end, again and again.
+  const late = row(3, 'user'); late.text = 'late';
+  const cur = range(0, 30).slice(0, 4).concat([late], range(4, 30));     // where it sat in his loaded list
+  const tail = [late].concat(range(20, 31));                              // the server's tail: it sits on top
+  const c = load({ messages: cur });
+  const out = c.__f(tail, 9, true);
+  ok(out.length === 32 && ids(out.slice(0, 4)) === ids(range(0, 4)) && out.filter(m => m.text === 'late').length === 1 && out[out.length - 1].text === 'r30' && c.state.oldestByte === 100,
+    'a late-written row on top of the tail: older pages kept, the row drawn once, the new row appended');
 }
 { // repeated timestamps: the splice point is confirmed by the following rows, not the first match
   const dup = [row(1), row(1), row(2), row(3)];

@@ -1,3 +1,8 @@
+## 0.2.194
+
+- Every message has a Copy button next to Reply. It copies the whole message, yours or Claude's, and says "Copied".
+- Selecting text now stays inside the message you started in. Dragging up or down past it no longer jumps to select everything.
+
 ## 0.2.193
 
 - Opening the Accounts page no longer pauses Relaymote while it counts every session in every account.

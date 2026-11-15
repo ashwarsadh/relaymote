@@ -1302,6 +1302,9 @@ mark.hit.cur{background:#f5a524; color:#000}
   background:var(--panel-2); color:var(--dim); opacity:var(--swipe,0)}
 details.peer{position:relative}
 .log{overflow-x:hidden}
+html.selecting body *{-webkit-user-select:none; user-select:none}
+html.selecting .sel-root, html.selecting .sel-root *{-webkit-user-select:text; user-select:text}
+.stamp .msg-copy{all:unset; margin-left:8px; padding:4px 6px; color:inherit; font-size:11px; cursor:pointer; -webkit-tap-highlight-color:transparent}
 .stamp .msg-reply{all:unset; margin-left:8px; padding:4px 6px; color:inherit; font-size:11px; cursor:pointer; -webkit-tap-highlight-color:transparent}
 .quote{border-left:3px solid currentColor; border-radius:4px; padding:4px 8px; margin:0 0 6px; background:var(--panel); cursor:pointer; font-size:13px; line-height:1.35; white-space:pre-wrap}
 .msg.user .quote{background:var(--accent-sunk); border-left-color:var(--on-accent); color:var(--on-accent)}

@@ -560,7 +560,8 @@ function stampHtml(m) {
   const full = new Date(Date.parse(m.ts)).toLocaleString();
   return `<div class="stamp ${m.role === 'user' ? 'mine' : ''}" data-ts="${esc(m.ts)}" ` +
          `title="${esc(full)}"><span class="age">${esc(ageText(m.ts))}</span>` +
-         (m.text && /^(assistant|user|peer)$/.test(m.role) ? `<button class="msg-reply" type="button" data-role="${esc(m.role)}" data-ts="${esc(m.ts)}" aria-label="Reply to this message">↩ Reply</button>` : '') + `</div>`;
+         (m.text && /^(assistant|user|peer)$/.test(m.role) ? `<button class="msg-reply" type="button" data-role="${esc(m.role)}" data-ts="${esc(m.ts)}" aria-label="Reply to this message">↩ Reply</button>` +
+                                                                     `<button class="msg-copy" type="button" data-role="${esc(m.role)}" data-ts="${esc(m.ts)}" aria-label="Copy this message">⧉ Copy</button>` : '') + `</div>`;
 }
 
 function tickStamps() {
@@ -5461,7 +5462,23 @@ function addSelReply(role, ts, text) {
     pill.style.top = top + 'px';
     pill.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
   };
-  document.addEventListener('selectionchange', () => { clearTimeout(timer); timer = setTimeout(look, 120); });
+  /* 15-Nov (Ashwar): "when I try to select a message and drag up and down, my starting cursor gets moved and it selects
+     all." A handle dragged past the bubble's edge landed in the gaps between messages, and the phone grew the selection to
+     the whole log. Now, once a selection starts in a message, every OTHER message stops being selectable until it is
+     cleared, so the handles stay inside that one bubble. (The log is not rebuilt or scrolled while text is selected.) */
+  const log = $('log');
+  let root = null;
+  const fence = () => {
+    const sel = window.getSelection();
+    const row = sel && !sel.isCollapsed && sel.rangeCount ? rowOf(sel.anchorNode) : null;
+    if (row === root) return;
+    if (root) root.classList.remove('sel-root');
+    root = row;
+    if (root) root.classList.add('sel-root');
+    document.documentElement.classList.toggle('selecting', !!root);
+  };
+  window.selFence = fence;   // tests
+  document.addEventListener('selectionchange', () => { fence(); clearTimeout(timer); timer = setTimeout(look, 120); });
   window.selReplyLook = look;   // tests call it directly
   $('log').addEventListener('scroll', () => { if (pick) look(); }, { passive: true });
   // pointerdown would move the selection; keep it until the click has read it.
@@ -5502,7 +5519,28 @@ $('quotes').addEventListener('click', (e) => {
   saveQuotes(state.open, list);
   renderQuotes();
 });
+/* 15-Nov (Ashwar): "Relay mode does not have a feature to copy an entire message." ⧉ Copy beside ↩ Reply copies the whole
+   message as written (markdown), his own or Claude's, and says "Copied". */
+async function copyText(text) {
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; } } catch {}
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+  document.body.appendChild(ta);
+  ta.select(); ta.setSelectionRange(0, text.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch {}
+  ta.remove();
+  return ok;
+}
+async function copyMessage(role, ts) {
+  const m = replyIndex.get(role + '|' + ts);
+  const text = m && String(m.text || '').split(String.fromCharCode(13)).join('').trim();
+  if (!text) return toast('Nothing to copy', true);
+  toast((await copyText(text)) ? 'Copied' : 'Could not copy', false);
+}
+window.copyMessage = copyMessage;   // tests
 $('log').addEventListener('click', (e) => {
+  const cp = e.target.closest('.msg-copy');
+  if (cp) { e.stopPropagation(); return copyMessage(cp.dataset.role, cp.dataset.ts); }
   const r = e.target.closest('.msg-reply');
   if (r) { e.stopPropagation(); return replyTo(r.dataset.role, r.dataset.ts); }
   const q = e.target.closest('.quote');

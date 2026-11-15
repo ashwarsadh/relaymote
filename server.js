@@ -236,7 +236,7 @@ const follow = require('./lib/follow').makeFollow({
       out = !r ? 'not run' : r.skipped ? 'skipped (' + r.presence + ')' : r.ok === false ? 'failed: ' + r.error
         : (r.applied ? r.applied.count : 0) + ' change(s) written, ' + (r.pendingCount || 0) + ' pending';
     }
-    try { await sync.transferTick({ exited: true }); } catch (e) { out += '; account-switch transfer failed: ' + e.message; }
+    try { await sync.transferTick({ exited: true, offThread: true }); } catch (e) { out += '; account-switch transfer failed: ' + e.message; }
     return out;
   },
   // run-daemon.cmd sees this marker and starts Relaymote again the moment claude.exe reappears.

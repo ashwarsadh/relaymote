@@ -249,6 +249,7 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
     <textarea id="new-prompt" rows="3" placeholder="What should it do?"></textarea>
     <label class="lbl">Model</label>
     <div class="seg" id="new-model"></div>
+    <button id="btn-all-models" class="linkish" type="button">View all models</button>
     <label class="lbl">Effort</label>
     <div class="seg" id="new-effort"></div>
     <div class="sheet-actions">
@@ -268,6 +269,16 @@ var m=document.createElement('meta');m.name='mobile-web-app-capable';m.content='
     <div class="stats" id="chipall-h" hidden><span class="muted">Waiting in other sessions</span></div>
     <ul class="sessions" id="chipall"></ul>
     <div class="sheet-actions"><button id="btn-close-chips" class="ghost">Done</button></div>
+  </div>
+</div>
+
+<div id="modelsheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="All models">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <h2>All models</h2>
+    <input id="model-filter" type="search" placeholder="Search models" autocomplete="off">
+    <ul class="sessions" id="modellist"></ul>
+    <div class="sheet-actions"><button id="btn-close-models" class="ghost">Cancel</button></div>
   </div>
 </div>
 

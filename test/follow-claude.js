@@ -57,7 +57,7 @@ function rig(o = {}) {
     ok(s.stopped === 0, 'with the setting off nothing stops');
   }
   const srv = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
-  ok(/bootPass\(\{ trigger: 'desktop-exit' \}\)/.test(srv) && /transferTick\(\{ exited: true \}\)/.test(srv) && /shutdown\('follow-claude'\)/.test(srv) && /follow\.tick\(\)/.test(srv), 'the daemon wires the account sync and a clean shutdown');
+  ok(/bootPass\(\{ trigger: 'desktop-exit' \}\)/.test(srv) && /transferTick\(\{ exited: true(, offThread: true)? \}\)/.test(srv) && /shutdown\('follow-claude'\)/.test(srv) && /follow\.tick\(\)/.test(srv), 'the daemon wires the account sync and a clean shutdown');
   const tray = fs.readFileSync(path.join(root, 'scripts', 'tray.ps1'), 'utf8');
   ok(/if \(Wanted\) \{ StartDaemon \}/.test(tray), 'the tray starts Relaymote at sign-in only when it is wanted');
   ok(tray.indexOf("Relaymote is asleep - it starts when Claude Desktop opens'; $icon") < tray.indexOf("'Relaymote stopped - restarting'"), 'the health poll does not restart a Relaymote that stopped with Desktop');

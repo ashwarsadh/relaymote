@@ -49,6 +49,20 @@ const check = (ok, what, extra) => { console.log((ok ? 'ok   ' : 'FAIL ') + what
   // The one-buffer scan blocked 170 ms here on an idle PC (2.3 s live, under load); chunked it is ~10 ms.
   check(maxMs < 120, 'it yields between chunks (a one-buffer scan of 120 MB blocks ~170 ms even idle)', maxMs.toFixed(0) + ' ms max');
 
+  // 16-Nov: a chunk holding one SendUserFile line was decoded whole (4 MB): 2-4 s stalls live under load (15-Nov 22:00Z).
+  // Only the matching lines are decoded now. A fresh transcript: 6 MB of filler with the call in the middle, and a
+  // second call on the last line.
+  const tr2 = path.join(home, 't2.jsonl');
+  const call = (f) => JSON.stringify({ cwd: home, message: { content: [{ type: 'tool_use', name: 'SendUserFile', input: { files: [f] } }] } }) + '\n';
+  fs.writeFileSync(tr2, block.repeat(Math.ceil(3 * 1048576 / block.length)) + call('mid.png') + block.repeat(Math.ceil(3 * 1048576 / block.length)) + call('end.png'));
+  const orig = Buffer.prototype.toString;
+  let biggest = 0;
+  Buffer.prototype.toString = function (enc, s, e) { const n = (e == null ? this.length : e) - (s || 0); if (n > biggest) biggest = n; return orig.apply(this, arguments); };
+  let files2;
+  try { files2 = await sentfiles.sentFiles(tr2); } finally { Buffer.prototype.toString = orig; }
+  check(files2.size === 2, 'both calls are found, mid-chunk and on the last line', [...files2].map(f => path.basename(f)).join());
+  check(biggest < 64 * 1024, 'only the matching lines are decoded, never a whole chunk', biggest + ' bytes at most');
+
   try { fs.rmSync(home, { recursive: true, force: true }); } catch {}
   if (fails) { console.error(fails + ' failed'); process.exit(1); }
   console.log('poll-stall: all checks passed');

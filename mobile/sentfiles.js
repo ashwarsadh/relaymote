@@ -66,7 +66,13 @@ async function sentFiles(transcript) {
           if (bytesRead < CHUNK) break;
           c.size += bytesRead; continue;           // a line longer than a chunk (a pasted image): never a SendUserFile call
         }
-        if (buf.indexOf('SendUserFile') >= 0) scanSent(buf.toString('utf8', 0, end), c);
+        // 16-Nov: decoding the whole 4 MB chunk for one match still held the loop 2-4 s under load (15-Nov 22:00Z,
+        // sentfiles.js:52 `slice`). Only the lines that hold a match are decoded now.
+        for (let at = buf.indexOf('SendUserFile'); at >= 0 && at < end; ) {
+          const from = buf.lastIndexOf(10, at) + 1, to = buf.indexOf(10, at);
+          scanSent(buf.toString('utf8', from, to < 0 ? end : to), c);
+          at = to < 0 ? -1 : buf.indexOf('SendUserFile', to);
+        }
         c.size += end + 1;
         if (c.size < st.size) await yieldNow();
       }

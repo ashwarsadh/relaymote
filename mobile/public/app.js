@@ -2864,7 +2864,9 @@ $('question').addEventListener('input', (e) => {
 const MODEL_HAS_EFFORT = (m) => !/^(claude-)?haiku[- ]?4/i.test(String(m || ''));   // Haiku 5.5 has effort (g1518)
 
 function renderNewSegs() {
-  seg($('new-model'), state.boot.models, state.newModel, async (v) => { state.newModel = v; renderNewSegs(); });
+  // A model picked from "View all models" shows as its own button beside the main four.
+  const shown = (state.boot.models || []).concat(state.newModel && !(state.boot.models || []).includes(state.newModel) ? [state.newModel] : []);
+  seg($('new-model'), shown, state.newModel, async (v) => { state.newModel = v; renderNewSegs(); });
   const canEffort = MODEL_HAS_EFFORT(modelId(state.newModel));
   seg($('new-effort'), state.boot.efforts, canEffort ? state.newEffort : null,
       async (v) => { state.newEffort = v; renderNewSegs(); });
@@ -4079,6 +4081,41 @@ $('new-folders').addEventListener('click', (e) => {
   renderFolderList();
 });
 $('btn-close-chips').onclick = () => navBack();
+
+// 16-Nov (Ashwar 15-Nov): "View all models" on New session. Every model Desktop's picker offers, its main list and its
+// "More models" submenu, read live (no ids written here); searchable; a pick is the model the session starts on.
+function renderModelList() {
+  const all = state.allModels || [];
+  const q = ($('model-filter').value || '').trim().toLowerCase();
+  const hits = all.filter(m => !q || m.name.toLowerCase().includes(q) || String(m.id || '').toLowerCase().includes(q));
+  const ul = $('modellist');
+  ul.innerHTML = '';
+  for (const m of hits) {
+    const li = document.createElement('li');
+    li.className = 'row' + (m.name === state.newModel ? ' on' : '');
+    li.innerHTML = `<div class="row-main"><div class="row-title">${esc(m.name)}</div>` +
+      `<div class="row-meta"><span>${esc(m.id || '')}</span>${m.more ? '<span class="muted">more models</span>' : ''}</div></div>`;
+    li.onclick = () => { state.newModel = m.name; navBack(); renderNewSegs(); };
+    ul.appendChild(li);
+  }
+  if (!hits.length) ul.innerHTML = `<div class="empty">${all.length ? `"${esc($('model-filter').value.trim())}" is not offered on this account.` : 'Reading the models from the PC…'}</div>`;
+}
+async function openAllModels() {
+  const b = state.boot || {};
+  state.allModels = (b.models || []).map(n => ({ name: n })).concat((b.moreModels || []).map(n => ({ name: n, more: true })));
+  $('model-filter').value = '';
+  showSheet($('modelsheet'));
+  renderModelList();
+  try {
+    const d = await api('/api/models');
+    const ids = d.ids || {};
+    state.allModels = (d.models || []).map(n => ({ name: n, id: ids[n] })).concat((d.more || []).map(n => ({ name: n, id: ids[n], more: true })));
+    renderModelList();
+  } catch (e) { if (!state.allModels.length) $('modellist').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+$('btn-all-models').onclick = () => openAllModels();
+$('model-filter').addEventListener('input', renderModelList);
+$('btn-close-models').onclick = () => navBack();
 $('chipsheet').onclick = (e) => { if (e.target === $('chipsheet')) hideSheet($('chipsheet')); };
 $('btn-chips').onclick = openChips;
 $('btn-create').onclick = createSession;

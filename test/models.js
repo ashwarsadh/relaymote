@@ -132,7 +132,7 @@ t('cleanModelName: a real name is never cut', () => {
   const lm = DSRC.slice(DSRC.indexOf('async function listModels'), DSRC.indexOf('async function sendMessage'));
   t('listModels: effort radios ([data-effort-id]) go to efforts, never models', () => {
     assert.ok(/hasAttribute\('data-effort-id'\)[\s\S]{0,200}efforts\.push/.test(lm), 'efforts not split out');
-    assert.ok(/return \{ ok: true, models, efforts/.test(lm), 'efforts not returned');
+    assert.ok(/return \{ ok: true, models, (more, )?efforts/.test(lm), 'efforts not returned');   // 16-Nov: `more` sits between
   });
   t('listModels, setModel picker and gui-worker label: badges cut before the name is read', () => {
     assert.ok(/data-cds="Badge"/.test(lm), 'listModels reads badges into the name');

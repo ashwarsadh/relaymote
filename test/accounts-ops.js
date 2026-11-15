@@ -188,6 +188,28 @@ const { check } = fx;
   scope.raise({ changed: true, from: keyA, to: 'eeeeeeee-0000-4000-8000-00000000000e/x' }); scope.answer('transfer');
   t = await sync.transferTick({ exited: true });
   check(t && t.done && t.error === 'NO_TARGET', 'an account that is not on this computer: recorded, nothing written');
+  // 16-Nov: the phone's poll asks for an account label every 2.5 s; each ask re-read every .claude.json. Now only on a change.
+  {
+    const readsOf = (fn) => { const o = fs.readFileSync; let n = 0;
+      fs.readFileSync = function (f) { if (/\.claude\.json$|identities\.json$/.test(String(f))) n++; return o.apply(this, arguments); };
+      try { fn(); } finally { fs.readFileSync = o; } return n; };
+    core.identities();
+    check(readsOf(() => { scope.activeScope(); scope.activeScope(); }) === 0, 'a label read twice with nothing changed re-reads no account file');
+    const any = path.join(core.DIR, 'identities.json');   // the sandbox's copy
+    if (!fs.existsSync(any)) { fs.mkdirSync(core.DIR, { recursive: true }); fs.writeFileSync(any, '{}'); }
+    const later = new Date(Date.now() + 5000); fs.utimesSync(any, later, later);
+    check(readsOf(() => core.identities()) > 0, 'a changed account file is read again', any);
+  }
+  // 16-Nov: the transfer's retry (every 5 min for up to 7 days) ran its pass on the main thread: 72 s and 38 s loop
+  // stalls live on 15-Nov. The server's callers send it to the 'slow' worker lane.
+  rec(B, 13, NOW - D);
+  scope.raise({ changed: true, from: keyA, to: keyB }); scope.answer('transfer');
+  scope.raise({ changed: true, from: keyB, to: keyA }); scope.answer('transfer');
+  await offThread.run('slow', 'test.presence', { state: 'absent' });
+  t = await sync.transferTick({ exited: true, offThread: true });
+  check(t && t.done && t.thread > 0 && has(A, 13), 'the transfer pass runs in a worker thread and writes the same change', JSON.stringify(t));
+  check(/autoTick[\s\S]{0,900}transferTick\(\{ exited, offThread: opts\.offThread \}\)/.test(fs.readFileSync(path.join(__dirname, '..', 'lib', 'account-sync.js'), 'utf8'))
+    && src.includes('sync.transferTick({ exited: true, offThread: true })'), 'the interval tick and the Desktop-exit pass both ask for the worker lane');
 
   // ---------------------------------------------------------------- launching through Relaymote
   console.log('-- launch Claude through Relaymote');

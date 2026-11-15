@@ -1,3 +1,9 @@
+## 0.2.195
+
+- New session: a "View all models" link under the model buttons opens a searchable list of every model your account offers, read live from Claude (no fixed list). Type to filter; a model the account does not offer says so.
+- Fewer long pauses: the retry of an account-switch transfer now runs in the background worker instead of freezing Relaymote for up to a minute.
+- The sent-files scan reads only the lines that mention a sent file, and the account list is cached until it changes.
+
 ## 0.2.194
 
 - Every message has a Copy button next to Reply. It copies the whole message, yours or Claude's, and says "Copied".

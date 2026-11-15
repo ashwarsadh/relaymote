@@ -91,6 +91,17 @@ if (!bin) { console.log('skip browser part: no Edge/Chrome on this machine'); H.
       on: [...document.querySelectorAll('#new-model button.on')].map(b => b.textContent) })`);
     check(after && after.model === 'Opus 4.6' && after.sheet && after.newOpen && after.on.join() === 'Opus 4.6',
       'a pick closes the list, back on New session with it selected beside the main four', after);
+    // Pinned first, then recent (what he last started on), then the picker's order.
+    await ev(`localStorage.setItem('baton.modelRecent', JSON.stringify(['Opus 4.6'])); openAllModels(); true`);
+    await H.wait(400);
+    await ev(`[...document.querySelectorAll('#modellist .row')].find(e => e.dataset.name === 'Sonnet 4.6').querySelector('.model-pin').click(); true`);
+    await H.wait(200);
+    const order = await ev(`({ rows: [...document.querySelectorAll('#modellist .row')].map(e => e.dataset.name + ':' + e.querySelector('.row-meta').textContent), open: !document.getElementById('modelsheet').classList.contains('hidden') })`);
+    check(order && order.open && /^Sonnet 4\.6:.*pinned/.test(order.rows[0]) && /^Opus 4\.6:.*recent/.test(order.rows[1]),
+      'a pinned model goes to the top, his recent pick next, and pinning keeps the list open', order);
+    await ev(`navBack(); openAllModels(); true`); await H.wait(400);
+    const again = await ev(`[...document.querySelectorAll('#modellist .row')].map(e => e.dataset.name)`);
+    check(again && again[0] === 'Sonnet 4.6' && again[1] === 'Opus 4.6', 'and it is still there next time', again);
     ws.close();
   } finally {
     br.kill();

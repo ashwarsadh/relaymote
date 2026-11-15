@@ -1,3 +1,7 @@
+## 0.2.196
+
+- In "View all models", tap the star to pin a model. Pinned models come first, then the ones you last started sessions on.
+
 ## 0.2.195
 
 - New session: a "View all models" link under the model buttons opens a searchable list of every model your account offers, read live from Claude (no fixed list). Type to filter; a model the account does not offer says so.

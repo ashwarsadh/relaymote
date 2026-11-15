@@ -4084,17 +4084,33 @@ $('btn-close-chips').onclick = () => navBack();
 
 // 16-Nov (Ashwar 15-Nov): "View all models" on New session. Every model Desktop's picker offers, its main list and its
 // "More models" submenu, read live (no ids written here); searchable; a pick is the model the session starts on.
+function modelPrefs(k) { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } }
+function setModelPrefs(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 function renderModelList() {
   const all = state.allModels || [];
   const q = ($('model-filter').value || '').trim().toLowerCase();
-  const hits = all.filter(m => !q || m.name.toLowerCase().includes(q) || String(m.id || '').toLowerCase().includes(q));
+  // 16-Nov (Conductor's brief for Ashwar's ask): pinned models first, then his recent picks, then the rest in the
+  // picker's order. Pins are a ☆ on each row; recent is what he last started sessions on (kept on this phone).
+  const pins = modelPrefs('baton.modelPins'), recent = modelPrefs('baton.modelRecent');
+  const rank = (m) => pins.includes(m.name) ? 0 : recent.includes(m.name) ? 1 : 2;
+  const hits = all.filter(m => !q || m.name.toLowerCase().includes(q) || String(m.id || '').toLowerCase().includes(q))
+    .map((m, i) => ({ m, i })).sort((a, b) => rank(a.m) - rank(b.m) || (rank(a.m) === 1 ? recent.indexOf(a.m.name) - recent.indexOf(b.m.name) : a.i - b.i))
+    .map(x => x.m);
   const ul = $('modellist');
   ul.innerHTML = '';
   for (const m of hits) {
     const li = document.createElement('li');
+    const pinned = pins.includes(m.name);
     li.className = 'row' + (m.name === state.newModel ? ' on' : '');
+    li.dataset.name = m.name;
     li.innerHTML = `<div class="row-main"><div class="row-title">${esc(m.name)}</div>` +
-      `<div class="row-meta"><span>${esc(m.id || '')}</span>${m.more ? '<span class="muted">more models</span>' : ''}</div></div>`;
+      `<div class="row-meta"><span>${esc(m.id || '')}</span>${pinned ? '<span class="muted">pinned</span>' : recent.includes(m.name) ? '<span class="muted">recent</span>' : ''}${m.more ? '<span class="muted">more models</span>' : ''}</div></div>` +
+      `<button class="model-pin" type="button" aria-label="${pinned ? 'Unpin' : 'Pin'} ${esc(m.name)}">${pinned ? '★' : '☆'}</button>`;
+    li.querySelector('.model-pin').onclick = (e) => {
+      e.stopPropagation();
+      setModelPrefs('baton.modelPins', pinned ? pins.filter(x => x !== m.name) : [m.name].concat(pins));
+      renderModelList();
+    };
     li.onclick = () => { state.newModel = m.name; navBack(); renderNewSegs(); };
     ul.appendChild(li);
   }
@@ -4310,6 +4326,7 @@ async function createSession() {
     });
     btn.disabled = false; btn.textContent = 'Create';
     try { localStorage.setItem('baton.newPick', JSON.stringify({ cwd: state.newFolder, model: state.newModel, effort: state.newEffort })); } catch {}
+    if (state.newModel) setModelPrefs('baton.modelRecent', [state.newModel].concat(modelPrefs('baton.modelRecent').filter(x => x !== state.newModel)).slice(0, 5));
     const short = (m) => String(m || '').replace(/^claude-/, '').replace(/-(\d+)-(\d+).*$/, ' $1.$2');
     toast('Started in ' + (d.folder || folder) + ' · ' + short(d.model) + (d.effort ? ' · ' + d.effort : '') +
           (d.indexed ? '' : ' — opening…'));

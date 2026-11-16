@@ -4442,9 +4442,14 @@ function updateBanner(server) {
 // unfocused box and no touch for 8 s, or the app going to the background.
 let lastTouchAt = 0;
 addEventListener('pointerdown', () => { lastTouchAt = Date.now(); }, true);
+// 17-Nov: an open sheet counts as busy too. The reload used to fire under New session (a model picked from View all
+// models, a prompt typed in #new-prompt) and drop all of it: the chat box was empty, so nothing looked in use.
 function composerBusy() {
   const i = $('input');
-  return !!i && (document.activeElement === i || !!i.value.trim() || Date.now() - lastTouchAt < 8000);
+  if (visibleSheetId()) return true;
+  const a = document.activeElement;
+  if (a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && a.type !== 'button'))) return true;
+  return !!i && (!!i.value.trim() || Date.now() - lastTouchAt < 8000);
 }
 function reloadForUpdate() {
   if (reloadForUpdate.armed) return;

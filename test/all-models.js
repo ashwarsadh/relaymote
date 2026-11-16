@@ -65,11 +65,22 @@ if (!bin) { console.log('skip browser part: no Edge/Chrome on this machine'); H.
     for (let i = 0; i < 60 && !(await ev(`typeof openNew === 'function' && !!navigator.serviceWorker.controller`)); i++) await H.wait(250);
     await H.wait(1500);
     for (let i = 0; i < 60 && !(await ev(`typeof state === 'object' && !!state.boot`)); i++) await H.wait(250);
+    // 17-Nov: a fresh profile's first service-worker install reloads the page once (watchForUpdates). Under load that reload
+    // commits seconds later, and the old page kept running the checks below until it was replaced (samePage false, nav
+    // "reload"). Wait for a page that stays.
+    for (let i = 0; i < 20; i++) {
+      await ev(`window.__settle = 1; true`); await H.wait(2500);
+      if (await ev(`window.__settle === 1 && typeof state === 'object' && !!state.boot`)) break;
+      for (let k = 0; k < 60 && !(await ev(`typeof state === 'object' && !!state.boot`)); k++) await H.wait(250);
+    }
 
-    await ev(`openNew().catch(() => {})`);
+    await ev(`window.__page = 1; openNew().catch(() => {})`);
     await H.wait(600);
+    // On a failure, say what moved the page: a reload (samePage false), boot's first screen (open chat, drawer), or history.
     const btn = await ev(`(() => { const b = document.getElementById('btn-all-models'); const r = b.getBoundingClientRect();
-      return { text: b.textContent, visible: !!b.offsetParent, w: r.width, right: r.right }; })()`);
+      return { text: b.textContent, visible: !!b.offsetParent, w: r.width, right: r.right, samePage: window.__page === 1,
+        nav: performance.getEntriesByType('navigation')[0].type, sheet: visibleSheetId(), chat: state.open || null,
+        drawer: $('drawer').classList.contains('open'), first: window.__relaymoteFirstScreen || null, stack: navStack.length }; })()`);
     check(btn && btn.visible && btn.text === 'View all models' && btn.right <= 412, 'New session shows "View all models" on a phone screen', btn);
     await ev(`document.getElementById('btn-all-models').click(); true`);
     for (let i = 0; i < 20 && !(await ev(`document.querySelectorAll('#modellist .row').length >= 8`)); i++) await H.wait(250);
@@ -102,6 +113,12 @@ if (!bin) { console.log('skip browser part: no Edge/Chrome on this machine'); H.
     await ev(`navBack(); openAllModels(); true`); await H.wait(400);
     const again = await ev(`[...document.querySelectorAll('#modellist .row')].map(e => e.dataset.name)`);
     check(again && again[0] === 'Sonnet 4.6' && again[1] === 'Opus 4.6', 'and it is still there next time', again);
+    // 17-Nov: this test failed under load because the app's update reload fired 900 ms after a new build installed, with
+    // New session open; only a busy chat box held it back. A reload now waits while any sheet is open.
+    await ev(`document.querySelectorAll('.sheet:not(.hidden)').forEach(hideSheet); showSheet($('newsheet')); state.newModel = 'Opus 4.6'; window.__keep = 1; true`); await H.wait(300);
+    const held = await ev(`(async () => { reloadForUpdate(); await new Promise(r => setTimeout(r, 2000));
+      return { kept: window.__keep === 1, open: !document.getElementById('newsheet').classList.contains('hidden'), model: state.newModel }; })()`);
+    check(held && held.kept && held.open && held.model === 'Opus 4.6', 'an update reload waits while New session is open (the pick is not lost)', held);
     ws.close();
   } finally {
     br.kill();

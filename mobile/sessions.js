@@ -233,15 +233,34 @@ function projectDirs() {
   return dirs;
 }
 
+// 17-Nov: a session whose transcript is not under its cwd's slug (a worktree, a moved folder, no transcript yet) cost one
+// existsSync in EVERY project folder, on every call, for every such session: 38.5 s of loop stalls in 15 stalls on 16-Nov
+// (leaf existsSync, up to 2.8 s each). A miss now looks the id up in one index of the folders' .jsonl names, rebuilt at
+// most every 15 s, re-listing only the folders whose mtime moved. First folder wins, as before.
+const TRANSCRIPT_INDEX_MS = 15000;
+let tIndex = { at: 0, dirs: new Map(), ids: new Map() };
+function transcriptIndex() {
+  if (Date.now() - tIndex.at < TRANSCRIPT_INDEX_MS) return tIndex.ids;
+  const dirs = new Map(), ids = new Map();
+  for (const d of projectDirs()) {
+    let m;
+    try { m = fs.statSync(d).mtimeMs; } catch { continue; }
+    const prev = tIndex.dirs.get(d);
+    let names = prev && prev.mtimeMs === m ? prev.names : null;
+    if (!names) { try { names = fs.readdirSync(d).filter(n => n.endsWith('.jsonl')); } catch { names = []; } }
+    dirs.set(d, { mtimeMs: m, names });
+    for (const n of names) if (!ids.has(n)) ids.set(n, path.join(d, n));
+  }
+  tIndex = { at: Date.now(), dirs, ids };
+  return ids;
+}
+
 function transcriptPath(sess) {
   if (!sess || !sess.cliSessionId) return null;
   const direct = path.join(PROJECTS, slugFor(sess.cwd), sess.cliSessionId + '.jsonl');
   if (fs.existsSync(direct)) return direct;
-  for (const d of projectDirs()) {
-    const p = path.join(d, sess.cliSessionId + '.jsonl');
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
+  const hit = transcriptIndex().get(sess.cliSessionId + '.jsonl');
+  return hit && fs.existsSync(hit) ? hit : null;
 }
 
 function readWindow(file, size, endAt) {

@@ -1,3 +1,9 @@
+## 0.2.198
+
+- Fewer pauses: finding a session's chat history no longer checks every project folder one by one when the chat lives somewhere else, such as a worktree. That lookup was the biggest cause of pauses on 16-Nov.
+- The check that your session groups survived a Claude restart now runs in the background.
+- An app update no longer reloads the page while a sheet is open, so a half-made New session (a model picked, a prompt typed) is not lost. It reloads once you close it or leave the app.
+
 ## 0.2.197
 
 - A message you send while Claude is working now waits until that turn ends. It no longer cuts into the running turn. Only Stop, or Send now on a queued message, interrupts.

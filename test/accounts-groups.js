@@ -175,6 +175,18 @@ const { check } = fx;
   check(v.ok === false && v.entries.some(e => !e.ok && e.got.localStorage.groups < e.want.groups), 'a write clobbered after the relaunch is reported as FAILED', JSON.stringify(v.entries));
   const st = await sync.status({ presence: 'absent' });
   check(st.verdict && st.verdict.ok === false, 'the failed verdict is surfaced to the app');
+  // 17-Nov: the count copies and parses Desktop's leveldb; it ran on the daemon's main thread on every tick. The
+  // interval tick now sends it to the 'slow' worker lane, with the same counts.
+  fx.writeMirror(fx.PROFILE, bigger);
+  await run();
+  check(!!verify.pending(), 'another write arms another check');
+  const e0 = verify.pending().entries[0], inline = await groups.countStore(e0.store);
+  await verify.tick({ now: () => t0 + 20000, presence: async () => 'live', offThread: true });
+  v = await verify.tick({ now: () => t0 + 20000 + 181000, presence: async () => 'live', offThread: true });
+  check(v.phase === 'AFTER RELAUNCH' && v.countedOn > 0 && JSON.stringify(v.entries[0].got) === JSON.stringify(inline[e0.groupKey]),
+    'the relaunch count runs in a worker thread and finds the same counts', JSON.stringify({ countedOn: v.countedOn, got: v.entries[0].got, inline: inline[e0.groupKey] }));
+  check(fs.readFileSync(path.join(__dirname, '..', 'lib', 'account-sync.js'), 'utf8')
+    .includes('verify.tick(opts.offThread && opts.presence === undefined ? { offThread: true } : {})'), 'the interval tick asks for the worker lane');
 
   fx.done('groups');
 })().catch(fx.fail);

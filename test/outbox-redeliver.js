@@ -76,7 +76,39 @@ async function runHang() {
   } finally { await d.stop(); w.cleanup(); }
 }
 
+// 16-Nov (03:24/03:25 IST): two sends were stuck in the outbox when the daemon stalled 186 s, was killed by the tray
+// and restarted. The NEXT daemon must re-deliver them from outbox.json by itself; nothing is held in memory only.
+async function runRestart() {
+  const w = H.world('redeliver-restart');
+  const SID = w.sessions().filter(s => !/^Migrate database/.test(s.title || '')).map(s => s.sessionId || s.id).filter(Boolean)[0];
+  const text = 'Bandana order: confirm the 400 pcs for Monday ' + Date.now();
+  // The first daemon's send hangs for good and its own re-delivery is far off: it dies with the message pending.
+  const d1 = await H.boot(w, { RELAYMOTE_FAKE_SEND: 'hang-first', RELAYMOTE_OUTBOX_STUCK_MS: '600000', RELAYMOTE_SEND_DEADLINE_MS: '1500', RELAYMOTE_FAKE_HANG_MS: '600000' });
+  let obId = null;
+  try {
+    const ev = d1.stream('phone-restart');
+    const r = await d1.req('/api/send', { method: 'POST', headers: { 'X-Baton-Client': 'phone-restart' }, body: { id: SID, text, cmid: 'r' + Date.now().toString(36) } });
+    check(r.status === 202 && r.json.ok, '[restart] the send is accepted', r.status);
+    const res = await d1.waitFor(ev, e => e.event === 'sendresult' && e.data.id === SID, 10000);
+    obId = res && res.data.outboxId;
+    check(!!res && res.data.delivery === 'pc-outbox' && obId, '[restart] it is left to the PC outbox', res && res.data);
+  } finally { await d1.stop(); }
+  const d2 = await H.boot(w, { RELAYMOTE_FAKE_SEND: '1', RELAYMOTE_OUTBOX_STUCK_MS: '2000' });
+  try {
+    const ev = d2.stream('phone-restart2');
+    const t0 = Date.now();
+    const red = await d2.waitFor(ev, e => e.event === 'outbox' && (e.data.redelivered || []).some(x => x.id === obId), 30000);
+    check(!!red && red.data.redelivered.find(x => x.id === obId).ok, '[restart] the NEW daemon re-delivers the message the dead one left pending', red && red.data);
+    await d2.waitFor(ev, e => e.event === 'outbox' && (e.data.confirmed || []).some(x => x.id === obId), 20000);
+    const tr = await d2.req('/api/session/' + SID + '?limit=20');
+    const mine = (tr.json.transcript && tr.json.transcript.messages || []).filter(m => m.role === 'user' && String(m.text).includes(text));
+    check(mine.length === 1, '[restart] and the session has it exactly once', mine.length);
+    check(Date.now() - t0 < 30000, '[restart] within seconds of the restart', Date.now() - t0);
+  } finally { await d2.stop(); w.cleanup(); }
+}
+
 (async () => {
+  await runRestart();
   await runHang();
   await run('drop-first');
   const w = await run('drop-all');

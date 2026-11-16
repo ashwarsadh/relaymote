@@ -1019,7 +1019,11 @@ function fakeWrite(id, body) {
 /** Re-deliver an outbox entry: the bridge under its own uuid when it had one, else the composer. */
 async function redeliver(e, text) {
   if (FAKE_SEND) { if (FAKE_SEND !== 'drop-all') fakeWrite(e.session, text); return { ok: true }; }
-  if (e.uuid) return ui(() => desktop.sendQueued(e.session, text, { uuid: e.uuid }));
+  // 16-Nov: through the app's own channel into the end-of-turn queue, never the composer first. Desktop takes a
+  // composer Send during a running turn as a steer and may cut the turn for it; a re-delivery must only queue.
+  const r = await desktop.sendQueued(e.session, text, e.uuid ? { uuid: e.uuid } : {}).catch(err => ({ ok: false, error: err.message }));
+  if (r && r.ok) return r;
+  if (e.uuid) return r;
   return ui(() => desktop.sendMessage(e.session, text, { queue: true }));
 }
 
@@ -2621,8 +2625,9 @@ async function outboxTickInner() {
     outbox.markResending(e.id);   // from here the original send, should it wake, stands down
     try { r = await redeliver(e, text); } catch (x) { r = { ok: false, error: x.message }; }
     outbox.markResent(e.id, { ok: !!(r && r.ok), error: r && (r.detail || r.error) });
+    if (r && r.ok && r.uuid && !e.uuid) outbox.setUuid(e.id, r.uuid);
     log(`outbox: ${e.id} never reached ${e.session} (${e.delivery ? 'no queue or user row in ' + outbox.ACCEPT_MS / 1000 + 's' : 'its send never finished'}) -- REDELIVERED once ` +
-        `${e.uuid ? 'via bridge, same uuid ' + String(e.uuid).slice(0, 8) : 'via the composer'}: ${r && r.ok ? 'ok' : 'FAILED ' + (r && (r.detail || r.error))}`);
+        `${e.uuid ? 'via bridge, same uuid ' + String(e.uuid).slice(0, 8) : r && r.transport === 'bridge' ? 'via bridge, end-of-turn queue' : 'via the composer'}: ${r && r.ok ? 'ok' : 'FAILED ' + (r && (r.detail || r.error))}`);
     for (const c of clients) {
       if (isSubuser(c.identity) && !c.identity.sessions.has(e.session)) continue;
       sseSend(c, 'outbox', { redelivered: [{ id: e.id, session: e.session, ok: !!(r && r.ok) }] });

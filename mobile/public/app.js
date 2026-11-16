@@ -1208,9 +1208,9 @@ function renderLog(messages, force) {
             `<button class="linkish ob-retry" data-ob="${esc(e.id)}">Send again</button> ` +
             `<button class="linkish ob-forget" data-ob="${esc(e.id)}">Discard</button></span>`
           : `<span class="tick">${e.held
-              ? 'queued — goes in at its next step' + waitedNote(e.ageMs) + sn
+              ? 'queued — goes in when this turn ends' + waitedNote(e.ageMs) + sn
               : e.delivery === 'queued'
-                ? 'queued — goes in at its next step' + waitedNote(e.ageMs) + sn + heldNote(e.at)
+                ? 'queued — goes in when this turn ends' + waitedNote(e.ageMs) + sn + heldNote(e.at)
                 : e.redelivered ? 'redelivered — the first send was lost; checking it arrived'
                 : !e.delivery && (e.ageMs || 0) > 60000 ? 'on the PC — Claude is slow to take it; the PC sends it again by itself' : 'sending…'}</span>`) +
         `</div>`;
@@ -1249,7 +1249,7 @@ function renderLog(messages, force) {
                    ' <button class="pend-retry">Retry</button> <button class="pend-edit">Edit</button>'
                : p2.status === 'sent' ? 'sent ✓'
                : p2.status === 'pc' ? 'on the PC — Claude is slow to take it; the PC sends it again by itself'
-               : p2.status === 'queued' ? 'queued — goes in at its next step' + waitedNote(Date.now() - (p2.at || Date.now())) + sn2 + (p2.held ? '' : heldNote(p2.at))
+               : p2.status === 'queued' ? 'queued — goes in when this turn ends' + waitedNote(Date.now() - (p2.at || Date.now())) + sn2 + (p2.held ? '' : heldNote(p2.at))
                : 'sending…';
     html += `<div class="msg user pending${sn2 || failed ? ' act' : ''}${failed ? ' failed' : ''}">${body}<span class="tick">${tick}</span></div>`;
   }

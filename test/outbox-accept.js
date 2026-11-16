@@ -67,7 +67,7 @@ check(!ob.get(ob.add({ session: 'x', text: 'composer send' }).id).uuid && !ob.ch
 const app = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'public', 'app.js'), 'utf8');
 check(/NOT delivered/.test(app) && /if \(e\.accepted\) return 'delivered, waiting for a reply'/.test(app), 'the phone says "delivered" only once the session took it, else NOT delivered');
 const idx = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
-check(/sendQueued\(e\.session, text, \{ uuid: e\.uuid \}\)/.test(idx) && /const text = outbox\.redeliveryText\(e\)/.test(idx), 'the daemon re-sends with the original uuid (text carries the redelivered line)');
+check(/sendQueued\(e\.session, text, e\.uuid \? \{ uuid: e\.uuid \} : \{\}\)/.test(idx) && /const text = outbox\.redeliveryText\(e\)/.test(idx), 'the daemon re-sends with the original uuid (text carries the redelivered line)');
 
 if (fails) { console.error(fails + ' failed'); process.exit(1); }
 console.log('outbox-accept: all checks passed');

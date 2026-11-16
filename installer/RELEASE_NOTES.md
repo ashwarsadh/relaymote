@@ -1,3 +1,9 @@
+## 0.2.197
+
+- A message you send while Claude is working now waits until that turn ends. It no longer cuts into the running turn. Only Stop, or Send now on a queued message, interrupts.
+- A message the PC re-sends after a lost send also just queues, through the app's own channel.
+- After a restart, Relaymote re-sends a message the previous run left unsent, within seconds.
+
 ## 0.2.196
 
 - In "View all models", tap the star to pin a model. Pinned models come first, then the ones you last started sessions on.

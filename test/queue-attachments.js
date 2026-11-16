@@ -56,14 +56,21 @@ check(/const held = \(state\.outbox/.test(app), 'a held message is drawn once, f
   check(!make(null)({ id: 'ob1', text: 'x' }), 'no bubble pending: every outbox entry shows');
 }
 
-// g1050: a reply sent during a running turn takes Desktop's "next" lane (in at the next tool call, as
-// the composer does), not the end-of-turn lane where it waited 20 minutes.
+// 16-Nov (supersedes g1050's "next" lane): a reply sent during a running turn waits in Desktop's END-OF-TURN
+// queue. Desktop escalates a steer-lane message by itself (young-thought cut, steer detach), so a second message
+// cut into the first; Ashwar: "I never meant to interrupt the previous message". Only Stop / Send now interrupt.
 {
   const dsk = read('lib', 'desktop.js');
   const sq = dsk.slice(dsk.indexOf('async function sendQueued('), dsk.indexOf('async function cancelQueued('));
   const call = (sq.match(/LS\.sendMessage\(([^;]*)\);/) || [])[1] || '';
   const args = call.split(',').map(x => x.trim());
-  check(args.length === 8 && args[5] === "'next'", 'sendMessage gets priority \'next\' as its 6th argument', call);
+  check(args.length === 8 && args[5] === 'undefined', 'sendMessage gets NO priority (the end-of-turn queue) as its 6th argument', call);
+  check(!/'next'|"next"|'now'/.test(sq), 'and no steer lane anywhere in sendQueued');
+  const bg = dsk.slice(dsk.indexOf('async function sendMessageBackground('), dsk.indexOf('async function sendMessageBackground(') + 2500);
+  check(/LS\.sendMessage\(\$\{JSON\.stringify\(sessionId\)\}, \$\{JSON\.stringify\(String\(message\)\)\}\)/.test(bg), 'the background send passes no priority either');
+  const rd = index.slice(index.indexOf('async function redeliver('), index.indexOf('async function doSend('));
+  check(rd.indexOf('desktop.sendQueued(') > 0 && rd.indexOf('desktop.sendQueued(') < rd.indexOf('desktop.sendMessage('),
+    'an outbox re-delivery queues through the app channel before it would ever press the composer Send');
   check(/\$\{JSON\.stringify\(uuid\)\}/.test(args[7] || ''), 'and the message uuid as its 8th, so Send now and × can find it', args[7]);
   const sn = dsk.slice(dsk.indexOf('async function sendQueuedNowByUuid'), dsk.indexOf('async function sendQueuedNowByUuid') + 1500);
   check(sn.indexOf('LS.sendSteeredNow') > 0 && sn.indexOf('LS.sendSteeredNow') < sn.indexOf('LS.promoteQueuedMessage'), 'Send now pushes a steer-lane message in before falling back to promote + interrupt');

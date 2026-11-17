@@ -88,5 +88,13 @@ function rig(o = {}) {
   }
   const ui = fs.readFileSync(path.join(root, 'mobile', 'public', 'settings-ui.js'), 'utf8');
   ok(/toggle\('followClaude'/.test(ui), 'Settings has the switch');
+  // 18-Nov: the tasklist spawn behind claudeUp held the daemon's loop 7.5 s (Windows spawns synchronously). It runs in a
+  // worker on its own 'proc' lane now.
+  const srv2 = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+  ok(/run\('proc', 'proc\.claudeUp'\)/.test(srv2) && !/execFile\('tasklist'/.test(srv2), 'the server asks the proc lane, never spawns tasklist itself');
+  if (process.platform === 'win32') {
+    const pr = await require(path.join(root, 'lib', 'off-thread.js')).run('proc', 'proc.claudeUp');
+    ok(pr && typeof pr.up === 'boolean' && pr.thread > 0, 'the Desktop check runs in a worker thread and answers up/down (' + JSON.stringify(pr) + ')');
+  }
   console.log(`\n${n}/${n} passed`);
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

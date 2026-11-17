@@ -220,8 +220,8 @@ async function debuggerTick() {
 
 // followClaude (lib/follow.js): the tray starts Relaymote when Claude Desktop opens; this stops it after
 // Desktop exits, once the exit-window account sync has run.
-const claudeUp = () => new Promise(r => execFile('tasklist', ['/FI', 'IMAGENAME eq claude.exe', '/NH'], { windowsHide: true },
-  (e, out) => r(e ? null : /claude\.exe/i.test(String(out)))));
+// The tasklist spawn runs off the main thread (off-thread task proc.claudeUp): a Windows spawn blocked the loop 7.5 s.
+const claudeUp = () => require('./lib/off-thread').run('proc', 'proc.claudeUp').then(r => (r ? r.up : null), () => null);
 const follow = require('./lib/follow').makeFollow({
   enabled: () => process.platform === 'win32' && config.get().followClaude === true,
   claudeUp,

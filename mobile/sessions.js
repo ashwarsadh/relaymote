@@ -63,7 +63,44 @@ async function mapLimit(items, limit, fn) {
   return out;
 }
 
+// 18-Nov: the store holds ~6,700 records (715 MB) on the live PC, and the first scan after every daemon start read and
+// parsed all of them: the phone's first /api/bootstrap waited 10-17 s after each update or restart. The small shaped
+// records are kept in STATE/sessions-shape.json with each file's mtime and size; a start stats every file and reads only
+// those that changed. Saved at most every 5 min (and 10 s after the first scan), only when something changed. Tied to the
+// app version, so a new shape() is never fed an old shape.
+const SHAPE_FILE = path.join(require('../lib/config').STATE, 'sessions-shape.json');
+const SHAPE_VER = (() => { try { return require('../package.json').version; } catch { return '?'; } })();
+let shapeSeeded = false, shapeDirty = false, shapeTimer = null, shapeSavedAt = 0;
+function seedShapes() {
+  if (shapeSeeded) return;
+  shapeSeeded = true;
+  if (parsed.size) return;
+  try {
+    const j = JSON.parse(fs.readFileSync(SHAPE_FILE, 'utf8'));
+    if (!j || j.v !== SHAPE_VER || !Array.isArray(j.entries)) return;
+    for (const [file, e] of j.entries) if (e && e.rec) parsed.set(file, { mtimeMs: e.mtimeMs, size: e.size, statAt: 0, rec: e.rec });
+  } catch {}
+}
+function saveShapes() {
+  shapeTimer = null;
+  if (!shapeDirty) return Promise.resolve(false);
+  shapeDirty = false; shapeSavedAt = Date.now();
+  const entries = [...parsed].map(([file, e]) => [file, { mtimeMs: e.mtimeMs, size: e.size, rec: e.rec }]);
+  const tmp = SHAPE_FILE + '.tmp';
+  return fs.promises.mkdir(path.dirname(SHAPE_FILE), { recursive: true })
+    .then(() => fs.promises.writeFile(tmp, JSON.stringify({ v: SHAPE_VER, at: Date.now(), entries })))
+    .then(() => fs.promises.rename(tmp, SHAPE_FILE)).then(() => true, () => false);
+}
+function shapesChanged() {
+  shapeDirty = true;
+  if (shapeTimer) return;
+  const wait = shapeSavedAt ? Math.max(10000, 5 * 60000 - (Date.now() - shapeSavedAt)) : 10000;
+  shapeTimer = setTimeout(saveShapes, wait);
+  if (shapeTimer.unref) shapeTimer.unref();
+}
+
 async function scan() {
+  seedShapes();
   const dirs = storeDirs();
   const files = [];
   for (const dir of dirs) {
@@ -76,6 +113,7 @@ async function scan() {
 
   const seen = new Set();
   const now = Date.now();
+  let changed = false;
   const recs = await mapLimit(files, 24, async file => {
     seen.add(file);
     const hit = parsed.get(file);
@@ -96,10 +134,12 @@ async function scan() {
     if (!d || !d.sessionId) return null;
     const rec = shape(d, file);
     parsed.set(file, { mtimeMs: st.mtimeMs, size: st.size, statAt: now, rec });
+    changed = true;
     return rec;
   });
 
-  for (const k of parsed.keys()) if (!seen.has(k)) parsed.delete(k);
+  for (const k of parsed.keys()) if (!seen.has(k)) { parsed.delete(k); changed = true; }
+  if (changed) shapesChanged();
 
   const byId = new Map();
   for (const r of recs) {
@@ -1134,5 +1174,5 @@ async function searchSession(sess, query, { limit = 500, deadlineMs = 8000, uuid
 module.exports = { unwrapForTest: unwrap, flattenForTest: flatten, byTypedTimeForTest: byTypedTime,
   refresh, index, get, decorate, folders, transcript, pendingQuestion, pendingChips, chipsInFile, questionInFile, tailStats, backgroundTasksSoon, backgroundFromFile, backgroundTasks, refreshLiveJobs, liveJobs, noteLive, transcriptStamp, transcriptPath, slugFor,
   searchTranscripts, searchSession, ackDot, ackVersion,
-  STORE, PROJECTS,
+  STORE, PROJECTS, SHAPE_FILE, saveShapesForTest: () => { shapeDirty = true; return saveShapes(); },
 };

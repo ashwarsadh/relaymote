@@ -18,10 +18,10 @@ const env = { ...process.env, RELAYMOTE_HOME: HOME, RELAYMOTE_PORT: String(PORT)
 
 let failed = 0;
 const check = (ok, name, extra) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); if (!ok) failed++; };
-function req(port, p, { method = 'GET', body, headers = {} } = {}) {
+function req(port, p, { method = 'GET', body, headers = {}, timeout = 15000 } = {}) {
   return new Promise(resolve => {
     const data = body ? JSON.stringify(body) : null;
-    const r = http.request({ host: '127.0.0.1', port, path: p, method, timeout: 15000,
+    const r = http.request({ host: '127.0.0.1', port, path: p, method, timeout,
       headers: { ...headers, ...(data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {}) } },
       res => { let s = ''; res.on('data', c => s += c); res.on('end', () => { let j = null; try { j = JSON.parse(s); } catch {} resolve({ status: res.statusCode, text: s, json: j, headers: res.headers }); }); });
     r.on('error', e => resolve({ status: 0, text: e.message })); r.on('timeout', () => r.destroy());
@@ -60,12 +60,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check(home.status === 302 && /baton_m=/.test(String(home.headers['set-cookie'] || '')), 'pairing link sets the sign-in cookie');
   const idx = await req(APP, '/', { headers: { Cookie: 'baton_m=' + encodeURIComponent(token) } });
   check(idx.status === 200 && idx.text.includes('settings-ui.js'), 'app shell served with settings screen');
-  const boot = await req(APP, '/api/bootstrap', { headers: auth });
-  check(boot.status === 200, 'bootstrap answers');
+  // 18-Nov: smoke runs on a FRESH data folder against this PC's real session store (~6,700 records, 715 MB), so its first
+  // bootstrap and project index are a true first start: 10-17 s measured under suite load, past the old 15 s timeout
+  // (a false failure seen in most full runs). They get 60 s, and the time is printed. A daemon restart with a data
+  // folder answers in under a second (test/shape-cache.js).
+  let t0 = Date.now();
+  const boot = await req(APP, '/api/bootstrap', { headers: auth, timeout: 60000 });
+  check(boot.status === 200, 'bootstrap answers', 'first start ' + (Date.now() - t0) + ' ms');
   const list = await req(APP, '/api/sessions', { headers: auth });
   check(list.status === 200 && Array.isArray(list.json.sessions), 'session list answers', 'sessions on this machine=' + (list.json ? list.json.total : '?'));
-  const proj = await req(APP, '/api/projects', { headers: auth });
-  check(proj.status === 200 && proj.json && proj.json.projects && proj.json.counts, 'project index answers', 'projects=' + (proj.json && proj.json.counts ? proj.json.counts.projects : '?'));
+  t0 = Date.now();
+  const proj = await req(APP, '/api/projects', { headers: auth, timeout: 60000 });
+  check(proj.status === 200 && proj.json && proj.json.projects && proj.json.counts, 'project index answers', 'projects=' + (proj.json && proj.json.counts ? proj.json.counts.projects : '?') + ', first build ' + (Date.now() - t0) + ' ms');
 
   // Remote mode "off" (the default) means loopback only: no Tailscale / LAN listener and no such pairing link.
   check(!/\((Tailscale|LAN)\)/.test(out), 'mode off listens on loopback only', (out.match(/listening on \S+/g) || []).join(' '));

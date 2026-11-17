@@ -1,3 +1,8 @@
+## 0.2.199
+
+- The app opens fast after Relaymote restarts or updates. It used to re-read every saved session (about 700 MB on a busy PC) before showing the list, which took 10 to 17 seconds; now it re-reads only the sessions that changed (about half a second).
+- Fewer pauses: counting each account's sessions and checking whether Claude is running no longer hold Relaymote up.
+
 ## 0.2.198
 
 - Fewer pauses: finding a session's chat history no longer checks every project folder one by one when the chat lives somewhere else, such as a worktree. That lookup was the biggest cause of pauses on 16-Nov.

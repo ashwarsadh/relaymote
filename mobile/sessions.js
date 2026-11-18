@@ -70,16 +70,20 @@ async function mapLimit(items, limit, fn) {
 // app version, so a new shape() is never fed an old shape.
 const SHAPE_FILE = path.join(require('../lib/config').STATE, 'sessions-shape.json');
 const SHAPE_VER = (() => { try { return require('../package.json').version; } catch { return '?'; } })();
-let shapeSeeded = false, shapeDirty = false, shapeTimer = null, shapeSavedAt = 0;
+let shapeSeeded = null, shapeDirty = false, shapeTimer = null, shapeSavedAt = 0;
+// 19-Nov: read without blocking. After a PC reboot the cold read of this 6 MB file held the event loop 5.0 s
+// (seedShapes sessions.js:74, leaf readFileUtf8). Every scan awaits the one read; the parse is ~0.1 s.
 function seedShapes() {
-  if (shapeSeeded) return;
-  shapeSeeded = true;
-  if (parsed.size) return;
-  try {
-    const j = JSON.parse(fs.readFileSync(SHAPE_FILE, 'utf8'));
-    if (!j || j.v !== SHAPE_VER || !Array.isArray(j.entries)) return;
-    for (const [file, e] of j.entries) if (e && e.rec) parsed.set(file, { mtimeMs: e.mtimeMs, size: e.size, statAt: 0, rec: e.rec });
-  } catch {}
+  if (shapeSeeded) return shapeSeeded;
+  shapeSeeded = (async () => {
+    if (parsed.size) return;
+    try {
+      const j = JSON.parse(await fs.promises.readFile(SHAPE_FILE, 'utf8'));
+      if (!j || j.v !== SHAPE_VER || !Array.isArray(j.entries) || parsed.size) return;
+      for (const [file, e] of j.entries) if (e && e.rec) parsed.set(file, { mtimeMs: e.mtimeMs, size: e.size, statAt: 0, rec: e.rec });
+    } catch {}
+  })();
+  return shapeSeeded;
 }
 function saveShapes() {
   shapeTimer = null;
@@ -100,7 +104,7 @@ function shapesChanged() {
 }
 
 async function scan() {
-  seedShapes();
+  await seedShapes();
   const dirs = storeDirs();
   const files = [];
   for (const dir of dirs) {
@@ -295,12 +299,22 @@ function transcriptIndex() {
   return ids;
 }
 
+// 19-Nov: every transcript read stat-ed its file first, synchronously; on a busy disk one existsSync held the event
+// loop 2.0 s (transcriptPath sessions.js:298). A found path is trusted for PATH_TTL_MS; a miss is never cached, so a
+// transcript that appears is found on the next call.
+const PATH_TTL_MS = 30000;
+const pathSeen = new Map();
 function transcriptPath(sess) {
   if (!sess || !sess.cliSessionId) return null;
   const direct = path.join(PROJECTS, slugFor(sess.cwd), sess.cliSessionId + '.jsonl');
-  if (fs.existsSync(direct)) return direct;
-  const hit = transcriptIndex().get(sess.cliSessionId + '.jsonl');
-  return hit && fs.existsSync(hit) ? hit : null;
+  const memo = pathSeen.get(direct);
+  if (memo && Date.now() - memo.at < PATH_TTL_MS) return memo.file;
+  let file = null;
+  if (fs.existsSync(direct)) file = direct;
+  else { const hit = transcriptIndex().get(sess.cliSessionId + '.jsonl'); if (hit && fs.existsSync(hit)) file = hit; }
+  if (file) { pathSeen.set(direct, { file, at: Date.now() }); if (pathSeen.size > 2000) pathSeen.delete(pathSeen.keys().next().value); }
+  else pathSeen.delete(direct);
+  return file;
 }
 
 function readWindow(file, size, endAt) {
@@ -633,7 +647,7 @@ function transcript(sess, { limit = 60, minSpoken = 8, minUser = 2, before = nul
   const TAIL_CAP = Math.max(limit, 150);
   let win, msgs = [], offs = [], queued = new Map();
   for (let attempt = 0; attempt < 4; attempt++) {
-    try { win = readWindow(file, size, before); } catch (e) { return { ok: false, error: e.message, messages: [] }; }
+    try { win = readWindow(file, size, before); } catch (e) { pathSeen.clear(); return { ok: false, error: e.message, messages: [] }; }   // a moved file is looked up afresh
     const lines = win.text.split('\n');
     let off = win.start;                       // byte offset of each line, so a page can start at any row
     if (win.truncated) off += Buffer.byteLength(lines.shift(), 'utf8') + 1;

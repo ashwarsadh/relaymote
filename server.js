@@ -757,6 +757,7 @@ async function evictWedgedHolder(reason) {
     // Test seam (replays only): one UI step that never settles, as after the 10-Oct reboot.
     if (process.env.RELAYMOTE_TEST_HANG_UI === '1') serialise(function testHang() { return new Promise(() => {}); });
     setInterval(() => { if (config.mod('orchestrator')) Promise.resolve(orch.pump()).catch(e => orch.log('pump error: ' + e.message)); }, PUMP_MS);
+    desktop.primeSnapshot().catch(() => {});   // 19-Nov: read without blocking before the first tick needs it
     setInterval(() => serialise(refreshDesktop), DESKTOP_MS);
     setInterval(() => serialise(notifyTick), NOTIFY_MS);
     setInterval(() => serialise(resumeTick), RESUME_MS);

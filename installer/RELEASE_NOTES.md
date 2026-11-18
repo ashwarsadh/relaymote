@@ -1,3 +1,7 @@
+## 0.2.200
+
+- After the PC restarts, Relaymote answers sooner: its saved session list and Desktop status are read without freezing it, and a session's transcript location is remembered instead of looked up on every refresh.
+
 ## 0.2.199
 
 - The app opens fast after Relaymote restarts or updates. It used to re-read every saved session (about 700 MB on a busy PC) before showing the list, which took 10 to 17 seconds; now it re-reads only the sessions that changed (about half a second).

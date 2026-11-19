@@ -51,7 +51,9 @@ function stalledAlive(note, pid, graceMs) {
 
   // 2. The tray's decision, from the real function text in scripts/tray.ps1.
   check(!!fn, 'tray.ps1 defines StalledAlive($procId, $graceMs)');
-  if (fn) {
+  // tray.ps1 is the Windows tray; macOS release runners have no powershell.exe (v0.2.201's mac builds failed here).
+  if (process.platform !== 'win32') console.log('skip StalledAlive fixtures: no PowerShell off Windows');
+  else if (fn) {
     const now = Date.now();
     check(stalledAlive({ pid: 4242, stalledSince: now - 60000, at: now - 2000 }, 4242, 180000) === 'YES', 'fresh note, same pid, 60 s into a stall: spared');
     check(stalledAlive({ pid: 4242, stalledSince: now - 60000, at: now - 30000 }, 4242, 180000) === 'NO', 'note 30 s old (the worker is silent too, a real hang): ended');

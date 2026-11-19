@@ -1,3 +1,7 @@
+## 0.2.201
+
+- Relaymote is no longer restarted while it is only busy. If the PC is slow and Relaymote pauses for a while, the tray now waits up to 3 minutes for it to finish instead of ending it after about 40 seconds. A Relaymote that is really stuck is still restarted.
+
 ## 0.2.200
 
 - After the PC restarts, Relaymote answers sooner: its saved session list and Desktop status are read without freezing it, and a session's transcript location is remembered instead of looked up on every refresh.

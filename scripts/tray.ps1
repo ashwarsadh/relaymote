@@ -46,7 +46,7 @@ function Health {
   $s = Settings
   try {
     $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 10 "http://127.0.0.1:$($s.port)/api/health"
-    if ($r.StatusCode -eq 200) { $j = $r.Content | ConvertFrom-Json; if ($j.app -eq 'relaymote') { $script:frozen = 0; return $j } }
+    if ($r.StatusCode -eq 200) { $j = $r.Content | ConvertFrom-Json; if ($j.app -eq 'relaymote') { $script:frozen = 0; $script:graceLogged = $false; return $j } }
   } catch {}
   return $null
 }
@@ -60,6 +60,20 @@ function Wanted { return (-not (FollowClaude)) -or (ClaudeUp) }
 # nothing restarted it. A Relaymote node holding the port that has not answered two probes in a row (10 s each,
 # 20 s apart), and is past its first 2 minutes, is frozen: it is ended and started again.
 $script:frozen = 0
+# 19-Nov: blocked is not dead. During a main-thread stall the daemon's loop-watch worker writes state\loop-stall.json
+# {pid, stalledSince, at} every 5 s. A fresh note (worker alive, < 15 s old) from this holder, stalled for less than
+# the grace (settings watchdogGraceSec, default 180), is left to finish: ending it on 16-Nov 03:24 IST cost two
+# restarts and a 72 s boot stall. A silent worker, another pid or a longer stall is ended as before.
+function StalledAlive($procId, $graceMs) {
+  try { $j = Get-Content -Raw -ErrorAction Stop -LiteralPath (Join-Path $State 'loop-stall.json') | ConvertFrom-Json -ErrorAction Stop } catch { return $false }
+  if (-not $j -or [int64]$j.pid -ne [int64]$procId -or -not $j.stalledSince) { return $false }
+  $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+  if ($now - [double]$j.at -gt 15000) { return $false }
+  if ($now - [double]$j.stalledSince -gt $graceMs) { return $false }
+  return $true
+}
+function GraceMs { $g = 180; try { $v = (Settings).watchdogGraceSec; if ($v -ne $null) { $g = [double]$v } } catch {}; return $g * 1000 }
+$script:graceLogged = $false
 function FrozenHolder {
   $s = Settings
   $c = Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort $s.port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -77,6 +91,10 @@ function StartDaemon {
   if ($held) {
     $script:frozen++
     if ($script:frozen -lt 2) { return }
+    if (StalledAlive $held.ProcessId (GraceMs)) {
+      if (-not $script:graceLogged) { Log ("no answer to two health probes from pid " + $held.ProcessId + ", but its loop-watch worker says it is blocked, not dead: waiting up to " + ((GraceMs) / 1000) + " s"); $script:graceLogged = $true }
+      return
+    }
     Log ("no answer to two health probes (10 s each) from pid " + $held.ProcessId + ": ending it and starting again")
     Stop-Process -Id $held.ProcessId -Force -ErrorAction SilentlyContinue
     $script:frozen = 0

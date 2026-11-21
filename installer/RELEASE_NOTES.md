@@ -1,3 +1,7 @@
+## 0.2.203
+
+- A message sent to a session that is busy goes in at its next step again, instead of waiting until its whole turn ends (that could be an hour). It is no longer marked "NOT delivered" while the desktop app is still holding it for that session.
+
 ## 0.2.202
 
 - The same as 0.2.201, now also built for Mac (a test that only applies to Windows stopped the Mac build).

@@ -209,7 +209,9 @@ function arrivedIn(raw, e) {
 
 // Returns the bridge sends that need a re-send now, and those that failed it. The caller re-sends and then
 // calls markResent; nothing here talks to Desktop.
-function checkAccepted(readText, now = Date.now()) {
+// held: { sessionId: [uuid, ...] } from bridge.heldUuids -- what Desktop still holds. A uuid there is accepted even with no
+// transcript row yet (21-Nov: the end-of-turn queue writes none until the turn ends; two sends were wrongly "NOT delivered").
+function checkAccepted(readText, now = Date.now(), held = null) {
   const entries = load();
   const resend = [], failed = [];
   let changed = false;
@@ -219,6 +221,7 @@ function checkAccepted(readText, now = Date.now()) {
     let raw = cache.get(e.session);
     if (raw === undefined) { try { raw = readText(e.session) || ''; } catch { raw = ''; } cache.set(e.session, raw); }
     if (arrivedIn(raw, e)) { e.acceptedAt = now; changed = true; continue; }
+    if (e.uuid && held && Array.isArray(held[e.session]) && held[e.session].includes(e.uuid)) { e.acceptedAt = now; e.heldByDesktop = true; changed = true; continue; }
     // Only a fresh send is re-sent: an older one (from before this check, or a tail that no longer reaches
     // back to it) is left to the 15-minute suspect flag rather than risk a late duplicate.
     const due = stuck(e) ? STUCK_MS : ACCEPT_MS;

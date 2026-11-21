@@ -56,16 +56,16 @@ check(/const held = \(state\.outbox/.test(app), 'a held message is drawn once, f
   check(!make(null)({ id: 'ob1', text: 'x' }), 'no bubble pending: every outbox entry shows');
 }
 
-// 16-Nov (supersedes g1050's "next" lane): a reply sent during a running turn waits in Desktop's END-OF-TURN
-// queue. Desktop escalates a steer-lane message by itself (young-thought cut, steer detach), so a second message
-// cut into the first; Ashwar: "I never meant to interrupt the previous message". Only Stop / Send now interrupt.
+// g1050, restored 21-Nov: a reply sent during a running turn takes Desktop's steer lane ("next": in at the next tool
+// call, the turn carries on). 0.2.197 moved it to the end-of-turn queue and his "stop burning tokens" sat unread for an
+// hour in a running lane (Ashwar 21-Nov: "Msgs didnt arrive"). Only Stop / Send now interrupt.
 {
   const dsk = read('lib', 'desktop.js');
   const sq = dsk.slice(dsk.indexOf('async function sendQueued('), dsk.indexOf('async function cancelQueued('));
   const call = (sq.match(/LS\.sendMessage\(([^;]*)\);/) || [])[1] || '';
   const args = call.split(',').map(x => x.trim());
-  check(args.length === 8 && args[5] === 'undefined', 'sendMessage gets NO priority (the end-of-turn queue) as its 6th argument', call);
-  check(!/'next'|"next"|'now'/.test(sq), 'and no steer lane anywhere in sendQueued');
+  check(args.length === 8 && args[5] === "'next'", 'sendMessage gets priority \x27next\x27 (the steer lane) as its 6th argument', call);
+  check(!/'now'/.test(sq), 'and never "now", which would cut into the turn');
   const bg = dsk.slice(dsk.indexOf('async function sendMessageBackground('), dsk.indexOf('async function sendMessageBackground(') + 2500);
   check(/LS\.sendMessage\(\$\{JSON\.stringify\(sessionId\)\}, \$\{JSON\.stringify\(String\(message\)\)\}\)/.test(bg), 'the background send passes no priority either');
   const rd = index.slice(index.indexOf('async function redeliver('), index.indexOf('async function doSend('));

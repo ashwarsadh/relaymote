@@ -1005,6 +1005,8 @@ function finishSend(job, out) {
 // FIRST send is accepted and then lost, as when Desktop crashes after taking it; later sends (the re-delivery) land.
 // 'drop-all': every send and re-delivery is lost (the NOT delivered path).
 const FAKE_SEND = process.env.RELAYMOTE_FAKE_SEND || '';
+// Test seam: what Desktop holds, from a file the test writes ({ sessionId: [uuid] }).
+const FAKE_HELD = process.env.RELAYMOTE_FAKE_HELD ? () => { try { return JSON.parse(fs.readFileSync(process.env.RELAYMOTE_FAKE_HELD, 'utf8')); } catch { return null; } } : null;
 const APPROVAL_PEEK_MS = Number(process.env.RELAYMOTE_APPROVAL_PEEK_MS) || 20000;
 const SEND_DEADLINE_MS = Number(process.env.RELAYMOTE_SEND_DEADLINE_MS) || 3 * 60 * 1000;
 const BG_SEND_MS = Number(process.env.RELAYMOTE_BG_SEND_MS) || 30000;
@@ -2618,7 +2620,14 @@ async function outboxTickInner() {
   // g1783 + 21-Oct (at-least-once): a send Desktop never took is re-delivered once, marked as such, then reported
   // NOT delivered. Not while Desktop is down or restarting: its absence is not the message's fault, and the check
   // runs again once it is back.
-  const acc = (FAKE_SEND || await cdpCached()) ? outbox.checkAccepted(transcriptTail, Date.now()) : { resend: [], failed: [] };
+  const live = FAKE_SEND || await cdpCached();
+  // 21-Nov: ask Desktop what it still holds before anything is called dropped (bridge.heldUuids).
+  let held = null;
+  if (live) {
+    const ids = [...new Set(outbox.pending().filter(e => e.uuid && !e.acceptedAt).map(e => e.session))];
+    if (ids.length) held = FAKE_HELD ? FAKE_HELD() : await require('../lib/bridge').heldUuids(ids).catch(() => null);
+  }
+  const acc = live ? outbox.checkAccepted(transcriptTail, Date.now(), held) : { resend: [], failed: [] };
   for (const e of acc.resend) {
     const text = outbox.redeliveryText(e);
     let r = null;

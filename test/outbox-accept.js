@@ -69,5 +69,28 @@ check(/NOT delivered/.test(app) && /if \(e\.accepted\) return 'delivered, waitin
 const idx = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
 check(/sendQueued\(e\.session, text, e\.uuid \? \{ uuid: e\.uuid \} : \{\}\)/.test(idx) && /const text = outbox\.redeliveryText\(e\)/.test(idx), 'the daemon re-sends with the original uuid (text carries the redelivered line)');
 
+// 21-Nov (Ashwar: "Msgs didnt arrive"): two sends to lanes in hour-long turns sat in Desktop's end-of-turn queue
+// (deferredSends), which writes no transcript row until the turn ends. With no row in 60 s the outbox re-sent them and
+// then called them NOT delivered. Now it asks Desktop what it still holds (bridge.heldUuids): a held uuid is accepted.
+{
+  const u2 = 'bbbbbbbb-0000-4000-8000-000000000001';
+  const e2 = ob.add({ session: 'local_bbbbbbbb', text: 'You can stop working once work is done', delivery: 'held', uuid: u2 });
+  ob.markSent(e2.id, { ok: true, delivery: 'held' });
+  const all2 = ob.load(); all2.find(x => x.id === e2.id).at = T0; fs.writeFileSync(ob.FILE, JSON.stringify({ entries: all2 }));
+  const quiet = () => '';
+  let r2 = ob.checkAccepted(quiet, T0 + 61 * 1000, { local_bbbbbbbb: ['bbbbbbbb-0000-4000-8000-000000000002', u2] });
+  check(!r2.resend.some(x => x.id === e2.id) && ob.get(e2.id).acceptedAt && ob.get(e2.id).heldByDesktop,
+    'a uuid Desktop still holds is accepted with no transcript row: not re-sent', ob.get(e2.id));
+  r2 = ob.checkAccepted(quiet, T0 + 5 * 60 * 1000, {});
+  check(!r2.failed.some(x => x.id === e2.id) && ob.get(e2.id).state === 'pending', 'and never later called NOT delivered');
+  const e3 = ob.add({ session: 'local_bbbbbbbb', text: 'a message Desktop really lost', delivery: 'held', uuid: 'aaaaaaaa-0000-4000-8000-00000000dead' });
+  ob.markSent(e3.id, { ok: true, delivery: 'held' });
+  const all3 = ob.load(); all3.find(x => x.id === e3.id).at = T0; fs.writeFileSync(ob.FILE, JSON.stringify({ entries: all3 }));
+  r2 = ob.checkAccepted(quiet, T0 + 61 * 1000, { local_bbbbbbbb: [u2] });
+  check(r2.resend.some(x => x.id === e3.id), 'a uuid Desktop does NOT hold, with no row, is still re-sent once');
+  const idx2 = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'index.js'), 'utf8');
+  check(/heldUuids\(ids\)/.test(idx2) && /outbox\.checkAccepted\(transcriptTail, Date\.now\(\), held\)/.test(idx2), 'the daemon asks Desktop before each check');
+}
+
 if (fails) { console.error(fails + ' failed'); process.exit(1); }
 console.log('outbox-accept: all checks passed');

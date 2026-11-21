@@ -34,7 +34,8 @@ const needle = ob.needleFor('@C:\\up\\a.jpg\nplease look at this');
 check(!ob.norm(ob.unescapeTranscript(ob.withoutQueueOps(tail))).includes(needle), 'an enqueue row alone does not confirm delivery');
 const delivered = tail + '\n' + JSON.stringify({ type: 'user', message: { content: '@C:\\up\\a.jpg\nplease look at this' } });
 check(ob.norm(ob.unescapeTranscript(ob.withoutQueueOps(delivered))).includes(needle), 'the delivered user row still confirms it');
-check(/withoutQueueOps\(readText\(/.test(read('mobile', 'outbox.js')), 'reconcile reads the transcript without queue rows');
+check(/hayFor\('r:' \+ e\.session, readText\(e\.session\) \|\| '', true\)/.test(read('mobile', 'outbox.js')), 'reconcile reads the transcript without queue rows');
+check(!ob.hayFor('t:q', tail, true).includes(needle) && ob.hayFor('t:d', delivered, true).includes(needle), 'and its incremental hay drops them too');
 check(/const held = \(state\.outbox/.test(app), 'a held message is drawn once, from the outbox, with its controls');
 
 // One send, one bubble: the just-sent bubble (typed text) and its outbox entry ("@<path>" lines + text)

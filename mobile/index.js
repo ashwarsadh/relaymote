@@ -2571,6 +2571,11 @@ function rebindLoop() {
 
 const TAIL_BYTES = 2 * 1024 * 1024;
 
+// 21-Nov: read once, then only the bytes appended since (whole lines), instead of 2 MB from disk every 5 s per pending
+// session. An unchanged file returns the very same string, so outbox.hayFor skips it in O(1). A shrunk or replaced file
+// is read afresh. The trailing partial line (a write in progress) is left for the next tick.
+const tailMemo = new Map();
+function tailRead(fd, at, len) { const buf = Buffer.allocUnsafe(len); const n = fs.readSync(fd, buf, 0, len, at); return n < len ? buf.subarray(0, n) : buf; }
 function transcriptTail(id, span = TAIL_BYTES) {
   const sess = sessions.get(id);
   if (!sess) return '';
@@ -2578,12 +2583,29 @@ function transcriptTail(id, span = TAIL_BYTES) {
     const file = sessions.transcriptPath(sess);
     if (!file) return '';
     const size = fs.statSync(file).size;
-    const want = Math.min(size, span);
+    const m = tailMemo.get(id);
+    if (m && m.file === file && m.span === span && size === m.size) return m.text;
     const fd = fs.openSync(file, 'r');
     try {
-      const buf = Buffer.allocUnsafe(want);
-      fs.readSync(fd, buf, 0, want, size - want);
-      return buf.toString('utf8');
+      let text, upto;
+      if (m && m.file === file && m.span === span && size > m.size && size - m.size < span) {
+        const add = tailRead(fd, m.size, size - m.size);
+        const nl = add.lastIndexOf(10);
+        if (nl < 0) return m.text;                       // no whole line yet
+        text = m.text + add.subarray(0, nl + 1).toString('utf8');
+        upto = m.size + nl + 1;
+        if (text.length > 2 * span) { const cut = text.indexOf(String.fromCharCode(10), text.length - span); if (cut > 0) text = text.slice(cut + 1); }
+      } else {
+        const want = Math.min(size, span);
+        const buf = tailRead(fd, size - want, want);
+        const nl = buf.lastIndexOf(10);
+        if (nl < 0) return buf.toString('utf8');         // not one whole line in the window: nothing to keep
+        text = buf.subarray(0, nl + 1).toString('utf8'); // whole lines only, so the next tick appends exactly
+        upto = size - want + nl + 1;
+      }
+      tailMemo.delete(id); tailMemo.set(id, { file, span, size: upto, text });
+      if (tailMemo.size > 40) tailMemo.delete(tailMemo.keys().next().value);
+      return text;
     } finally { fs.closeSync(fd); }
   } catch { return ''; }
 }

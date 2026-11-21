@@ -161,6 +161,42 @@ function withoutQueueOps(text) {
   return String(text).split(NL).filter(l => l.indexOf('"type":"queue-operation"') < 0).join(NL);
 }
 
+// 21-Nov: the haystacks below were rebuilt from a 2 MB transcript tail on every 5 s tick, twice (reconcile, then
+// checkAccepted per entry), for as long as a message sat pending -- an hour in a long turn. That was 3-4 s loop stalls
+// (norm/unescapeTranscript/withoutQueueOps, 21-Nov 22:30 IST). The text is line-local (no escape or match spans a NL,
+// lines join as one space), so a hay is kept per session and only the lines added since the last tick are processed.
+const HAY_MAX = 6 * 1024 * 1024, HAY_KEEP = 3 * 1024 * 1024, ANCHOR = 4096, MEMO_MAX = 40;
+const hayMemo = new Map();
+let hayWork = 0;   // characters processed: lets a test see the work is incremental
+const lineHay = (l, dropQueue) => (dropQueue && l.indexOf('"type":"queue-operation"') >= 0) ? '' : norm(unescapeTranscript(l));
+function linesHay(text, dropQueue) {
+  hayWork += text.length;
+  const out = [];
+  for (const l of text.split(NL)) { const h = lineHay(l, dropQueue); if (h) out.push(h); }
+  return out.join(' ');
+}
+const join2 = (a, b) => (a && b) ? a + ' ' + b : (a || b);
+// The same string as norm(unescapeTranscript(dropQueue ? withoutQueueOps(raw) : raw)), except that text which slid
+// out of the front of the tail window may still be kept (more coverage, never less).
+function hayFor(key, raw, dropQueue) {
+  raw = String(raw || '');
+  const m = hayMemo.get(key);
+  if (m && m.raw === raw) return m.hay;
+  let done = null, rest = raw;
+  if (m && m.raw.length >= ANCHOR) {
+    const k = raw.lastIndexOf(m.raw.slice(-ANCHOR));
+    if (k >= 0) { done = m.done; rest = m.partial + raw.slice(k + ANCHOR); }
+  }
+  const i = rest.lastIndexOf(NL);
+  const complete = i >= 0 ? rest.slice(0, i) : '', partial = i >= 0 ? rest.slice(i + 1) : rest;
+  done = done === null ? linesHay(complete, dropQueue) : (complete ? join2(done, linesHay(complete, dropQueue)) : done);
+  if (done.length > HAY_MAX) done = done.slice(-HAY_KEEP);
+  const hay = partial ? join2(done, lineHay(partial, dropQueue)) : done;
+  hayMemo.delete(key); hayMemo.set(key, { raw, done, partial, hay });
+  if (hayMemo.size > MEMO_MAX) hayMemo.delete(hayMemo.keys().next().value);
+  return hay;
+}
+
 function reconcile(readText, now = Date.now(), busy = null) {
   const entries = load();
   if (!entries.length) return { confirmed: [], suspect: [], checked: 0 };
@@ -176,7 +212,7 @@ function reconcile(readText, now = Date.now(), busy = null) {
     if (hay === undefined) {
       // A queue "enqueue" row is not delivery: a held message sits there until the turn ends, and
       // confirming on it dropped the message's Send now and × the moment it was queued.
-      try { hay = norm(unescapeTranscript(withoutQueueOps(readText(e.session) || ''))); } catch { hay = ''; }
+      try { hay = hayFor('r:' + e.session, readText(e.session) || '', true); } catch { hay = ''; }
       cache.set(e.session, hay);
     }
     const needle = needleFor(e.text);
@@ -200,11 +236,11 @@ function reconcile(readText, now = Date.now(), busy = null) {
 
 // Did Desktop take it at all? Any trace counts, queue rows included: an enqueue/remove carrying the text,
 // a row carrying the uuid (queued_command attachment, remove.commandUuid), or the user turn itself.
-function arrivedIn(raw, e) {
+function arrivedIn(raw, e, key = null) {
   if (!raw) return false;
   if (e.uuid && raw.includes(e.uuid)) return true;
   const needle = needleFor(e.text);
-  return !!needle && norm(unescapeTranscript(raw)).includes(needle);
+  return !!needle && (key ? hayFor(key, raw, false) : norm(unescapeTranscript(raw))).includes(needle);
 }
 
 // Returns the bridge sends that need a re-send now, and those that failed it. The caller re-sends and then
@@ -220,7 +256,7 @@ function checkAccepted(readText, now = Date.now(), held = null) {
     if (e.state !== 'pending' || !canRedeliver(e) || e.acceptedAt) continue;
     let raw = cache.get(e.session);
     if (raw === undefined) { try { raw = readText(e.session) || ''; } catch { raw = ''; } cache.set(e.session, raw); }
-    if (arrivedIn(raw, e)) { e.acceptedAt = now; changed = true; continue; }
+    if (arrivedIn(raw, e, 'a:' + e.session)) { e.acceptedAt = now; changed = true; continue; }
     if (e.uuid && held && Array.isArray(held[e.session]) && held[e.session].includes(e.uuid)) { e.acceptedAt = now; e.heldByDesktop = true; changed = true; continue; }
     // Only a fresh send is re-sent: an older one (from before this check, or a tail that no longer reaches
     // back to it) is left to the 15-minute suspect flag rather than risk a late duplicate.
@@ -254,4 +290,4 @@ function markResending(id, now = Date.now()) {
   if (e) { e.resendingAt = now; save(entries); }
 }
 
-module.exports = { flush, _reset() { mem = null; dirty = false; memMtime = 0; looked = 0; }, overtaken, markResending, STUCK_MS, redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, BUSY_CAP_MS, KEEP_MS, FILE };
+module.exports = { hayFor, hayWork: () => hayWork, _resetHay() { hayMemo.clear(); hayWork = 0; }, flush, _reset() { mem = null; dirty = false; memMtime = 0; looked = 0; }, overtaken, markResending, STUCK_MS, redeliveryText, canRedeliver, RESEND_WINDOW_MS, checkAccepted, markResent, arrivedIn, ACCEPT_MS, withoutQueueOps, add, setUuid, markSent, pending, get, drop, reconcile, load, norm, needleFor, unescapeTranscript, SUSPECT_MS, BUSY_CAP_MS, KEEP_MS, FILE };

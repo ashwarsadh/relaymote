@@ -1,3 +1,7 @@
+## 0.2.205
+
+- Fewer pauses: the check for which Claude account is in use no longer holds Relaymote up while it lists the session folders.
+
 ## 0.2.204
 
 - While a message waits for a busy session, Relaymote no longer re-reads that session's whole recent history every 5 seconds; it reads only what is new. This removes the 3-4 second pauses seen while a message was waiting.

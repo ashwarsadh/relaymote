@@ -667,7 +667,7 @@ async function notifyAttention(all) {
 let lastDecor = { key: '', all: null };
 async function noticeAccountSwitch() {
   try {
-    const change = accountScope.note(accountScope.activeScope());
+    const change = accountScope.note(await accountScope.activeScopeAsync());
     if (!change || !change.changed) return;
     // The text comes from the settings that govern account sync, and with the Accounts module off
     // no question is raised at all: nothing could act on "carry the chats over".
@@ -1530,7 +1530,7 @@ async function handle(req, res) {
     return json(res, 200, {
       ok: true,
       pending: accountScope.pending(),
-      active: accountScope.activeScope(),
+      active: await accountScope.activeScopeAsync(),
       ...(() => { const w = alerts.accountSwitchText(config.get()); return { note: w.note, transferToast: w.transferToast, accountsModule: w.moduleOn }; })(),
     });
   }

@@ -37,6 +37,8 @@ const MSGS = [
   { role: 'assistant', ts: T(6), text: WIDE },
 ].filter(m => !m.tools);
 for (let i = 7; i < 37; i++) MSGS.push({ role: i % 2 ? 'user' : 'assistant', ts: T(i), text: 'Filler message number ' + i + ' so the log can scroll.' });
+const CMD = '$a = "x<y>" & echo 1\nGet-Item C:\\a\\b.txt\n  indented line';
+MSGS.push({ role: 'assistant', ts: T(45), text: 'Run this:\n```powershell\n' + CMD + '\n```\ndone' });
 
 (async () => {
   const fake = await H.fakeDesktop();
@@ -207,6 +209,36 @@ for (let i = 7; i < 37; i++) MSGS.push({ role: i % 2 ? 'user' : 'assistant', ts:
     const pasted = await ev(`(() => { const s = splitQuotes('> a pasted line\\n\\nmy note'); return { n: s.quotes.length, who: s.quotes[0].who, body: s.body }; })()`);
     check(pasted.n === 1 && pasted.who === '' && pasted.body === 'my note', 'a pasted "> line" reads as a quote with no name', pasted);
     check((await ev(`splitQuotes('no quote here').quotes.length`)) === 0 && (await ev(`userBody('a > b')`)).includes('a &gt; b'), 'a message with no quote is drawn as before');
+
+    // 23-Nov (Ashwar from his phone: "code blocks have no copy button"; "reply by dragging a message to the right does not work").
+    await draw(); await H.wait(300);
+    await ev(`(() => { window.__copied = null; navigator.clipboard.writeText = (t) => { window.__copied = t; return Promise.resolve(); }; })()`);
+    const cc = await ev(`(() => { const b = document.querySelector('#log [data-mts="${T(45)}"] .code-copy'); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height }; })()`);
+    check(cc.w >= 40 && cc.h >= 24, 'a code block shows a Copy button big enough to tap', cc);
+    await touch('touchStart', cc.x, cc.y); await touch('touchEnd', cc.x, cc.y); await H.wait(150);
+    await ev(`document.querySelector('#log [data-mts="${T(45)}"] .code-copy').click()`); await H.wait(150);
+    check((await ev(`window.__copied`)) === CMD, 'it copies the block exactly: multi-line, symbols, indentation, no label text', await ev(`window.__copied`));
+    check((await ev(`getComputedStyle(document.querySelector('#log [data-mts="${T(45)}"] .code-copy'), '::after').content`)).includes('Copied'), 'and says Copied');
+    check(!(await ev(`document.querySelector('#log [data-mts="${T(45)}"]').innerText`)).includes('Copy'), 'the label is never part of the message text');
+    check((await chips()) === 0, 'tapping Copy does not start a reply');
+    // A selection left in another bubble (copying a command by hand) used to block every swipe in the chat.
+    await ev(`(() => { const t = document.querySelector('#log [data-mts="${T(0)}"]'); const r = document.createRange(); r.selectNodeContents(t); const s = getSelection(); s.removeAllRanges(); s.addRange(r); })()`);
+    r = await rowAt(T(1));
+    check(!(await ev(`getSelection().isCollapsed`)), 'a selection is left in another message');
+    await drag(r.x + 40, r.y, 90, 0);
+    check((await chips()) === 1, 'a swipe still replies with a selection left elsewhere');
+    check((await ev(`getSelection().isCollapsed`)), 'and the stale selection is cleared');
+    await ev(`saveQuotes(state.open, []); renderQuotes()`);
+    await ev(`(() => { const t = document.querySelector('#log [data-mts="${T(1)}"]'); const r = document.createRange(); r.selectNodeContents(t); const s = getSelection(); s.removeAllRanges(); s.addRange(r); })()`);
+    r = await rowAt(T(1));
+    await drag(r.x + 40, r.y, 90, 0);
+    check((await chips()) === 0, 'a swipe on the message being selected still leaves the selection alone', await ev(`[...document.querySelectorAll('#quotes .qchip-line')].map(x => x.textContent.slice(0, 30))`));
+    await ev(`getSelection().removeAllRanges(); saveQuotes(state.open, []); renderQuotes()`);
+    // A thumb arcs: 90 right while 65 up was refused by the old 1.5x rule.
+    r = await rowAt(T(1));
+    await drag(r.x + 40, r.y, 90, -65);
+    check((await chips()) === 1, 'a natural, slightly arced thumb swipe replies', await ev(`[...document.querySelectorAll('#quotes .qchip-line')].map(x => x.textContent.slice(0, 30))`));
+    await ev(`saveQuotes(state.open, []); renderQuotes()`);
 
     const real = errors.filter(e => !/Failed to fetch/.test(e));   // a poll cut off by the test's own timing is not a page fault
     check(real.length === 0, 'no page errors', real.slice(0, 3));

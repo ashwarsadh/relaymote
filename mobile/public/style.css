@@ -282,6 +282,16 @@ pre.code{
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; line-height:1.45;
   overflow-x:auto; white-space:pre; color:var(--txt);
 }
+/* 23-Nov: a Copy chip on every code block, outside the pre so a sideways scroll never moves it away. */
+.codewrap{position:relative}
+.codewrap>pre.code{padding-top:32px}
+.code-copy{position:absolute; top:13px; right:5px; z-index:1; min-height:26px; padding:3px 10px; border-radius:6px;
+  border:1px solid var(--line); background:var(--panel); color:var(--txt); font:600 12px/1 system-ui,sans-serif;
+  cursor:pointer; -webkit-tap-highlight-color:transparent}
+.code-copy::after{content:'Copy'}
+.code-copy[data-done="1"]::after{content:'Copied \2713'}
+.code-copy[data-done="0"]::after{content:'Copy failed'}
+.msg.user .code-copy{background:var(--accent-sunk); border-color:var(--on-accent-line); color:var(--on-accent)}
 .msg.user pre.code{background:var(--accent-sunk); border-color:var(--on-accent-line); color:var(--on-accent)}
 .msg code{background:var(--panel-2); border-radius:4px; padding:1px 4px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em}
 .msg.user code{background:var(--accent-sunk)}

@@ -1,3 +1,8 @@
+## 0.2.206
+
+- Every code block in a chat now has a Copy button: it copies the block exactly as shown and says "Copied".
+- Swiping a message to the right to reply works again after you have selected text somewhere else in the chat, and a slightly curved thumb swipe now counts.
+
 ## 0.2.205
 
 - Fewer pauses: the check for which Claude account is in use no longer holds Relaymote up while it lists the session folders.

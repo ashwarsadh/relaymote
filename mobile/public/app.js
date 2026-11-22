@@ -278,7 +278,7 @@ function md(src, doc) {
   let h = esc(String(src == null ? '' : src).replace(/\0/g, ''));
   const fences = [];
   h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-    fences.push(`<pre class="code">${code.replace(/\n$/, '')}</pre>`);
+    fences.push(`<div class="codewrap"><button class="code-copy" type="button" aria-label="Copy code"></button><pre class="code">${code.replace(/\n$/, '')}</pre></div>`);
     return `\u0000${fences.length - 1}\u0000`;
   });
   const links = [];
@@ -5597,6 +5597,20 @@ async function copyMessage(role, ts) {
   toast((await copyText(text)) ? 'Copied' : 'Could not copy', false);
 }
 window.copyMessage = copyMessage;   // tests
+/* 23-Nov (Ashwar, from his phone: code blocks have no copy button, so he cannot copy commands). Every fenced block has a
+   Copy chip; it copies the block's text exactly as shown (the label is CSS, so it is never part of the text). */
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest && e.target.closest('.code-copy');
+  if (!b) return;
+  e.stopPropagation(); e.preventDefault();
+  const pre = b.parentElement && b.parentElement.querySelector('pre');
+  const text = pre ? pre.textContent : '';
+  if (!text) return toast('Nothing to copy', true);
+  const ok = await copyText(text);
+  b.dataset.done = ok ? '1' : '0';
+  clearTimeout(b._t); b._t = setTimeout(() => { delete b.dataset.done; }, 1600);
+  if (!ok) toast('Could not copy', true);
+}, true);
 $('log').addEventListener('click', (e) => {
   const cp = e.target.closest('.msg-copy');
   if (cp) { e.stopPropagation(); return copyMessage(cp.dataset.role, cp.dataset.ts); }
@@ -5636,7 +5650,10 @@ $('log').addEventListener('click', (e) => {
     const t = e.touches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
     if (!s.on) {
       if (Math.abs(dx) < LOCK && Math.abs(dy) < LOCK) return;
-      if (dx <= 0 || Math.abs(dx) < Math.abs(dy) * 1.5 || Date.now() - s.at > 450) { s = null; return; }
+      // 23-Nov: a thumb swipe arcs; 1.5 x the vertical travel refused a natural one. A refusal of a real rightward drag is
+      // reported to the PC log, so the next "swipe does not work" says why.
+      const why = dx <= 0 ? '' : Math.abs(dx) < Math.abs(dy) * 1.2 ? 'angle' : Date.now() - s.at > 450 ? 'slow' : '';
+      if (dx <= 0 || why) { if (why && dx >= 40) clientLog('swipe: not a reply (' + why + ') dx=' + Math.round(dx) + ' dy=' + Math.round(dy) + ' ms=' + (Date.now() - s.at)); s = null; return; }
       s.on = true;
     }
     s.dx = Math.max(0, dx);
@@ -5652,7 +5669,10 @@ $('log').addEventListener('click', (e) => {
     node.removeEventListener('touchcancel', onEnd);
     if (!s) return;
     const g = s;
-    if (g.on) { paint(0, true); if (e.type === 'touchend' && g.dx >= FIRE) replyTo(g.role, g.ts, live() || g.el); }
+    if (g.on) {
+      paint(0, true);
+      if (e.type === 'touchend' && g.dx >= FIRE) { try { const sl = window.getSelection(); if (sl && !sl.isCollapsed) sl.removeAllRanges(); } catch {} replyTo(g.role, g.ts, live() || g.el); }
+    }
     s = null;
   };
   log.addEventListener('touchstart', (e) => {
@@ -5660,8 +5680,10 @@ $('log').addEventListener('click', (e) => {
     if (e.touches.length !== 1) return;
     const el = rowOf(e.target), t = e.touches[0];
     if (!el || t.clientX < EDGE || scrollsSideways(e.target, el)) return;
+    // 23-Nov: only a selection IN this bubble stops a swipe (he is moving its handles). A selection left elsewhere, as after
+    // copying a command by hand, blocked every swipe in the chat until he tapped it away ("swipe to reply does not work").
     const sel = window.getSelection();
-    if (sel && !sel.isCollapsed) return;
+    if (sel && !sel.isCollapsed && sel.rangeCount && sel.getRangeAt(0).intersectsNode(el)) return;
     const role = el.matches('.peer') ? 'peer' : el.matches('.user') ? 'user' : 'assistant';
     s = { el, role, ts: el.dataset.mts, sel: (role === 'peer' ? 'details.peer' : '.msg.' + role) + '[data-mts="' + CSS.escape(el.dataset.mts) + '"]', x: t.clientX, y: t.clientY, at: Date.now(), on: false, dx: 0, buzzed: false };
     e.target.addEventListener('touchmove', onMove, { passive: true });

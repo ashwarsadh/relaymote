@@ -28,7 +28,11 @@ const check = (ok, what, extra) => { console.log((ok ? 'ok   ' : 'FAIL ') + what
   const ms = Number(process.hrtime.bigint() - t) / 1e6;
   check(a && a === b && ms < 20, 'a second read of an unchanged index is the cached parse', ms.toFixed(1) + ' ms');
   fs.writeFileSync(path.join(dir, 'index.json'), JSON.stringify({ builtAt: new Date().toISOString(), sessions: { x: {} } }));
-  check(Object.keys(P.read().sessions).join() === 'x', 'a rewritten index is read again');
+  // 0.2.207: a rewrite is re-read in the background; read() answers with the copy it has until then.
+  check(P.read() === a, 'a rewritten index: read() answers at once with the cached copy');
+  let nx = null;
+  for (let i = 0; i < 150 && !(nx && nx.sessions.x); i++) { await new Promise(r => setTimeout(r, 20)); nx = P.read(); }
+  check(nx && Object.keys(nx.sessions).join() === 'x', 'a rewritten index is read again (in the background)');
 
   // A 120 MB transcript with one SendUserFile call at the end.
   const tr = path.join(home, 't.jsonl');

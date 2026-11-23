@@ -104,7 +104,7 @@ async function refreshDesktop() {
     for (const s of sidebar.sessions) if (typeof truth[s.id] === 'boolean') s.running = truth[s.id];
     refreshStage = 'claudeAgents';
     const agents = await claudeAgents();
-    const cwdMap = desktop.buildCwdMap(agents);
+    const cwdMap = await desktop.buildCwdMapAsync(agents);
     const cwdCache = desktop.loadCwdCache();
     const merged = desktop.mergeSessions(
       sidebar.sessions.map(s => {

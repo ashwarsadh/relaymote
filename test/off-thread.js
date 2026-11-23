@@ -95,8 +95,12 @@ const failed = (p) => p.then(() => null, e => e);
   check(JSON.stringify(got) === JSON.stringify(JSON.parse(rf.call(fs, P.INDEX_JSON, 'utf8'))), 'it is what the file holds');
   const later = new Date(Date.now() + 5000); fs.utimesSync(P.INDEX_JSON, later, later);
   reads = 0; fs.readFileSync = function (f, ...x) { if (f === P.INDEX_JSON) reads++; return rf.call(fs, f, ...x); };
-  P.read(); fs.readFileSync = rf;
-  check(reads === 1, 'a later write by anyone else is read again', reads);
+  const stale = P.read(); fs.readFileSync = rf;
+  // 23-Nov (0.2.207): a later write is re-read in the BACKGROUND (fs.promises); read() keeps answering with what it has.
+  check(reads === 0 && stale === ix, 'a later write by anyone else: read() answers at once with the copy it has', reads);
+  let fresh = stale;
+  for (let i = 0; i < 100 && fresh === ix; i++) { await new Promise(r => setTimeout(r, 20)); fresh = P.read(); }
+  check(fresh !== ix && fresh && fresh.builtAt === ix.builtAt, 'and is read again in the background, then served', fresh === ix);
   const hy = await off.run('slow', 'hygiene.cycle');
   check(hy && (hy.ok || hy.skipped || hy.error), 'hygiene.cycle answers', Object.keys(hy || {}).slice(0, 4));
   const bd = await off.run('slow', 'board.build');

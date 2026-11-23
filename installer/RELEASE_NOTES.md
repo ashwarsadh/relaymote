@@ -1,3 +1,7 @@
+## 0.2.207
+
+- Fewer pauses when the PC is busy: the project index (about 15 MB) is re-read in the background after it changes, instead of making the next request wait for it, and the list of project folders is checked without holding Relaymote up.
+
 ## 0.2.206
 
 - Every code block in a chat now has a Copy button: it copies the block exactly as shown and says "Copied".

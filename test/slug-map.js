@@ -38,7 +38,23 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // The cwd cache is read once per refresh when the caller passes it.
   const c = desktop.lookupCwd(new Map([['x', { slug: 'C--proj1' }]]), 'x', { x: 'D:\\work' });
   check(c.cwd === 'D:\\work' && c.slug === 'C--proj1', 'lookupCwd takes a cache read once by its caller');
+  // 23-Nov: the refresh uses the async form (53 s in 16 stalls on 0.2.206 were the sync stats). Same answers, no sync fs.
+  await sleep(30);
+  touch('C--proj8', 'async-new');
+  const syncCalls = { n: 0 };
+  const orig = { statSync: fs.statSync, readdirSync: fs.readdirSync };
+  fs.statSync = function (...a) { syncCalls.n++; return orig.statSync.apply(fs, a); };
+  fs.readdirSync = function (...a) { syncCalls.n++; return orig.readdirSync.apply(fs, a); };
+  const before = desktop.slugStats.listed;
+  const am = await desktop.projectSlugMapAsync();
+  fs.statSync = orig.statSync; fs.readdirSync = orig.readdirSync;
+  check(same(am, full()) && am.get('async-new') === 'C--proj8', 'the async map matches a full listing and sees a new transcript', am.size);
+  check(syncCalls.n === 0, 'the async map makes no synchronous stat/readdir', syncCalls.n);
+  check(desktop.slugStats.listed === before + 1, 'it shares the per-folder cache: only the changed folder is listed', desktop.slugStats.listed - before);
+  const cm = await desktop.buildCwdMapAsync([{ sessionId: 'async-new', cwd: 'D:\\p8' }]);
+  check(cm.get('async-new').cwd === 'D:\\p8' && cm.get('async-new').slug === 'C--proj8', 'buildCwdMapAsync merges agents like buildCwdMap');
   const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  check(/await desktop\.buildCwdMapAsync\(agents\)/.test(src) && !/desktop\.buildCwdMap\(agents\)/.test(src), 'the Desktop refresh uses the async map');
   check((src.match(/lookupCwd\(cwdMap, [^)]*, cwdCache\)/g) || []).length === 2, 'the Desktop refresh passes one cwd-cache read to both lookups');
   fs.rmSync(home, { recursive: true, force: true });
   if (fails) { console.error(fails + ' failed'); process.exit(1); }

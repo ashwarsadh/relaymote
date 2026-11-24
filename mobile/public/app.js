@@ -2218,7 +2218,7 @@ function connectStream(watch) {
   state.es = es;
   state.esWatch = watch || null;
   state.esLastEvent = Date.now();
-  es.onopen = () => { esFails = 0; state.esLastEvent = Date.now(); paintConnDot(); noteConnOk(); obFlush(); };
+  es.onopen = () => { esFails = 0; state.esLastEvent = Date.now(); paintConnDot(); noteConnOk(); obWake(); };
   es.addEventListener('ping', () => { state.esLastEvent = Date.now(); paintConnDot(); });
   state.sseRows = null;   // a new stream starts with the full list
   es.addEventListener('sessions', ev => {
@@ -3260,7 +3260,8 @@ function obAdd(sid, text, atts) {
 }
 const obFind = (cmid) => obItems.find(x => x.cmid === cmid);
 function obRemove(cmid) { obItems = obItems.filter(x => x.cmid !== cmid); obSave(); }
-const obBackoff = (n) => Math.min(60000, 3000 * Math.pow(2, Math.max(0, n - 1)));
+// 24-Nov: a message waiting on a CONNECTION failure is tried again within 20 s (it was up to 60 s), whatever the count.
+const obBackoff = (n, cap = 60000) => Math.min(cap, 3000 * Math.pow(2, Math.max(0, n - 1)));
 function obRepaint(sid) { if (sid === state.open) renderLog(state.messages, false); renderDeskState(); }
 const obNorm = (t) => String(t || '').replace(/\s+/g, ' ').trim();
 // What the outbox looks for in the transcript. Every reply to one message starts the same, so its START would call
@@ -3276,10 +3277,22 @@ function obSeen(it, messages) {
 }
 const obInLog = (it) => it.sid === state.open && obSeen(it, state.messages);
 
-let obRunning = false, obTimer = null;
-async function obFlush() {
-  if (obRunning) return;
-  obRunning = true;
+let obRunning = false, obRunAt = 0, obTimer = null;
+// 24-Nov (Ashwar: "Msgs stuck ... I force stopped the relaymote and reopen then it worked"). apiOnce stops its own timer
+// once the response HEADERS arrive, so a body that never finishes (a phone that slept mid-request) left obPost pending for
+// ever; obRunning stayed true, and every later flush (back online, app visible, stream open, the retry timer) returned at
+// once. The queue sat dead, with the PC never told, until the app was force-stopped. Every send now has a hard limit; past
+// it the message waits for its retry (the PC knows the cmid, so a late first answer cannot make a double send).
+const OB_HARD_MS = 35000;
+function obApi(path, opts) {
+  let t;
+  const cap = new Promise((_, rej) => { t = setTimeout(() => rej(Object.assign(new Error('timed out'), { conn: true, kind: 'timeout' })), OB_HARD_MS); });
+  return Promise.race([apiOnce(path, opts), cap]).finally(() => clearTimeout(t));
+}
+async function obFlush(force) {
+  // A forced flush (his Send now tap) takes over a run that has been going longer than any send can legitimately take.
+  if (obRunning && !(force && Date.now() - obRunAt > 20000)) return;
+  obRunning = true; obRunAt = Date.now();
   try {
     for (let guard = 0; guard < 100; guard++) {
       const heads = new Map();
@@ -3307,7 +3320,7 @@ async function obPost(it) {
   if (it.pcFail && obInLog(it)) { obResult(it, { ok: true, confirmed: true }); return true; }
   it.state = 'sending'; it.tries++; obSave(); obRepaint(it.sid);
   try {
-    const r = await apiOnce('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, timeoutMs: 20000,
+    const r = await obApi('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, timeoutMs: 20000,
       body: JSON.stringify({ id: it.sid, text: it.text, attachments: it.atts || [], cmid: it.cmid }) });
     noteConnOk();
     if (r && r.already) { obResult(it, r.result || { ok: true }); return true; }
@@ -3328,7 +3341,7 @@ function obFailed(it, why, conn) {
   if (!conn) it.pcFail = (it.pcFail || 0) + 1;
   it.error = why;
   it.state = !conn && it.pcFail >= 3 ? 'stuck' : 'waiting';
-  it.next = Date.now() + obBackoff(conn ? it.tries : it.pcFail * 3);
+  it.next = Date.now() + (conn ? obBackoff(it.tries, 20000) : obBackoff(it.pcFail * 3));
   obSave(); obRepaint(it.sid);
 }
 /** The PC's answer for one message: reached Claude (leaves the outbox), or failed there (tried again). */
@@ -3351,20 +3364,33 @@ function obResult(it, r) {
 /** Accepted, and no result came back (the live stream was down): ask the PC what became of it. */
 async function obAsk(it) {
   try {
-    const d = await apiOnce('/api/send/status?cmid=' + encodeURIComponent(it.cmid), { timeoutMs: 12000 });
+    const d = await obApi('/api/send/status?cmid=' + encodeURIComponent(it.cmid), { timeoutMs: 12000 });
     noteConnOk();
     if (d.known && d.done && d.result) return obResult(it, d.result);
     if (d.known && d.running) { it.next = Date.now() + 15000; obSave(); return; }
     // The PC has no record of finishing it (it restarted mid-send): send again unless it already shows.
     if (obInLog(it)) return obResult(it, { ok: true, confirmed: true });
     it.state = 'waiting'; it.next = 0; obSave();
-  } catch (e) { it.next = Date.now() + obBackoff(3); obSave(); if (e.conn) noteConnFail(e); }
+  } catch (e) { it.next = Date.now() + obBackoff(3, e.conn ? 20000 : 60000); obSave(); if (e.conn) noteConnFail(e); }
 }
 function obRetryNow(cmid) {
   const it = obFind(cmid);
   if (!it || it.state === 'sending' || it.state === 'accepted') return;
-  it.state = 'waiting'; it.next = 0; it.pcFail = 0; obSave(); obRepaint(it.sid); obFlush();
+  it.state = 'waiting'; it.next = 0; it.pcFail = 0; obSave(); obRepaint(it.sid); obFlush(true);
 }
+/* 24-Nov (Ashwar: "Msgs stuck ... I force stopped the relaymote and reopen then it worked"; the app said "waiting to send - your PC can't be
+   reached" while the PC was up). The moment the phone may have a network again (back online, app visible or focused, the live stream open,
+   and every 20 s while anything waits) every waiting message and failed upload is tried NOW, not when its backoff ends, and no
+   remembered "offline" answer is consulted first: the attempt itself is the probe. */
+function obWake() {
+  for (const it of obItems) if (it.state === 'waiting') it.next = 0;
+  for (const u of (state.uploads || [])) if (u.failed && !u.cleared && u.file) { u.attempt = 0; uploadOne(u.file, u); }
+  obFlush();
+}
+for (const [t, ev] of [[window, 'online'], [window, 'focus'], [window, 'pageshow'], [document, 'visibilitychange']]) {
+  t.addEventListener(ev, () => { if (!document.hidden) obWake(); });
+}
+setInterval(() => { if (!document.hidden && (obItems.some(it => it.state === 'waiting' || it.state === 'new') || (state.uploads || []).some(u => u.failed && !u.cleared))) obWake(); }, 20000);
 function obEdit(cmid) {
   const it = obFind(cmid);
   if (!it || it.state === 'sending' || it.state === 'accepted') return;

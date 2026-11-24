@@ -1,3 +1,7 @@
+## 0.2.208
+
+- A message waiting on the phone no longer stays stuck until the app is force-stopped. It is tried again the moment the phone is back online or the app comes to the front, and at least every 20 seconds while it waits; one send that never gets an answer is given up on after 35 seconds instead of blocking everything behind it. Failed photo uploads retry by themselves, and the Send now button forces an attempt.
+
 ## 0.2.207
 
 - Fewer pauses when the PC is busy: the project index (about 15 MB) is re-read in the background after it changes, instead of making the next request wait for it, and the list of project folders is checked without holding Relaymote up.

@@ -17,6 +17,7 @@ const localStorage = { getItem: k => store.has(k) ? store.get(k) : null, setItem
 // The fake PC: down until pc.up; types each message into "Claude" once per cmid, like mobile/index.js.
 const pc = { up: false, typed: [], cmids: new Map(), loseAnswer: 0, failNext: 0 };
 async function apiOnce(p, o) {
+  if (pc.hang) { pc.hang--; return new Promise(() => {}); }   // an answer that never arrives (a phone that slept mid-request)
   if (!pc.up) throw Object.assign(new Error('Your PC can\'t be reached'), { conn: true, kind: 'pc-down' });
   if (p.startsWith('/api/send/status')) {
     const v = pc.cmids.get(new URL(p, 'http://x').searchParams.get('cmid'));
@@ -44,7 +45,7 @@ function boot() {   // a fresh app: everything in memory is gone, only localStor
   const o = env(localStorage, state, apiOnce, { addEventListener() {} }, new Map(), () => {}, () => {},
     () => {}, () => {}, (e) => 'Send failed: ' + e, () => {}, () => {},
     (f) => { timers.push(f); return timers.length; }, () => {}, { 'pc-down': "Your PC can't be reached", timeout: 'Your PC is answering slowly' });
-  return { o, state };
+  return { o, state, timers };
 }
 // Deliver the sendresults the fake PC produced (the live stream), as the app's handler does.
 async function stream(app) { while (pc.results.length) { const [cmid, r] = pc.results.shift(); const it = app.o.obFind(cmid); if (it) app.o.obResult(it, r); } await app.o.obFlush(); }
@@ -78,6 +79,20 @@ async function stream(app) { while (pc.results.length) { const [cmid, r] = pc.re
   a.o.obAdd('local_a', 'fifth: a stuck one', []);
   for (let i = 0; i < 10 && a.o.items[0] && a.o.items[0].state !== 'stuck'; i++) { a.o.items[0].next = 0; await stream(a); }
   check(a.o.items.length === 1 && a.o.items[0].state === 'stuck', 'a message the PC keeps failing is kept as "not sent" with Retry, never dropped', a.o.items[0]);
+
+  // 24-Nov (Ashwar: "Msgs stuck ... I force stopped the relaymote and reopen then it worked"): one request whose answer never
+  // came held obRunning for ever, so every later flush (online, app visible, stream open, timer) returned at once and the queue sat
+  // dead until the app was force-stopped. A send now has a hard limit and then waits for its retry.
+  pc.up = true; pc.typed = []; pc.hang = 1; pc.failNext = 0; store.clear();
+  const h = boot();
+  h.o.obAdd('local_a', 'sixth: an answer that never comes', []); h.o.obAdd('local_a', 'seventh: queued behind it', []);
+  const hung = h.o.obFlush();
+  await new Promise(r => setImmediate(r));
+  const done = await Promise.race([hung.then(() => 'returned'), new Promise(r => { setImmediate(() => { h.timers.slice().forEach(f => f()); setTimeout(() => r('still hung'), 300); }); })]);
+  check(done === 'returned', 'a send whose answer never comes is given up on, not waited for for ever', done);
+  check(h.o.items[0].state === 'waiting' && /slowly/.test(h.o.items[0].error), 'and stays in the outbox, waiting, saying the PC is slow', h.o.items[0]);
+  h.o.items[0].next = 0; for (let i = 0; i < 6 && h.o.items.length; i++) await stream(h);
+  check(pc.typed.join('|') === 'sixth: an answer that never comes|seventh: queued behind it' && h.o.items.length === 0, 'the next flush sends both, in order, once each', pc.typed);
 
   check(/obAdd\(id, text, atts\)/.test(sendFn) && !/state\.pending = \{ sid: id, text, atts, status: 'sending'/.test(sendFn), 'send() puts the message in the outbox instead of the single pending slot');
   check(/if \(r\.cmid\) \{ const it = obFind\(r\.cmid\); if \(it\) obResult\(it, r\); return; \}/.test(app), 'the PC\'s sendresult is matched to its outbox message by cmid');

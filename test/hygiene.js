@@ -322,7 +322,7 @@ async function files() {
 // ------------------------------------------------------------------ 7. archive candidates
 function archiveTests() {
   const S = {};
-  const put = (over) => { const s = sess({ pending: 'ended', est_ctx_tokens: 50000, ctx_flag: 'ok', last: isoAt(NOW - 20 * DAY), ...over }); S[s.id] = s; return s; };
+  const put = (over) => { const s = sess({ pending: 'ended', est_ctx_tokens: 50000, ctx_flag: 'ok', last: isoAt(NOW - 30 * DAY), ...over }); S[s.id] = s; return s; };
   const disp = put({ id: 'local_disp0001', title: 'probe the parser' });
   const young = put({ id: 'local_young001', title: 'test something', last: isoAt(NOW - 5 * DAY) });
   const run = put({ id: 'local_run00001', title: 'scratch run', running: true });
@@ -346,8 +346,8 @@ function archiveTests() {
   const listed = new Map(res.rows.map(r => [r.s.id, r.reasons.map(x => x.code)]));
   const heldBy = new Map(res.held.map(r => [r.s.id, r.why]));
   check(listed.has(disp.id) && listed.get(disp.id).includes('disposable'), 'DISPOSABLE: a probe title, idle > idleDays, ended -> listed', [...listed]);
-  check(!listed.has(young.id), 'idle <= idleDays (default 14) -> never listed');
-  check(res.cfg.idleDays === 14, 'idleDays defaults to 14');
+  check(!listed.has(young.id), 'idle <= idleDays (default 21) -> never listed');
+  check(res.cfg.idleDays === 21, 'idleDays defaults to 21');
   check(!listed.has(run.id) && /running/.test(heldBy.get(run.id) || ''), 'running -> held back, never listed');
   check(!listed.has(unread.id) && /unread/.test(heldBy.get(unread.id) || ''), 'unread -> held back (unseen work is never archived away)');
   check(!listed.has(asks.id) && /asking/.test(heldBy.get(asks.id) || ''), 'last turn did not END (still asking) -> held back');

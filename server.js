@@ -772,6 +772,10 @@ async function evictWedgedHolder(reason) {
     })).catch(e => orch.log('claude version watch: ' + e.message));
     setTimeout(versionTick, 90000);
     setInterval(versionTick, 5 * 60000);
+    // 27-Nov: transcript search index (lib/transcript-index.js). A detached low-priority child reads only the bytes transcripts gained;
+    // the lock file stops two at once. The first build of ~38 GB is the same command and takes ~15 min.
+    const crtTick = () => { try { const c = require('./lib/launch').spawnHidden(process.execPath, ['--no-warnings', path.join(__dirname, 'bin', 'crt.js'), 'update']); if (c && c.unref) c.unref(); } catch (e) { orch.log('transcript index: ' + e.message); } };
+    setTimeout(crtTick, 90000); setInterval(crtTick, 5 * 60000);
     setInterval(() => { follow.tick().catch(e => orch.log('follow Claude: ' + e.message)); }, 5000);
     setInterval(() => { if (config.mod('accounts')) require('./lib/account-sync').autoTick({ offThread: true }).then(r => { if (r && (r.applied || r.error)) orch.log('accounts auto-sync: ' + (r.error || r.applied + ' change(s) written')); }).catch(e => orch.log('accounts auto-sync: ' + e.message)); }, 15000);
     // Boot window: Desktop not running yet when Relaymote starts -> the pass that waits for a closed Desktop runs now.

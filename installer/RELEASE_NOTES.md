@@ -1,3 +1,7 @@
+## 0.2.209
+
+- Every session can now search ALL past session transcripts, archived ones included, in about a tenth of a second: the `relaymote_transcripts` tool, or `crt grep "words"` in a terminal. It understands Hindi, Nepali and Tibetan words, and shows the lane, folder, date and the matching text. The index builds itself in the background and then updates every few minutes.
+
 ## 0.2.208
 
 - A message waiting on the phone no longer stays stuck until the app is force-stopped. It is tried again the moment the phone is back online or the app comes to the front, and at least every 20 seconds while it waits; one send that never gets an answer is given up on after 35 seconds instead of blocking everything behind it. Failed photo uploads retry by themselves, and the Send now button forces an attempt.

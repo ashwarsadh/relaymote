@@ -670,6 +670,33 @@ const TOOLS = [
     handler: async (a) => ({ decision: router.route(a.prompt || '') }),
   },
   {
+    name: 'relaymote_transcripts',
+    description: 'SEARCH EVERY SESSION TRANSCRIPT, ARCHIVED ONES TOO — fast (about 0.5 s over all of them; a plain grep of ~/.claude/projects takes minutes). Unicode-aware: Devanagari, Nepali, Tibetan words match. Use it FIRST when Ashwar says "I told you earlier / there was a session where…", before asking him or giving up. Words are all required; "quoted phrase" stays whole; word* is a prefix. Returns per session: the local_ id (open it / read it with ccd_session_mgmt list_events), lane title, project, archived flag, hit count and snippets with [matched words]. Index = user/assistant text, tool results, tool calls, phone messages; refreshed every few minutes. CLI twin: `crt grep "<words>"`.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Words to find, e.g. dolma voice notes' },
+        limit: { type: 'number', description: 'Sessions to return (default 10).' },
+        per_session: { type: 'number', description: 'Snippets per session (default 2).' },
+        role: { type: 'string', enum: ['user', 'assistant', 'tool', 'call', 'queued'], description: 'Only this kind of line. user = what Ashwar/peers typed; assistant = what Claude said.' },
+        since: { type: 'string', description: 'ISO date, e.g. 2026-11-02' },
+        until: { type: 'string', description: 'ISO date, exclusive' },
+        lane: { type: 'string', description: 'Only lanes whose title contains this.' },
+        project: { type: 'string', description: 'Only folders containing this.' },
+        archived: { type: 'boolean', description: 'true = only archived lanes, false = only live ones.' },
+        recent: { type: 'boolean', description: 'Order by most recently active instead of relevance.' },
+      },
+      required: ['query'],
+    },
+    slaveSafe: true,
+    handler: async (a) => {
+      const T = require(path.join(Relaymote, 'lib', 'transcript-index.js'));
+      if (!require('fs').existsSync(T.DB_FILE)) return { error: 'NOT_BUILT', message: 'The transcript index is still being built for the first time; try again in a few minutes.' };
+      const r = T.search(a.query, { limit: a.limit || 10, per: a.per_session || 2, role: a.role, since: a.since, until: a.until, lane: a.lane, project: a.project, archived: a.archived, recent: a.recent });
+      return { ok: true, ms: r.ms, matchedRows: r.matched, sessions: r.hits.map(h => ({ session: h.local || h.cli, cliSessionId: h.cli, lane: h.lane, project: h.project, archived: h.archived, hits: h.count, snippets: h.snippets.map(s => ({ at: s.ts, role: s.role, text: s.text })) })) };
+    },
+  },
+  {
     name: 'relaymote_route_owner',
     description: 'WHO SHOULD GET THIS? Resolve a topic to the ONE session that owns it, from the Conductor index (project + title/tag match), before you send anything. Never returns a keeper or skill-owner for project work (that misroute is what it exists to stop), and never returns a session that merely shares a folder. When nothing owns the topic it says so and hands back a spawn plan (project + group) instead of naming the closest match. Pass `target` to have it CHECK a session you were about to message: it answers allow/refuse and names the real owner. Safe for any session.',
     inputSchema: {

@@ -1,4 +1,4 @@
-## 0.2.209
+## 0.2.210
 
 - Every session can now search ALL past session transcripts, archived ones included, in about a tenth of a second: the `relaymote_transcripts` tool, or `crt grep "words"` in a terminal. It understands Hindi, Nepali and Tibetan words, and shows the lane, folder, date and the matching text. The index builds itself in the background and then updates every few minutes.
 
